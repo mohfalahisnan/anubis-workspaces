@@ -1,4 +1,3 @@
-import type { ProgressInfo } from 'electron-updater'
 import { useCallback, useEffect, useState } from 'react'
 import Modal from '@/components/update/modal'
 import Progress from '@/components/update/progress'
@@ -8,7 +7,7 @@ const Update = () => {
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [versionInfo, setVersionInfo] = useState<VersionInfo>()
   const [updateError, setUpdateError] = useState<ErrorType>()
-  const [progressInfo, setProgressInfo] = useState<Partial<ProgressInfo>>()
+  const [progressInfo, setProgressInfo] = useState<DownloadProgressInfo>()
   const [modalOpen, setModalOpen] = useState<boolean>(false)
   const [modalBtn, setModalBtn] = useState<{
     cancelText?: string
@@ -16,38 +15,38 @@ const Update = () => {
     onCancel?: () => void
     onOk?: () => void
   }>({
-    onCancel: () => window.ipcRenderer.invoke('cancel-download').then(() => setModalOpen(false)),
-    onOk: () => window.ipcRenderer.invoke('start-download'),
+    onCancel: () => window.anubis?.updater.cancelDownload().then(() => setModalOpen(false)),
+    onOk: () => window.anubis?.updater.startDownload(),
   })
 
   const checkUpdate = async () => {
+    if (!window.anubis) return
+
     setChecking(true)
-    /**
-     * @type {import('electron-updater').UpdateCheckResult | null | { message: string, error: Error }}
-     */
-    const result = await window.ipcRenderer.invoke('check-update')
+    const result = await window.anubis.updater.check() as ErrorType | undefined
     setProgressInfo({ percent: 0 })
     setChecking(false)
     setModalOpen(true)
     if (result?.error) {
       setUpdateAvailable(false)
-      setUpdateError(result?.error)
+      setUpdateError(result)
     }
   }
 
   const onUpdateCanAvailable = useCallback(
-    (_event: Electron.IpcRendererEvent, arg1: VersionInfo) => {
-      setVersionInfo(arg1)
+    (payload: VersionInfo) => {
+      setVersionInfo(payload)
       setUpdateError(undefined)
       // Can be update
-      if (arg1.update) {
+      if (payload.update) {
         setModalBtn((state) => ({
           ...state,
           cancelText: 'Cancel',
           okText: 'Update',
-          onOk: () => window.ipcRenderer.invoke('start-download'),
+          onOk: () => window.anubis?.updater.startDownload(),
         }))
         setUpdateAvailable(true)
+        setModalOpen(true)
       } else {
         setUpdateAvailable(false)
       }
@@ -55,40 +54,44 @@ const Update = () => {
     [],
   )
 
-  const onUpdateError = useCallback((_event: Electron.IpcRendererEvent, arg1: ErrorType) => {
+  const onUpdateError = useCallback((arg1: ErrorType) => {
     setUpdateAvailable(false)
     setUpdateError(arg1)
   }, [])
 
   const onDownloadProgress = useCallback(
-    (_event: Electron.IpcRendererEvent, arg1: ProgressInfo) => {
+    (arg1: DownloadProgressInfo) => {
       setProgressInfo(arg1)
     },
     [],
   )
 
-  const onUpdateDownloaded = useCallback((_event: Electron.IpcRendererEvent, ...args: any[]) => {
+  const onUpdateDownloaded = useCallback(() => {
     setProgressInfo({ percent: 100 })
     setModalBtn((state) => ({
       ...state,
       cancelText: 'Later',
       okText: 'Install now',
-      onOk: () => window.ipcRenderer.invoke('quit-and-install'),
+      onOk: () => window.anubis?.updater.quitAndInstall(),
     }))
   }, [])
 
   useEffect(() => {
-    // Get version information and whether to update
-    window.ipcRenderer.on('update-can-available', onUpdateCanAvailable)
-    window.ipcRenderer.on('update-error', onUpdateError)
-    window.ipcRenderer.on('download-progress', onDownloadProgress)
-    window.ipcRenderer.on('update-downloaded', onUpdateDownloaded)
+    if (!window.anubis) return
+
+    const unsubscribeUpdateAvailable = window.anubis.updater.onUpdateAvailable(onUpdateCanAvailable)
+    const unsubscribeUpdateError = window.anubis.updater.onUpdateError(onUpdateError)
+    const unsubscribeDownloadProgress = window.anubis.updater.onDownloadProgress(onDownloadProgress)
+    const unsubscribeUpdateDownloaded = window.anubis.updater.onUpdateDownloaded(onUpdateDownloaded)
+
+    // Silent check on launch — the modal only opens if onUpdateCanAvailable reports update=true.
+    window.anubis.updater.check().catch(() => { /* dev build / offline — ignore */ })
 
     return () => {
-      window.ipcRenderer.off('update-can-available', onUpdateCanAvailable)
-      window.ipcRenderer.off('update-error', onUpdateError)
-      window.ipcRenderer.off('download-progress', onDownloadProgress)
-      window.ipcRenderer.off('update-downloaded', onUpdateDownloaded)
+      unsubscribeUpdateAvailable()
+      unsubscribeUpdateError()
+      unsubscribeDownloadProgress()
+      unsubscribeUpdateDownloaded()
     }
   }, [])
 

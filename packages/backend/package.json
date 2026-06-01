@@ -1,0 +1,16 @@
+{
+  "name": "@anubis/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anubis/shared": "workspace:*",
+    "@hono/node-server": "^1.19.6",
+    "hono": "^4.10.7"
+  }
+}

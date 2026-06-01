@@ -1,29 +1,33 @@
-import { ipcRenderer, contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 
-// --------- Expose some API to the Renderer process ---------
-contextBridge.exposeInMainWorld('ipcRenderer', {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args
-    return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
-  },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.off(channel, ...omit)
-  },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.send(channel, ...omit)
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.invoke(channel, ...omit)
-  },
+type Listener<T> = (payload: T) => void
 
-  // You can expose other APTs you need here.
-  // ...
+function subscribe<T>(channel: string, listener: Listener<T>) {
+  const handler = (_event: Electron.IpcRendererEvent, payload: T) => listener(payload)
+
+  ipcRenderer.on(channel, handler)
+
+  return () => {
+    ipcRenderer.off(channel, handler)
+  }
+}
+
+contextBridge.exposeInMainWorld('anubis', {
+  backend: {
+    getBaseUrl: () => ipcRenderer.invoke('anubis:get-backend-url') as Promise<string>,
+  },
+  updater: {
+    check: () => ipcRenderer.invoke('check-update'),
+    startDownload: () => ipcRenderer.invoke('start-download'),
+    cancelDownload: () => ipcRenderer.invoke('cancel-download'),
+    quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),
+    onUpdateAvailable: <T>(listener: Listener<T>) => subscribe('update-can-available', listener),
+    onUpdateError: <T>(listener: Listener<T>) => subscribe('update-error', listener),
+    onDownloadProgress: <T>(listener: Listener<T>) => subscribe('download-progress', listener),
+    onUpdateDownloaded: (listener: Listener<void>) => subscribe('update-downloaded', listener),
+  },
 })
 
-// --------- Preload scripts loading ---------
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
   return new Promise(resolve => {
     if (condition.includes(document.readyState)) {
@@ -51,12 +55,6 @@ const safeDOM = {
   },
 }
 
-/**
- * https://tobiasahlin.com/spinkit
- * https://connoratherton.com/loaders
- * https://projects.lukehaas.me/css-loaders
- * https://matejkustec.github.io/SpinThatShit
- */
 function useLoading() {
   const className = `loaders-css__square-spin`
   const styleContent = `
@@ -105,8 +103,6 @@ function useLoading() {
     },
   }
 }
-
-// ----------------------------------------------------------------------
 
 const { appendLoading, removeLoading } = useLoading()
 domReady().then(appendLoading)

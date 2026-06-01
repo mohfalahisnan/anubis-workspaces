@@ -71,13 +71,13 @@ test.afterAll(async () => {
 test.describe('[electron-vite-react] e2e tests', () => {
   test('startup', async () => {
     const title = await page.title()
-    expect(title).toBe('Electron + Vite + React')
+    expect(title).toBe('Anubis')
   })
 
   test('should be home page is load correctly', async () => {
     const h1 = await page.$('h1')
     const title = await h1?.textContent()
-    expect(title).toBe('A sharp starter with Tailwind-first styling.')
+    expect(title).toBe('Workspace-first desktop app with HTTP between renderer and backend.')
   })
 
   test('should be count button can click', async () => {

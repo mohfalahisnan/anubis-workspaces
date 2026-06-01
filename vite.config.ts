@@ -5,62 +5,62 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { electronSimple } from 'vite-plugin-electron/multi-env'
 import { notBundle } from 'vite-plugin-electron/plugin'
-import pkg from './package.json'
 
-const external = Object.keys(
-  'dependencies' in pkg ? (pkg.dependencies as Record<string, string>) : {},
-)
+const root = __dirname
+const frontendRoot = path.join(root, 'packages/frontend')
+const desktopRoot = path.join(root, 'apps/desktop')
 
-// https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
-  rmSync('dist-electron', { recursive: true, force: true })
+  rmSync(path.join(desktopRoot, 'dist-electron'), { recursive: true, force: true })
 
   const isServe = command === 'serve'
   const isBuild = command === 'build'
   const sourcemap = isServe || !!process.env.VSCODE_DEBUG
 
   return {
+    root: frontendRoot,
+    publicDir: isServe ? path.join(frontendRoot, 'public') : false,
     resolve: {
       alias: {
-        '@': path.join(__dirname, 'src'),
+        '@': path.join(frontendRoot, 'src'),
       },
+    },
+    build: {
+      outDir: path.join(frontendRoot, 'dist'),
+      emptyOutDir: true,
     },
     plugins: [
       react(),
       tailwindcss(),
       electronSimple({
         main: {
-          input: 'electron/main/index.ts',
+          input: path.join(desktopRoot, 'electron/main/index.ts'),
           plugins: [notBundle()],
           options: {
             build: {
               sourcemap,
               minify: isBuild,
-              outDir: 'dist-electron/main',
+              outDir: path.join(desktopRoot, 'dist-electron/main'),
               rolldownOptions: {
-                external,
+                external: ['electron', 'electron-updater'],
               },
             },
           },
         },
         preload: {
-          input: 'electron/preload/index.ts',
+          input: path.join(desktopRoot, 'electron/preload/index.ts'),
           plugins: [notBundle()],
           options: {
             build: {
-              sourcemap: sourcemap ? 'inline' : undefined, // #332
+              sourcemap: sourcemap ? 'inline' : undefined,
               minify: isBuild,
-              outDir: 'dist-electron/preload',
+              outDir: path.join(desktopRoot, 'dist-electron/preload'),
               rolldownOptions: {
-                external,
+                external: ['electron'],
               },
             },
           },
         },
-        // Polyfill the Electron and Node.js API for Renderer process.
-        // If you want use Node.js in Renderer process, the `nodeIntegration` needs to be enabled in the Main process.
-        // See 👉 https://github.com/electron-vite/vite-plugin-electron-renderer
-        // renderer: {},
       }),
     ],
     clearScreen: false,

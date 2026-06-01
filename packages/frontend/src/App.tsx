@@ -1,11 +1,39 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import UpdateElectron from '@/components/update'
+import { getApiBaseUrl, getHealth } from '@/api'
 import logoVite from './assets/logo-vite.svg'
 import logoElectron from './assets/logo-electron.svg'
 import logoTailwind from './assets/logo-tailwindcss.svg'
 
 function App() {
   const [count, setCount] = useState(0)
+  const [apiBaseUrl, setApiBaseUrl] = useState('Resolving...')
+  const [backendStatus, setBackendStatus] = useState('Checking...')
+
+  useEffect(() => {
+    let active = true
+
+    async function loadBackendStatus() {
+      try {
+        const [baseUrl, health] = await Promise.all([getApiBaseUrl(), getHealth()])
+        if (!active) return
+
+        setApiBaseUrl(baseUrl)
+        setBackendStatus(`${health.service} online`)
+      } catch (error) {
+        if (!active) return
+
+        setBackendStatus(error instanceof Error ? error.message : 'Backend unavailable')
+      }
+    }
+
+    loadBackendStatus()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   return (
     <div className='relative min-h-screen overflow-hidden bg-slate-50 px-4 py-8 text-slate-900 sm:px-6 lg:px-8'>
       <div className='pointer-events-none absolute inset-0'>
@@ -20,14 +48,14 @@ function App() {
             <div className='flex flex-col justify-between gap-8'>
               <div className='space-y-6'>
                 <div className='inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.24em] text-cyan-800'>
-                  Electron + Vite + React + Tailwind
+                  Electron + Hono + React + Tailwind
                 </div>
                 <div className='space-y-4'>
                   <h1 className='max-w-xl text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl'>
-                    Modern starter, cleaner rhythm, unified visual language.
+                    Workspace-first desktop app with HTTP between renderer and backend.
                   </h1>
                   <p className='max-w-2xl text-base leading-7 text-slate-600 sm:text-lg'>
-                    Refined spacing, balanced contrast, and consistent cards make the page feel more polished while keeping all demo functionality intact.
+                    Electron starts the backend on a unique local port, then the renderer talks to it through normal HTTP.
                   </p>
                 </div>
               </div>
@@ -67,7 +95,7 @@ function App() {
                   Increment counter
                 </button>
                 <p className='text-sm leading-6 text-slate-600'>
-                  Edit <code>src/App.tsx</code> and save to test HMR.
+                  Edit <code>packages/frontend/src/App.tsx</code> and save to test HMR.
                 </p>
               </div>
             </div>
@@ -78,7 +106,7 @@ function App() {
           <div className='rounded-3xl border border-slate-200 bg-white p-6 text-slate-800 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.35)]'>
             <div className='text-sm uppercase tracking-[0.3em] text-slate-500'>Public assets</div>
             <p className='mt-3 text-base leading-7'>
-              Place static files into the <code>/public</code> folder.
+              Place static files into the <code>packages/frontend/public</code> folder.
             </p>
           </div>
 
@@ -88,14 +116,16 @@ function App() {
               Tailwind system
             </div>
             <p className='mt-3 text-base leading-7 text-slate-700'>
-              Unified utility classes now drive layout, hierarchy, and component consistency across the app.
+              Frontend and backend develop independently while Electron keeps startup simple.
             </p>
           </div>
 
           <div className='rounded-3xl border border-slate-200 bg-white p-6 text-slate-800 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.35)]'>
-            <div className='text-sm uppercase tracking-[0.3em] text-slate-500'>Update panel</div>
+            <div className='text-sm uppercase tracking-[0.3em] text-slate-500'>Backend</div>
             <p className='mt-3 text-base leading-7'>
-              Built-in updater UI follows the same spacing and typography rules for a more harmonious experience.
+              {backendStatus}
+              <br />
+              <code>{apiBaseUrl}</code>
             </p>
           </div>
         </section>

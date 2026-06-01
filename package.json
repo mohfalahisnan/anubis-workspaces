@@ -1,35 +1,39 @@
 {
-  "name": "electron-vite-react",
-  "version": "2.3.0",
+  "name": "anubis-workspaces",
+  "version": "0.1.0",
   "private": true,
-  "description": "Electron Vite React boilerplate.",
+  "description": "Anubis desktop app.",
   "license": "MIT",
-  "author": "草鞋没号 <308487730@qq.com>",
   "type": "module",
-  "main": "dist-electron/main/index.js",
+  "main": "apps/desktop/dist-electron/main/index.js",
+  "author": {
+    "name": "Mohamad Falah Isnan",
+    "email": "m.falah.isnan@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohfalahisnan/anubis-workspaces.git"
+  },
+  "packageManager": "pnpm@10.12.4",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && electron-builder",
-    "preview": "vite preview",
-    "pretest": "vite build --mode=test",
+    "dev": "node scripts/dev.mjs",
+    "build": "pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-builder --config electron-builder.json",
+    "preview": "pnpm --filter @anubis/frontend preview",
+    "pretest": "pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build --mode=test",
     "test": "vitest run",
     "test:e2e": "pnpm pretest && playwright test",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "electron-updater": "^6.8.3"
+    "typecheck": "pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^24.10.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "electron": "^42.1.0",
     "electron-builder": "^26.8.1",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "tailwindcss": "^4.3.0",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.14",
     "vite-plugin-electron": "^1.0.0",

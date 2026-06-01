@@ -1,15 +1,22 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.mohfalahisnan.anubis",
+  "productName": "Anubis",
   "asar": true,
   "directories": {
     "output": "release/${version}"
   },
   "files": [
-    "dist-electron",
-    "dist"
+    "apps/desktop/dist-electron",
+    "packages/frontend/dist",
+    "packages/backend/dist",
+    "packages/backend/package.json"
+  ],
+  "asarUnpack": [
+    "packages/backend/dist/**"
   ],
   "mac": {
+    "identity": null,
     "artifactName": "${productName}_${version}.${ext}",
     "target": [
       "dmg",
@@ -35,8 +42,7 @@
   },
   "publish": {
     "provider": "github",
-    "owner": "electron-vite",
-    "repo": "electron-vite-react",
-    "releaseType": "release"
+    "owner": "mohfalahisnan",
+    "repo": "anubis-workspaces"
   }
 }

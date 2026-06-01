@@ -74,7 +74,10 @@ export function update(win: Electron.BrowserWindow) {
     cancellationToken = new updater.CancellationToken();
   })
 
-  // Install now
+  // Install now.
+  // NOTE: On macOS, electron-updater requires the app to be code-signed and notarized
+  // (Apple Developer ID + notarization). Until that is set up, this call will fail
+  // silently on Mac. Windows works fine without signing (just shows SmartScreen warnings).
   ipcMain.handle('quit-and-install', () => {
     autoUpdater.quitAndInstall(false, true)
   })

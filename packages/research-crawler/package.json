@@ -1,0 +1,36 @@
+{
+  "name": "research-crawler",
+  "version": "0.2.2",
+  "description": "Headless browser scraping and crawling core with a CLI.",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
+  "bin": {
+    "research-crawler": "./dist/cli.js",
+    "rcrawl": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/cli.ts",
+    "research-crawler": "node dist/cli.js",
+    "bundle": "esbuild src/cli.ts --bundle --platform=node --target=node24 --format=cjs --outfile=build/research-crawler.cjs",
+    "pack:sea": "pnpm build && node scripts/pack-sea.mjs",
+    "benchmark:capture": "pnpm build && node scripts/benchmark-capture.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "esbuild": "^0.28.0",
+    "postject": "1.0.0-alpha.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22"
+  }
+}

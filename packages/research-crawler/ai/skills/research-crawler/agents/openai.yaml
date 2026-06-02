@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Crawler"
+  short_description: "Browser crawling via MCP tools."
+  default_prompt: "Use Research Crawler to open Chrome with remote debugging, collect Instagram data, and return structured JSON."

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "research-crawler": {
+      "command": "C:/Tools/research-crawler/research-crawler.exe",
+      "args": ["mcp"]
+    }
+  }
+}

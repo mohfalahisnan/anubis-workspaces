@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "research-crawler": {
+      "command": "/usr/local/bin/research-crawler",
+      "args": ["mcp"]
+    }
+  }
+}

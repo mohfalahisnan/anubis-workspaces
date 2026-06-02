@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+release
+result
+*.tsbuildinfo
+.env
+data
+data/chrome-profile-flow/
+scratch
+.wwebjs_cache

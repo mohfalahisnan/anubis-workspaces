@@ -82,6 +82,9 @@ importers:
       '@anubis/ai-agent':
         specifier: workspace:*
         version: link:../ai-agent
+      '@anubis/conversation':
+        specifier: workspace:*
+        version: link:../conversation
       '@anubis/research-crawler':
         specifier: workspace:*
         version: link:../research-crawler

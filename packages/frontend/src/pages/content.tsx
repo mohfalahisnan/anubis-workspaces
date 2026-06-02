@@ -37,6 +37,7 @@ interface CardModel {
   hook?: string
   tint: string
   postUrl?: string
+  mediaUrl?: string
 }
 
 /* Brand-aligned mid-tone backdrops per handle, used for both real
@@ -110,6 +111,77 @@ function FormatGlyph({ format }: { format: Format }) {
   if (format === 'carousel') return <GalleryHorizontalEndIcon {...props} />
   if (format === 'reel') return <PlayIcon className='size-9 fill-white/65 text-white/65' />
   return <SquareIcon {...props} />
+}
+
+/* The post media block: lazy-loaded image when we have one, brand-
+   tinted fallback (with the format glyph) when we don't, and the
+   chip + star overlays in both cases. */
+function MediaPane({
+  card,
+  starred,
+  onStar,
+}: {
+  card: CardModel
+  starred: boolean
+  onStar: () => void
+}) {
+  const [failed, setFailed] = useState(false)
+  const showImage = !!card.mediaUrl && !failed
+  return (
+    <div
+      className='relative flex aspect-square items-center justify-center overflow-hidden'
+      style={{ background: card.tint }}
+    >
+      {showImage ? (
+        <img
+          src={card.mediaUrl}
+          alt={card.caption}
+          loading='lazy'
+          decoding='async'
+          // Instagram's CDN sometimes 403s a leaked referrer; better to
+          // not send one and gracefully fall through to the glyph if it
+          // still rejects.
+          referrerPolicy='no-referrer'
+          onError={() => setFailed(true)}
+          className='absolute inset-0 size-full object-cover'
+        />
+      ) : (
+        <FormatGlyph format={card.format} />
+      )}
+
+      {/* Video play overlay so reels read as reels even with a static
+          thumbnail behind. */}
+      {showImage && card.format === 'reel' && (
+        <span
+          aria-hidden
+          className='pointer-events-none absolute flex size-14 items-center justify-center rounded-full bg-[rgba(11,12,15,0.45)] backdrop-blur'
+        >
+          <PlayIcon
+            className='size-7 translate-x-[2px] fill-white/95 text-white/95'
+          />
+        </span>
+      )}
+
+      <span className='absolute left-[9px] top-[9px] inline-flex h-5 items-center rounded-md bg-[rgba(11,12,15,0.55)] px-2 font-mono text-[10px] tracking-wide text-[rgba(245,242,234,0.95)] backdrop-blur'>
+        {card.chip}
+      </span>
+      <button
+        type='button'
+        onClick={onStar}
+        aria-label='Toggle similarity index'
+        className={cn(
+          'absolute right-2 top-2 flex size-7 items-center justify-center rounded-md bg-[rgba(11,12,15,0.42)] backdrop-blur transition-colors hover:bg-[rgba(11,12,15,0.62)]',
+          starred ? 'text-[var(--anubis-gold)]' : 'text-white/90',
+        )}
+      >
+        <StarIcon
+          className='size-4'
+          strokeWidth={2}
+          fill={starred ? 'currentColor' : 'none'}
+        />
+      </button>
+    </div>
+  )
 }
 
 function FilterPill({ label, value }: { label: string; value: string }) {
@@ -365,30 +437,7 @@ export function ContentPage() {
                 'hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
               )}
             >
-              <div
-                className='relative flex aspect-square items-center justify-center'
-                style={{ background: card.tint }}
-              >
-                <FormatGlyph format={card.format} />
-                <span className='absolute left-[9px] top-[9px] inline-flex h-5 items-center rounded-md bg-[rgba(11,12,15,0.55)] px-2 font-mono text-[10px] tracking-wide text-[rgba(245,242,234,0.95)] backdrop-blur'>
-                  {card.chip}
-                </span>
-                <button
-                  type='button'
-                  onClick={() => toggleStar(card.key)}
-                  aria-label='Toggle similarity index'
-                  className={cn(
-                    'absolute right-2 top-2 flex size-7 items-center justify-center rounded-md bg-[rgba(11,12,15,0.42)] backdrop-blur transition-colors hover:bg-[rgba(11,12,15,0.62)]',
-                    stars[card.key] ? 'text-[var(--anubis-gold)]' : 'text-white/90',
-                  )}
-                >
-                  <StarIcon
-                    className='size-4'
-                    strokeWidth={2}
-                    fill={stars[card.key] ? 'currentColor' : 'none'}
-                  />
-                </button>
-              </div>
+              <MediaPane card={card} starred={!!stars[card.key]} onStar={() => toggleStar(card.key)} />
 
               <div className='p-3'>
                 <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
@@ -566,6 +615,7 @@ function realPostToCard(p: CapturedPostSummary): CardModel {
     hook: undefined,        // requires classifier; future work
     tint: p.competitorTint ?? HANDLE_TINTS[handle] ?? '#565B63',
     postUrl: p.postUrl,
+    mediaUrl: p.mediaUrl,
   }
 }
 

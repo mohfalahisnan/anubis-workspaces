@@ -6,6 +6,8 @@ import type {
   CreateConversationInput,
   CronJobListResponse,
   CronJobSummary,
+  MessageListResponse,
+  MessageSummary,
   ProfileListResponse,
   ProfileSummary,
   SkillListResponse,
@@ -78,6 +80,13 @@ export async function listConversations(
   return r.items
 }
 
+export async function getConversation(id: string): Promise<ConversationSummary> {
+  const r = await api<{ ok: true; conversation: ConversationSummary }>(
+    `/conversations/${encodeURIComponent(id)}`,
+  )
+  return r.conversation
+}
+
 export async function createConversation(
   input: CreateConversationInput,
 ): Promise<ConversationSummary> {
@@ -86,6 +95,31 @@ export async function createConversation(
     body: JSON.stringify(input),
   })
   return r.conversation
+}
+
+export async function listMessages(conversationId: string): Promise<MessageSummary[]> {
+  const r = await api<MessageListResponse>(
+    `/conversations/${encodeURIComponent(conversationId)}/messages`,
+  )
+  return r.items
+}
+
+export async function sendMessage(
+  conversationId: string,
+  content: string,
+): Promise<{ msgId: string; messageId: string }> {
+  const r = await api<{ ok: true; msgId: string; messageId: string }>(
+    `/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { method: 'POST', body: JSON.stringify({ content }) },
+  )
+  return { msgId: r.msgId, messageId: r.messageId }
+}
+
+export async function cancelConversation(conversationId: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/conversations/${encodeURIComponent(conversationId)}/cancel`,
+    { method: 'POST' },
+  )
 }
 
 export async function listSkills(): Promise<SkillSummary[]> {

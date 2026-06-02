@@ -8,10 +8,27 @@ import {
   listSkills,
 } from '@/api'
 import { cn } from '@/lib/utils'
+import { useNavigation, type PageKey } from '@/lib/navigation'
+import { ActiveConversationPage } from '@/pages/active-conversation'
+import { ContentPage } from '@/pages/content'
+import { ConversationsPage } from '@/pages/conversations'
+import { PlaceholderPage } from '@/pages/placeholder'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
 import type { Action } from './actions'
+
+const BREADCRUMBS: Record<PageKey, string> = {
+  home: 'Dashboard',
+  conversations: 'Conversations',
+  'active-conversation': 'Conversations',
+  content: 'Content',
+  profiles: 'Profiles',
+  skills: 'Skills',
+  competitors: 'Competitors',
+  scheduled: 'Scheduled jobs',
+  settings: 'Settings',
+}
 
 type BackendState = 'checking' | 'online' | 'offline'
 
@@ -91,7 +108,6 @@ function useLiveCounts(): LiveCounts {
           conversations.status === 'fulfilled' ? conversations.value.length : undefined,
         skills: skills.status === 'fulfilled' ? skills.value.length : undefined,
         cron: cron.status === 'fulfilled' ? cron.value.length : undefined,
-        // competitors + content are not yet wired to backend endpoints — leave undefined
       })
     }
 
@@ -104,38 +120,115 @@ function useLiveCounts(): LiveCounts {
   return counts
 }
 
-function handleAction(action: Action) {
-  // No router yet — log the intent. Wire to real routes once pages exist.
-  console.info('[anubis] action selected:', action.id)
+function HomePage() {
+  const { navigate } = useNavigation()
+  const counts = useLiveCounts()
+
+  function handleAction(action: Action) {
+    switch (action.id) {
+      case 'new-conversation':
+      case 'browse-conversations':
+        return navigate({ page: 'conversations' })
+      case 'capture-profile':
+      case 'discover-creators':
+        return navigate({ page: 'competitors' })
+      case 'browse-content':
+        return navigate({ page: 'content' })
+      case 'browse-profiles':
+        return navigate({ page: 'profiles' })
+      case 'browse-skills':
+        return navigate({ page: 'skills' })
+      case 'browse-cron':
+        return navigate({ page: 'scheduled' })
+      default:
+        return
+    }
+  }
+
+  return (
+    <main className='flex-1 overflow-y-auto'>
+      <div className='mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6 lg:py-10'>
+        <header className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
+          <div>
+            <h1 className='text-2xl font-semibold tracking-[-0.02em]'>
+              Good morning, Falah
+            </h1>
+            <p className='mt-1 text-sm text-muted-foreground'>
+              Pick an action to get started.
+            </p>
+          </div>
+          <StatusPill />
+        </header>
+
+        <LiveStatusRow counts={counts} />
+
+        <ActionsGrid counts={counts} onActionClick={handleAction} />
+      </div>
+    </main>
+  )
+}
+
+function CurrentPage() {
+  const { route } = useNavigation()
+
+  switch (route.page) {
+    case 'home':
+      return <HomePage />
+    case 'conversations':
+      return <ConversationsPage />
+    case 'active-conversation':
+      return <ActiveConversationPage conversationId={route.conversationId} />
+    case 'content':
+      return <ContentPage />
+    case 'profiles':
+      return (
+        <PlaceholderPage
+          title='Profiles'
+          hint='The profile manager screen is queued — it will surface the five builtin profiles plus your custom ones.'
+        />
+      )
+    case 'skills':
+      return (
+        <PlaceholderPage
+          title='Skills catalog'
+          hint='Auto-inject, opt-in, and user skills will list here. The backend route already returns them — UI is next.'
+        />
+      )
+    case 'competitors':
+      return (
+        <PlaceholderPage
+          title='Competitors'
+          hint='Tracked Instagram profiles will land here. Add competitor → research-crawler capture → posts show up in Content.'
+        />
+      )
+    case 'scheduled':
+      return (
+        <PlaceholderPage
+          title='Scheduled jobs'
+          hint='Jobs your agents create via [CRON_CREATE] blocks will be editable here.'
+        />
+      )
+    case 'settings':
+      return (
+        <PlaceholderPage
+          title='Settings'
+          hint='Workspace and theme settings — coming soon.'
+        />
+      )
+    default:
+      return <HomePage />
+  }
 }
 
 export function Dashboard() {
-  const counts = useLiveCounts()
+  const { route } = useNavigation()
 
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
       <Sidebar />
       <div className='flex min-w-0 flex-1 flex-col'>
-        <TopBar />
-        <main className='flex-1 overflow-y-auto'>
-          <div className='mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6 lg:py-10'>
-            <header className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
-              <div>
-                <h1 className='text-2xl font-semibold tracking-[-0.02em]'>
-                  Good morning, Falah
-                </h1>
-                <p className='mt-1 text-sm text-muted-foreground'>
-                  Pick an action to get started.
-                </p>
-              </div>
-              <StatusPill />
-            </header>
-
-            <LiveStatusRow counts={counts} />
-
-            <ActionsGrid counts={counts} onActionClick={handleAction} />
-          </div>
-        </main>
+        <TopBar breadcrumb={BREADCRUMBS[route.page]} />
+        <CurrentPage />
       </div>
     </div>
   )

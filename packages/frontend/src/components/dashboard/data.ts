@@ -17,22 +17,24 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+import type { PageKey } from '@/lib/navigation'
+
 export type NavItem = {
   label: string
   icon: LucideIcon
   badge?: string
-  active?: boolean
+  page: PageKey
 }
 
 export const navItems: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboardIcon, active: true },
-  { label: 'Conversations', icon: ScrollTextIcon },
-  { label: 'Competitors', icon: UsersRoundIcon },
-  { label: 'Content', icon: ImagesIcon },
-  { label: 'Profiles', icon: SlidersHorizontalIcon },
-  { label: 'Skills', icon: LibraryIcon },
-  { label: 'Scheduled', icon: CalendarClockIcon },
-  { label: 'Settings', icon: Settings2Icon },
+  { label: 'Dashboard', icon: LayoutDashboardIcon, page: 'home' },
+  { label: 'Conversations', icon: ScrollTextIcon, page: 'conversations' },
+  { label: 'Competitors', icon: UsersRoundIcon, page: 'competitors' },
+  { label: 'Content', icon: ImagesIcon, page: 'content' },
+  { label: 'Profiles', icon: SlidersHorizontalIcon, page: 'profiles' },
+  { label: 'Skills', icon: LibraryIcon, page: 'skills' },
+  { label: 'Scheduled', icon: CalendarClockIcon, page: 'scheduled' },
+  { label: 'Settings', icon: Settings2Icon, page: 'settings' },
 ]
 
 export type Stat = {

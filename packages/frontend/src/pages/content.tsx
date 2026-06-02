@@ -16,10 +16,11 @@ import {
   StarIcon,
 } from 'lucide-react'
 
-import type { CapturedPostSummary } from '@anubis/shared'
+import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
 
-import { listPosts } from '@/api'
+import { captureCompetitor, listCompetitors, listPosts } from '@/api'
 import { cn } from '@/lib/utils'
+import { useNavigation } from '@/lib/navigation'
 
 type Format = 'carousel' | 'reel' | 'static'
 
@@ -123,9 +124,24 @@ function FilterPill({ label, value }: { label: string; value: string }) {
   )
 }
 
+type CaptureProgress = {
+  done: number
+  total: number
+  currentHandle?: string
+  capturedSoFar: number
+  errors: { handle: string; message: string }[]
+}
+
+type Banner =
+  | { kind: 'success' | 'warning'; message: string; errors?: { handle: string; message: string }[] }
+  | { kind: 'error'; message: string }
+
 export function ContentPage() {
+  const { navigate } = useNavigation()
   const [posts, setPosts] = useState<CapturedPostSummary[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [capturing, setCapturing] = useState<CaptureProgress | null>(null)
+  const [banner, setBanner] = useState<Banner | null>(null)
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [stars, setStars] = useState<Record<string, boolean>>({})
 
@@ -150,6 +166,77 @@ export function ContentPage() {
     setStars((s) => ({ ...s, [key]: !s[key] }))
   }
 
+  async function handleCaptureAll() {
+    setBanner(null)
+    let competitors: CompetitorSummary[]
+    try {
+      competitors = await listCompetitors()
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not load competitors.',
+      })
+      return
+    }
+
+    if (competitors.length === 0) {
+      setBanner({
+        kind: 'warning',
+        message: 'No competitors tracked yet. Add some on the Competitors page first.',
+      })
+      return
+    }
+
+    // Sequential — Chrome is single-tab single-user, so parallel captures
+    // would step on each other. Showing live "X of N" progress is the
+    // right UX for a serial run anyway.
+    const errors: { handle: string; message: string }[] = []
+    let capturedSoFar = 0
+    setCapturing({ done: 0, total: competitors.length, capturedSoFar, errors })
+
+    for (let i = 0; i < competitors.length; i++) {
+      const competitor = competitors[i]!
+      setCapturing({
+        done: i,
+        total: competitors.length,
+        currentHandle: competitor.handle,
+        capturedSoFar,
+        errors,
+      })
+      try {
+        const result = await captureCompetitor(competitor.id)
+        capturedSoFar += result.capturedCount
+      } catch (e) {
+        errors.push({
+          handle: competitor.handle,
+          message: e instanceof Error ? e.message : String(e),
+        })
+      }
+    }
+
+    setCapturing(null)
+    await refresh()
+
+    if (errors.length === 0) {
+      setBanner({
+        kind: 'success',
+        message: `Captured ${capturedSoFar} post${capturedSoFar === 1 ? '' : 's'} across ${competitors.length} competitor${competitors.length === 1 ? '' : 's'}.`,
+      })
+    } else if (errors.length === competitors.length) {
+      setBanner({
+        kind: 'error',
+        message: `All ${competitors.length} captures failed. The first error: ${errors[0]!.message}`,
+      })
+    } else {
+      const okCount = competitors.length - errors.length
+      setBanner({
+        kind: 'warning',
+        message: `Captured ${capturedSoFar} posts from ${okCount} competitor${okCount === 1 ? '' : 's'}; ${errors.length} failed.`,
+        errors,
+      })
+    }
+  }
+
   const usingMock = (posts ?? []).length === 0
   const cards = usingMock ? MOCK_CARDS : posts!.map(realPostToCard)
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
@@ -171,7 +258,7 @@ export function ContentPage() {
             <button
               type='button'
               onClick={() => void refresh()}
-              disabled={busy}
+              disabled={busy || !!capturing}
               className='inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
             >
               <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
@@ -179,24 +266,43 @@ export function ContentPage() {
             </button>
             <button
               type='button'
-              disabled
-              title='Rebuild similarity index — wired in a later pass'
-              className='inline-flex h-9 cursor-not-allowed items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-3.5 text-[13.5px] font-semibold text-[#0B0C0F] opacity-60'
+              onClick={() => void handleCaptureAll()}
+              disabled={!!capturing}
+              title='Run the research-crawler against every tracked competitor'
+              className={cn(
+                'inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-semibold transition-colors',
+                capturing
+                  ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-80'
+                  : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+              )}
             >
-              <ArrowDownToLineIcon className='size-[15px]' strokeWidth={2.2} />
-              Capture posts
+              <ArrowDownToLineIcon
+                className={cn('size-[15px]', capturing && 'animate-pulse')}
+                strokeWidth={2.2}
+              />
+              {capturing ? 'Capturing…' : 'Capture posts'}
             </button>
           </div>
         </div>
 
-        {usingMock && (
+        {capturing && (
+          <CaptureProgressPanel progress={capturing} />
+        )}
+
+        {banner && (
+          <BannerPanel banner={banner} onGoToCompetitors={() => navigate({ page: 'competitors' })} />
+        )}
+
+        {usingMock && !capturing && !banner && (
           <div
             role='status'
             className='mt-5 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3.5 py-2.5 text-[13px] text-foreground'
           >
             <span className='font-mono text-[var(--anubis-gold)]'>Sample data:</span>{' '}
             Showing 12 example posts so you can see what the populated feed looks
-            like. Real posts will appear here once you Refresh a competitor.
+            like. Hit <span className='font-medium'>Capture posts</span> to run the
+            research-crawler against your tracked competitors and replace this with
+            real data.
           </div>
         )}
 
@@ -342,6 +448,98 @@ export function ContentPage() {
 }
 
 /* ---------- Converters ---------- */
+
+/* ---------- Progress + banner panels ---------- */
+
+function CaptureProgressPanel({ progress }: { progress: CaptureProgress }) {
+  const pct = progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100)
+  return (
+    <div
+      role='status'
+      aria-live='polite'
+      className='mt-5 overflow-hidden rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] bg-card'
+    >
+      <div className='flex items-center justify-between gap-3 px-3.5 py-2.5'>
+        <div className='flex items-center gap-2 text-[13px] text-foreground'>
+          <ArrowDownToLineIcon
+            className='size-[15px] animate-pulse text-[var(--anubis-gold)]'
+            strokeWidth={2}
+          />
+          <span>
+            <span className='font-medium'>Capturing</span>{' '}
+            <span className='tabular-nums text-muted-foreground'>
+              {progress.done} of {progress.total}
+            </span>
+            {progress.currentHandle && (
+              <>
+                {' '}
+                <span className='font-mono text-foreground/80'>
+                  · {progress.currentHandle}
+                </span>
+              </>
+            )}
+          </span>
+        </div>
+        <span className='font-mono text-[11px] tabular-nums text-muted-foreground'>
+          {progress.capturedSoFar} post{progress.capturedSoFar === 1 ? '' : 's'} so far
+        </span>
+      </div>
+      <div className='h-1 w-full bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)]'>
+        <div
+          className='h-full bg-[var(--anubis-gold)] transition-[width]'
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function BannerPanel({
+  banner,
+  onGoToCompetitors,
+}: {
+  banner: Banner
+  onGoToCompetitors: () => void
+}) {
+  const palette =
+    banner.kind === 'error'
+      ? 'border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] text-destructive'
+      : banner.kind === 'warning'
+        ? 'border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_10%,transparent)] text-foreground'
+        : 'border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] text-foreground'
+  const hasErrors = banner.kind === 'warning' && banner.errors && banner.errors.length > 0
+  return (
+    <div role='status' className={cn('mt-5 rounded-md border px-3.5 py-2.5 text-[13px]', palette)}>
+      <div className='flex items-start justify-between gap-3'>
+        <div className='min-w-0 flex-1'>{banner.message}</div>
+        {banner.kind === 'warning' && banner.message.includes('No competitors') && (
+          <button
+            type='button'
+            onClick={onGoToCompetitors}
+            className='shrink-0 text-[12.5px] font-medium text-[var(--anubis-gold)] underline-offset-2 hover:underline'
+          >
+            Go to Competitors →
+          </button>
+        )}
+      </div>
+      {hasErrors && (
+        <ul className='mt-2 list-disc space-y-0.5 pl-5 text-[12px] text-muted-foreground'>
+          {banner.errors!.slice(0, 5).map((err, i) => (
+            <li key={i}>
+              <span className='font-mono text-foreground/80'>{err.handle}</span>{' '}
+              <span className='text-muted-foreground'>— {err.message}</span>
+            </li>
+          ))}
+          {banner.errors!.length > 5 && (
+            <li className='list-none italic'>…and {banner.errors!.length - 5} more</li>
+          )}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/* ---------- Real → card converter ---------- */
 
 function realPostToCard(p: CapturedPostSummary): CardModel {
   const handle = p.competitorHandle ?? `@${p.username}`

@@ -1,5 +1,8 @@
 import type {
   ApiHealthResponse,
+  CapturedPostListResponse,
+  CapturedPostSummary,
+  CaptureResultPayload,
   CompetitorListResponse,
   CompetitorSummary,
   ConversationCreateResponse,
@@ -273,4 +276,44 @@ export async function deleteCompetitor(id: string): Promise<void> {
   await api<{ ok: true }>(`/competitors/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+export interface CaptureOptions {
+  profile?: 'login' | 'public' | 'flow'
+  maxResponses?: number
+  timeoutMs?: number
+}
+
+export async function captureCompetitor(
+  id: string,
+  options: CaptureOptions = {},
+): Promise<{ competitor: CompetitorSummary; capturedCount: number; warnings: string[] }> {
+  const r = await api<CaptureResultPayload>(
+    `/captures/competitors/${encodeURIComponent(id)}`,
+    { method: 'POST', body: JSON.stringify(options) },
+  )
+  return {
+    competitor: r.competitor,
+    capturedCount: r.capturedCount,
+    warnings: r.warnings,
+  }
+}
+
+export interface ListPostsOpts {
+  competitorId?: string
+  limit?: number
+  orderBy?: 'recent' | 'engagement'
+}
+
+export async function listPosts(
+  opts: ListPostsOpts = {},
+): Promise<CapturedPostSummary[]> {
+  const params = new URLSearchParams()
+  if (opts.competitorId) params.set('competitorId', opts.competitorId)
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  if (opts.orderBy) params.set('orderBy', opts.orderBy)
+  const qs = params.toString()
+  const path = qs ? `/posts?${qs}` : '/posts'
+  const r = await api<CapturedPostListResponse>(path)
+  return r.items
 }

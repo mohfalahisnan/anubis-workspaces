@@ -103,6 +103,16 @@ export class CompetitorsService {
   remove(id: string): void {
     this.repo.softDelete(id)
   }
+
+  /**
+   * Records the timestamp of a successful capture. Used by the
+   * backend's capture orchestrator and intentionally not part of
+   * the open `update()` surface so refresh state can't be faked
+   * by clients.
+   */
+  markRefreshedAt(id: string, atMs: number): void {
+    this.repo.update(id, { lastRefreshedAt: atMs })
+  }
 }
 
 export type { Competitor }

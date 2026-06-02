@@ -174,6 +174,35 @@ export type CronJobListResponse = ListResponse<CronJobSummary>
 export type MessageListResponse = ListResponse<MessageSummary>
 export type CompetitorListResponse = ListResponse<CompetitorSummary>
 
+export interface CapturedPostSummary {
+  id: string
+  competitorId: string
+  username: string
+  postUrl: string
+  caption?: string
+  likes?: number
+  comments?: number
+  /** ISO timestamp from the source platform. */
+  postedAt?: string
+  mediaKind?: 'image' | 'video' | 'carousel'
+  mediaUrl?: string
+  carouselCount?: number
+  capturedAt: number
+  /** Owning competitor's handle, joined in by the route layer. */
+  competitorHandle?: string
+  /** Owning competitor's accent tint, joined in by the route layer. */
+  competitorTint?: string
+}
+
+export type CapturedPostListResponse = ListResponse<CapturedPostSummary>
+
+export interface CaptureResultPayload {
+  ok: true
+  competitor: CompetitorSummary
+  capturedCount: number
+  warnings: string[]
+}
+
 export interface ConversationCreateResponse {
   ok: true
   conversation: ConversationSummary

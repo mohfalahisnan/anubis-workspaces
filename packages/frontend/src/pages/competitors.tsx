@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
+  DownloadCloudIcon,
   PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
@@ -9,6 +10,7 @@ import {
 import type { CompetitorSummary } from '@anubis/shared'
 
 import {
+  captureCompetitor,
   createCompetitor,
   deleteCompetitor,
   listCompetitors,
@@ -41,6 +43,7 @@ export function CompetitorsPage() {
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [capturing, setCapturing] = useState<Set<string>>(() => new Set())
 
   async function refresh() {
     try {
@@ -56,6 +59,33 @@ export function CompetitorsPage() {
   useEffect(() => {
     void refresh()
   }, [])
+
+  async function handleCapture(c: CompetitorSummary) {
+    setCapturing((prev) => new Set(prev).add(c.id))
+    setBanner(null)
+    try {
+      const result = await captureCompetitor(c.id)
+      await refresh()
+      setBanner({
+        kind: 'success',
+        message:
+          result.capturedCount > 0
+            ? `Captured ${result.capturedCount} post${result.capturedCount === 1 ? '' : 's'} from ${c.handle}.`
+            : `${c.handle} responded but no new posts came back.`,
+      })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Capture failed.',
+      })
+    } finally {
+      setCapturing((prev) => {
+        const next = new Set(prev)
+        next.delete(c.id)
+        return next
+      })
+    }
+  }
 
   async function handleDelete(c: CompetitorSummary) {
     const ok = window.confirm(`Stop tracking ${c.handle}?`)
@@ -136,18 +166,25 @@ export function CompetitorsPage() {
         ) : (
           <div className='mt-7 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
             {items.map((c) => (
-              <CompetitorCard key={c.id} competitor={c} onDelete={() => handleDelete(c)} />
+              <CompetitorCard
+                key={c.id}
+                competitor={c}
+                onCapture={() => void handleCapture(c)}
+                onDelete={() => handleDelete(c)}
+                capturing={capturing.has(c.id)}
+              />
             ))}
           </div>
         )}
 
-        {/* Footnote on capture pipeline */}
+        {/* Footnote on capture mechanics */}
         {items && items.length > 0 && (
-          <p className='mt-8 text-[12px] text-muted-foreground'>
-            <span className='font-mono text-[var(--anubis-gold)]'>Note:</span>{' '}
-            Followers, avgLikes, and post counts will auto-populate once the
-            research-crawler capture pipeline is wired. For now they stay at
-            zero until you fill them in manually.
+          <p className='mt-8 text-[12px] leading-relaxed text-muted-foreground'>
+            <span className='font-mono text-[var(--anubis-gold)]'>Tip:</span>{' '}
+            Refresh runs the research-crawler against Chrome. If a capture says
+            "not authenticated", open Chrome with the <code className='font-mono text-foreground/80'>login</code>{' '}
+            profile and sign in once via{' '}
+            <code className='font-mono text-foreground/80'>POST /research-crawler/chrome/open</code>.
           </p>
         )}
       </div>
@@ -168,10 +205,14 @@ export function CompetitorsPage() {
 
 function CompetitorCard({
   competitor,
+  onCapture,
   onDelete,
+  capturing,
 }: {
   competitor: CompetitorSummary
+  onCapture: () => void
   onDelete: () => void
+  capturing: boolean
 }) {
   const tint = competitor.tint ?? '#565B63'
   const followersLabel = formatBigNumber(competitor.followers)
@@ -224,21 +265,47 @@ function CompetitorCard({
         </div>
       </div>
 
-      <div className='flex items-center justify-between border-t border-border bg-background/40 px-3 py-2 text-[11px] text-muted-foreground'>
-        <span>
-          {competitor.lastRefreshedAt
-            ? `Refreshed ${relativeTime(competitor.lastRefreshedAt)}`
-            : 'Never refreshed'}
+      <div className='flex items-center justify-between gap-2 border-t border-border bg-background/40 px-3 py-2 text-[11px] text-muted-foreground'>
+        <span className='min-w-0 truncate'>
+          {capturing
+            ? 'Capturing…'
+            : competitor.lastRefreshedAt
+              ? `Refreshed ${relativeTime(competitor.lastRefreshedAt)}`
+              : 'Never refreshed'}
         </span>
-        <button
-          type='button'
-          onClick={onDelete}
-          aria-label={`Stop tracking ${competitor.handle}`}
-          className='inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive'
-        >
-          <Trash2Icon className='size-3.5' strokeWidth={2} />
-          Remove
-        </button>
+        <div className='flex shrink-0 items-center gap-1'>
+          <button
+            type='button'
+            onClick={onCapture}
+            disabled={capturing}
+            aria-label={`Refresh ${competitor.handle}`}
+            className={cn(
+              'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors disabled:cursor-not-allowed',
+              capturing
+                ? 'text-[var(--anubis-gold)] opacity-80'
+                : 'text-foreground hover:bg-[color-mix(in_oklab,var(--anubis-gold)_12%,transparent)] hover:text-[var(--anubis-gold)]',
+            )}
+          >
+            <DownloadCloudIcon
+              className={cn(
+                'size-3.5',
+                capturing && 'animate-pulse',
+              )}
+              strokeWidth={2}
+            />
+            {capturing ? 'Capturing' : 'Refresh'}
+          </button>
+          <button
+            type='button'
+            onClick={onDelete}
+            disabled={capturing}
+            aria-label={`Stop tracking ${competitor.handle}`}
+            className='inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive disabled:opacity-50'
+          >
+            <Trash2Icon className='size-3.5' strokeWidth={2} />
+            Remove
+          </button>
+        </div>
       </div>
     </article>
   )

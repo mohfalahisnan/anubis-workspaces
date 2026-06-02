@@ -12,6 +12,7 @@ import { AgentSessionsRepo } from './db/repositories/agent-sessions-repo.js'
 import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
 import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
 import { CompetitorsService } from './competitors/competitors-service.js'
+import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 import { ProfileService } from './profiles/profile-service.js'
 import { SkillLoader, type SkillRoots } from './skills/loader.js'
 import { SseBroadcaster } from './sse/broadcaster.js'
@@ -31,6 +32,7 @@ export interface ConversationStack {
   conversation: ConversationService
   profiles: ProfileService
   competitors: CompetitorsService
+  capturedPosts: CapturedPostsRepo
   skills: SkillLoader
   sse: SseBroadcaster
   cron: CronService
@@ -56,6 +58,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
+  const capturedPosts = new CapturedPostsRepo(db)
 
   const skills = new SkillLoader(opts.skillRoots)
   const sse = new SseBroadcaster()
@@ -83,7 +86,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   return {
-    conversation, profiles, competitors, skills, sse, cron, taskManager: tm, aiAgent,
+    conversation, profiles, competitors, capturedPosts, skills, sse, cron, taskManager: tm, aiAgent,
     async shutdown() {
       cron.shutdown()
       await tm.shutdown()
@@ -98,6 +101,8 @@ export type { SkillDefinition, SkillIndex, SkillSource } from './skills/types.js
 export { toIndex as toSkillIndex } from './skills/types.js'
 export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'
+export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-posts-repo.js'
+export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 export { ConversationService } from './conversations/conversation-service.js'
 export { ProfileService } from './profiles/profile-service.js'
 export { CompetitorsService } from './competitors/competitors-service.js'

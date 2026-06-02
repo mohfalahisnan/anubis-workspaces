@@ -3,6 +3,7 @@ import {
   DownloadCloudIcon,
   PlusIcon,
   RefreshCwIcon,
+  SearchIcon,
   Trash2Icon,
   UserRoundIcon,
 } from 'lucide-react'
@@ -15,6 +16,7 @@ import {
   deleteCompetitor,
   listCompetitors,
 } from '@/api'
+import { FindCompetitorsDialog } from './competitor-dialogs'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -43,6 +45,7 @@ export function CompetitorsPage() {
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)
   const [capturing, setCapturing] = useState<Set<string>>(() => new Set())
 
   async function refresh() {
@@ -123,7 +126,7 @@ export function CompetitorsPage() {
                 : `${total} handle${total === 1 ? '' : 's'} tracked. Posts from each one land in Content.`}
             </p>
           </div>
-          <div className='flex shrink-0 items-center gap-2.5'>
+          <div className='flex shrink-0 flex-wrap items-center gap-2.5'>
             <button
               type='button'
               onClick={() => void refresh()}
@@ -132,6 +135,15 @@ export function CompetitorsPage() {
             >
               <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
               Refresh
+            </button>
+            <button
+              type='button'
+              onClick={() => setFindOpen(true)}
+              disabled={busy}
+              className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+            >
+              <SearchIcon className='size-[15px]' strokeWidth={2} />
+              Find competitors
             </button>
             <button
               type='button'
@@ -195,6 +207,22 @@ export function CompetitorsPage() {
         onCreated={async () => {
           setAddOpen(false)
           await refresh()
+        }}
+      />
+
+      <FindCompetitorsDialog
+        open={findOpen}
+        onClose={() => setFindOpen(false)}
+        onComplete={async (added) => {
+          setFindOpen(false)
+          await refresh()
+          setBanner({
+            kind: 'success',
+            message:
+              added === 0
+                ? 'Selected candidates were already tracked — nothing new added.'
+                : `Added ${added} new competitor${added === 1 ? '' : 's'} from discovery.`,
+          })
         }}
       />
     </div>

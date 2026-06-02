@@ -140,6 +140,27 @@ export interface UpdateCompetitorInput {
   notes?: string
 }
 
+/* Discovery — surfaces adjacent IG profiles to add as competitors. */
+export type DiscoverySource = 'explore' | 'hashtag' | 'keyword'
+
+export interface DiscoverCompetitorsInput {
+  source: DiscoverySource
+  hashtag?: string
+  keyword?: string
+  targetCompetitors?: number
+  timeoutMs?: number
+  profile?: 'login' | 'public' | 'flow'
+}
+
+export interface DiscoveredCandidate {
+  username: string
+  fullName?: string
+  bio?: string
+  followers?: number
+  profileImageUrl?: string
+  profileUrl?: string
+}
+
 export interface CreateConversationInput {
   title: string
   profileId?: string

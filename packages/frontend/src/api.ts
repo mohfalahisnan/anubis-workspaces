@@ -13,6 +13,8 @@ import type {
   CreateProfileInput,
   CronJobListResponse,
   CronJobSummary,
+  DiscoverCompetitorsInput,
+  DiscoveredCandidate,
   MessageListResponse,
   MessageSummary,
   ProfileListResponse,
@@ -303,6 +305,53 @@ export interface ListPostsOpts {
   competitorId?: string
   limit?: number
   orderBy?: 'recent' | 'engagement'
+}
+
+/**
+ * Runs the research-crawler's discovery flow (explore / hashtag /
+ * keyword) and returns the candidate profiles it surfaces. The raw
+ * route returns a StandardCrawlerOutput; we strip that down to the
+ * `output.profiles[]` since that's what the UI shows.
+ */
+export async function discoverCompetitors(
+  input: DiscoverCompetitorsInput,
+): Promise<DiscoveredCandidate[]> {
+  interface CrawlerProfile {
+    username: string
+    fullName?: string
+    bio?: string
+    followers?: number
+    profileImageUrl?: string
+    profileUrl?: string
+  }
+  interface CrawlerResponse {
+    ok: boolean
+    output: { profiles: CrawlerProfile[] }
+    error?: { code: string; message: string }
+    meta: { warnings: string[] }
+  }
+  const r = await api<CrawlerResponse>('/research-crawler/instagram/discover', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: input.source,
+      hashtag: input.source === 'hashtag' ? input.hashtag : undefined,
+      keyword: input.source === 'keyword' ? input.keyword : undefined,
+      targetCompetitors: input.targetCompetitors,
+      timeoutMs: input.timeoutMs,
+      profile: input.profile,
+    }),
+  })
+  if (!r.ok) {
+    throw new Error(r.error?.message ?? 'Discovery failed.')
+  }
+  return r.output.profiles.map((p) => ({
+    username: p.username,
+    fullName: p.fullName,
+    bio: p.bio,
+    followers: p.followers,
+    profileImageUrl: p.profileImageUrl,
+    profileUrl: p.profileUrl,
+  }))
 }
 
 export async function listPosts(

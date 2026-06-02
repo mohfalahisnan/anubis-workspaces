@@ -18,9 +18,10 @@ import {
 
 import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
 
-import { captureCompetitor, listCompetitors, listPosts } from '@/api'
+import { captureCompetitor, listPosts } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
+import { CaptureSelectionDialog } from './competitor-dialogs'
 
 type Format = 'carousel' | 'reel' | 'static'
 
@@ -213,6 +214,7 @@ export function ContentPage() {
   const [posts, setPosts] = useState<CapturedPostSummary[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [capturing, setCapturing] = useState<CaptureProgress | null>(null)
+  const [selectionOpen, setSelectionOpen] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [stars, setStars] = useState<Record<string, boolean>>({})
@@ -238,26 +240,9 @@ export function ContentPage() {
     setStars((s) => ({ ...s, [key]: !s[key] }))
   }
 
-  async function handleCaptureAll() {
+  async function handleCaptureFor(competitors: CompetitorSummary[]) {
     setBanner(null)
-    let competitors: CompetitorSummary[]
-    try {
-      competitors = await listCompetitors()
-    } catch (e) {
-      setBanner({
-        kind: 'error',
-        message: e instanceof Error ? e.message : 'Could not load competitors.',
-      })
-      return
-    }
-
-    if (competitors.length === 0) {
-      setBanner({
-        kind: 'warning',
-        message: 'No competitors tracked yet. Add some on the Competitors page first.',
-      })
-      return
-    }
+    if (competitors.length === 0) return
 
     // Sequential — Chrome is single-tab single-user, so parallel captures
     // would step on each other. Showing live "X of N" progress is the
@@ -338,9 +323,9 @@ export function ContentPage() {
             </button>
             <button
               type='button'
-              onClick={() => void handleCaptureAll()}
+              onClick={() => setSelectionOpen(true)}
               disabled={!!capturing}
-              title='Run the research-crawler against every tracked competitor'
+              title='Pick which tracked competitors to crawl'
               className={cn(
                 'inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-semibold transition-colors',
                 capturing
@@ -492,6 +477,15 @@ export function ContentPage() {
           </p>
         )}
       </div>
+
+      <CaptureSelectionDialog
+        open={selectionOpen}
+        onClose={() => setSelectionOpen(false)}
+        onConfirm={(picked) => {
+          setSelectionOpen(false)
+          void handleCaptureFor(picked)
+        }}
+      />
     </div>
   )
 }

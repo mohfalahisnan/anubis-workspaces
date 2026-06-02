@@ -97,6 +97,49 @@ export interface CronJobSummary {
   updatedAt: number
 }
 
+export interface UpdateCronJobInput {
+  name?: string
+  schedule?: string
+  scheduleDescription?: string
+  prompt?: string
+  enabled?: boolean
+}
+
+export interface CompetitorSummary {
+  id: string
+  handle: string
+  displayName?: string
+  niche?: string
+  tint?: string
+  followers?: number
+  avgLikes?: number
+  postCount: number
+  lastRefreshedAt?: number
+  notes?: string
+  addedAt: number
+  updatedAt: number
+}
+
+export interface CreateCompetitorInput {
+  handle: string
+  displayName?: string
+  niche?: string
+  tint?: string
+  followers?: number
+  avgLikes?: number
+  notes?: string
+}
+
+export interface UpdateCompetitorInput {
+  displayName?: string
+  niche?: string
+  tint?: string
+  followers?: number
+  avgLikes?: number
+  postCount?: number
+  notes?: string
+}
+
 export interface CreateConversationInput {
   title: string
   profileId?: string
@@ -129,6 +172,7 @@ export type ConversationListResponse = ListResponse<ConversationSummary>
 export type SkillListResponse = ListResponse<SkillSummary>
 export type CronJobListResponse = ListResponse<CronJobSummary>
 export type MessageListResponse = ListResponse<MessageSummary>
+export type CompetitorListResponse = ListResponse<CompetitorSummary>
 
 export interface ConversationCreateResponse {
   ok: true

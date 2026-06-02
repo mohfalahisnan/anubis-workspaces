@@ -1,8 +1,11 @@
 import type {
   ApiHealthResponse,
+  CompetitorListResponse,
+  CompetitorSummary,
   ConversationCreateResponse,
   ConversationListResponse,
   ConversationSummary,
+  CreateCompetitorInput,
   CreateConversationInput,
   CreateProfileInput,
   CronJobListResponse,
@@ -14,6 +17,8 @@ import type {
   SkillDetail,
   SkillListResponse,
   SkillSummary,
+  UpdateCompetitorInput,
+  UpdateCronJobInput,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -213,7 +218,59 @@ export async function reloadSkills(): Promise<{ count: number }> {
   return { count: r.count }
 }
 
-export async function listCronJobs(): Promise<CronJobSummary[]> {
-  const r = await api<CronJobListResponse>('/cron-jobs')
+export async function listCronJobs(conversationId?: string): Promise<CronJobSummary[]> {
+  const path = conversationId
+    ? `/cron-jobs?conversationId=${encodeURIComponent(conversationId)}`
+    : '/cron-jobs'
+  const r = await api<CronJobListResponse>(path)
   return r.items
+}
+
+export async function updateCronJob(
+  id: string,
+  patch: UpdateCronJobInput,
+): Promise<CronJobSummary> {
+  const r = await api<{ ok: true; job: CronJobSummary }>(
+    `/cron-jobs/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.job
+}
+
+export async function deleteCronJob(id: string): Promise<void> {
+  await api<{ ok: true }>(`/cron-jobs/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function listCompetitors(): Promise<CompetitorSummary[]> {
+  const r = await api<CompetitorListResponse>('/competitors')
+  return r.items
+}
+
+export async function createCompetitor(
+  input: CreateCompetitorInput,
+): Promise<CompetitorSummary> {
+  const r = await api<{ ok: true; competitor: CompetitorSummary }>('/competitors', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.competitor
+}
+
+export async function updateCompetitor(
+  id: string,
+  patch: UpdateCompetitorInput,
+): Promise<CompetitorSummary> {
+  const r = await api<{ ok: true; competitor: CompetitorSummary }>(
+    `/competitors/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.competitor
+}
+
+export async function deleteCompetitor(id: string): Promise<void> {
+  await api<{ ok: true }>(`/competitors/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
 }

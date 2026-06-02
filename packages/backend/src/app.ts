@@ -8,6 +8,7 @@ import { conversationRoutes } from './conversation.js'
 import { profileRoutes } from './profile.js'
 import { skillRoutes } from './skill.js'
 import { cronRoutes } from './cron.js'
+import { competitorRoutes } from './competitors.js'
 
 const app = new Hono()
 
@@ -39,6 +40,7 @@ app.route('/conversations', conversationRoutes)
 app.route('/profiles', profileRoutes)
 app.route('/skills', skillRoutes)
 app.route('/cron-jobs', cronRoutes)
+app.route('/competitors', competitorRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

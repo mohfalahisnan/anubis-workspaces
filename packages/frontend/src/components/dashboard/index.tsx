@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import {
   getHealth,
+  listCompetitors,
   listConversations,
   listCronJobs,
   listProfiles,
@@ -13,8 +14,10 @@ import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
+import { CompetitorsPage } from '@/pages/competitors'
 import { ProfileEditorPage } from '@/pages/profile-editor'
 import { ProfilesPage } from '@/pages/profiles'
+import { ScheduledPage } from '@/pages/scheduled'
 import { SkillsPage } from '@/pages/skills'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
@@ -99,11 +102,12 @@ function useLiveCounts(): LiveCounts {
     let active = true
 
     async function fetchAll() {
-      const [profiles, conversations, skills, cron] = await Promise.allSettled([
+      const [profiles, conversations, skills, cron, competitors] = await Promise.allSettled([
         listProfiles(),
         listConversations({ limit: 200 }),
         listSkills(),
         listCronJobs(),
+        listCompetitors(),
       ])
       if (!active) return
       setCounts({
@@ -112,6 +116,8 @@ function useLiveCounts(): LiveCounts {
           conversations.status === 'fulfilled' ? conversations.value.length : undefined,
         skills: skills.status === 'fulfilled' ? skills.value.length : undefined,
         cron: cron.status === 'fulfilled' ? cron.value.length : undefined,
+        competitors:
+          competitors.status === 'fulfilled' ? competitors.value.length : undefined,
       })
     }
 
@@ -191,19 +197,9 @@ function CurrentPage() {
     case 'skills':
       return <SkillsPage />
     case 'competitors':
-      return (
-        <PlaceholderPage
-          title='Competitors'
-          hint='Tracked Instagram profiles will land here. Add competitor → research-crawler capture → posts show up in Content.'
-        />
-      )
+      return <CompetitorsPage />
     case 'scheduled':
-      return (
-        <PlaceholderPage
-          title='Scheduled jobs'
-          hint='Jobs your agents create via [CRON_CREATE] blocks will be editable here.'
-        />
-      )
+      return <ScheduledPage />
     case 'settings':
       return (
         <PlaceholderPage

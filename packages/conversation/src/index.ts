@@ -10,6 +10,8 @@ import { MessagesRepo } from './db/repositories/messages-repo.js'
 import { ArtifactsRepo } from './db/repositories/artifacts-repo.js'
 import { AgentSessionsRepo } from './db/repositories/agent-sessions-repo.js'
 import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
+import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
+import { CompetitorsService } from './competitors/competitors-service.js'
 import { ProfileService } from './profiles/profile-service.js'
 import { SkillLoader, type SkillRoots } from './skills/loader.js'
 import { SseBroadcaster } from './sse/broadcaster.js'
@@ -28,6 +30,7 @@ export interface CreateConversationServiceOpts {
 export interface ConversationStack {
   conversation: ConversationService
   profiles: ProfileService
+  competitors: CompetitorsService
   skills: SkillLoader
   sse: SseBroadcaster
   cron: CronService
@@ -52,6 +55,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
+  const competitors = new CompetitorsService(new CompetitorsRepo(db))
 
   const skills = new SkillLoader(opts.skillRoots)
   const sse = new SseBroadcaster()
@@ -79,7 +83,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   return {
-    conversation, profiles, skills, sse, cron, taskManager: tm, aiAgent,
+    conversation, profiles, competitors, skills, sse, cron, taskManager: tm, aiAgent,
     async shutdown() {
       cron.shutdown()
       await tm.shutdown()
@@ -93,8 +97,10 @@ export type { Profile, ProfileConfig, ProfileOverride, ProfileSource, ResolvedPr
 export type { SkillDefinition, SkillIndex, SkillSource } from './skills/types.js'
 export { toIndex as toSkillIndex } from './skills/types.js'
 export type { CronJob } from './db/repositories/cron-jobs-repo.js'
+export type { Competitor } from './db/repositories/competitors-repo.js'
 export { ConversationService } from './conversations/conversation-service.js'
 export { ProfileService } from './profiles/profile-service.js'
+export { CompetitorsService } from './competitors/competitors-service.js'
 export { SkillLoader } from './skills/loader.js'
 export { CronService } from './cron/cron-service.js'
 export { SseBroadcaster } from './sse/broadcaster.js'

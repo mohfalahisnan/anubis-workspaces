@@ -50,6 +50,12 @@ export class TaskManager {
     return this.tasks.get(conversationId)?.emitter ?? null
   }
 
+  isBusy(conversationId: string): boolean {
+    if (this.building.has(conversationId)) return true
+    const task = this.tasks.get(conversationId)
+    return task?.status === 'pending' || task?.status === 'running'
+  }
+
   async getOrBuild(
     conv: ConversationLite,
     profile: ResolvedProfile,
@@ -57,8 +63,11 @@ export class TaskManager {
   ): Promise<AgentTask> {
     const existing = this.tasks.get(conv.id)
     if (existing) {
+      if (existing.status === 'pending' || existing.status === 'running') {
+        throw new Error(`Conversation ${conv.id} already has a running agent task`)
+      }
       existing.lastActivityAt = nowMs()
-      return existing
+      this.tasks.delete(conv.id)
     }
     const inflight = this.building.get(conv.id)
     if (inflight) return inflight

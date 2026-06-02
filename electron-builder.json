@@ -12,12 +12,20 @@
     "packages/backend/dist",
     "packages/backend/package.json",
     "packages/backend/node_modules/**",
+    "packages/ai-agent/dist",
+    "packages/ai-agent/package.json",
+    "packages/conversation/dist",
+    "packages/conversation/package.json",
     "packages/research-crawler/dist",
     "packages/research-crawler/package.json"
   ],
   "asarUnpack": [
     "packages/backend/dist/**",
     "packages/backend/node_modules/**",
+    "packages/ai-agent/dist/**",
+    "packages/ai-agent/package.json",
+    "packages/conversation/dist/**",
+    "packages/conversation/package.json",
     "packages/research-crawler/dist/**",
     "packages/research-crawler/package.json"
   ],

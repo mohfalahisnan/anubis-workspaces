@@ -130,6 +130,9 @@ export class ConversationService {
     if (input.override?.agent && input.override.agent !== cur.agent) {
       throw new Error('Cannot change conversation agent via per-turn override')
     }
+    if (this.deps.tm.isBusy(id)) {
+      throw new Error(`Conversation ${id} already has a running agent task`)
+    }
     const resolved = this.resolveOrThrow(cur.profileId ?? null, { ...cur.extra.overrides, ...input.override }, cur.agent)
     const now = nowMs()
     const msgId = newId()

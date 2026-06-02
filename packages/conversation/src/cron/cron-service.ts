@@ -67,7 +67,11 @@ export class CronService {
       return `Removed cron job ${cmd.id}.`
     }
     if (cmd.kind === 'update') {
-      const next = this.update(cmd.id, cmd.params)
+      const { message, ...patch } = cmd.params
+      const next = this.update(cmd.id, {
+        ...patch,
+        ...(message !== undefined ? { prompt: message } : {}),
+      })
       return next ? `Updated cron job ${cmd.id}.` : `Cron job ${cmd.id} not found.`
     }
     const all = this.opts.repo.list(conversationId)

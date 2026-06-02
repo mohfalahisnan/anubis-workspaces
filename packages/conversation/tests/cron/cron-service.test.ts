@@ -51,8 +51,21 @@ describe('CronService', () => {
   it('handle(update) updates fields when present', () => {
     svc.handle({ kind: 'create', params: { name: 'Y', schedule: '* * * * *', message: 'go' } }, 'c1')
     const id = svc.list('c1')[0]!.id
+    svc.handle({ kind: 'update', id, params: { name: 'Z', message: 'updated prompt' } }, 'c1')
+    expect(svc.list('c1')[0]!).toMatchObject({
+      name: 'Z',
+      prompt: 'updated prompt',
+    })
+  })
+
+  it('handle(update) preserves prompt when message is omitted', () => {
+    svc.handle({ kind: 'create', params: { name: 'Y', schedule: '* * * * *', message: 'go' } }, 'c1')
+    const id = svc.list('c1')[0]!.id
     svc.handle({ kind: 'update', id, params: { name: 'Z' } }, 'c1')
-    expect(svc.list('c1')[0]!.name).toBe('Z')
+    expect(svc.list('c1')[0]!).toMatchObject({
+      name: 'Z',
+      prompt: 'go',
+    })
   })
 
   it('loadFromDb schedules every enabled job', () => {

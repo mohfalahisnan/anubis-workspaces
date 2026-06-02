@@ -2,11 +2,20 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================
+   Anubis — Brand Identity v1
+   Black & gold · warm neutrals · plainspoken
+   Source of truth: brand-identity.html
+   ============================================================ */
+
 @theme {
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Geist Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "JetBrains Mono", monospace;
+  --font-heading: var(--font-sans);
 }
 
 @layer base {
@@ -20,12 +29,14 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-text-size-adjust: 100%;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "ss01" 1;
   }
 
   html {
     min-width: 320px;
     min-height: 100%;
-    background: #f8fafc;
+    background: var(--background);
     @apply font-sans;
   }
 
@@ -33,12 +44,16 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    background:
-      radial-gradient(circle at top, rgba(56, 189, 248, 0.16), transparent 34%),
-      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.12), transparent 28%),
-      #f8fafc;
-    color: #0f172a;
+    background: var(--background);
+    color: var(--foreground);
     @apply bg-background text-foreground;
+  }
+
+  /* Subtle warm radial — only on dark, low opacity, the brand's one indulgence */
+  .dark body {
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(217, 164, 65, 0.035), transparent 60%),
+      var(--background);
   }
 
   #root {
@@ -58,39 +73,23 @@
     font: inherit;
   }
 
+  /* Inline code — uses brand surface tokens, monospaced via Geist Mono */
   code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
     border-radius: 0.375rem;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    background: #f1f5f9;
+    border: 1px solid var(--border);
+    background: var(--muted);
     padding: 0.125rem 0.375rem;
-    color: #0f172a;
+    color: var(--foreground);
   }
 
   .dark {
     color-scheme: dark;
   }
 
-  .dark html,
-  html.dark {
-    background: #020617;
-  }
-
-  .dark body {
-    background:
-      radial-gradient(circle at top, rgba(56, 189, 248, 0.1), transparent 34%),
-      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.08), transparent 28%),
-      #020617;
-    color: #e2e8f0;
-  }
-
-  .dark code {
-    border-color: rgba(148, 163, 184, 0.25);
-    background: #1e293b;
-    color: #e2e8f0;
-  }
-
   * {
-    scrollbar-color: #94a3b8 #e2e8f0;
+    scrollbar-color: var(--border) var(--muted);
     @apply border-border outline-ring/50;
   }
 
@@ -100,23 +99,29 @@
   }
 
   *::-webkit-scrollbar-track {
-    background: #e2e8f0;
+    background: var(--muted);
   }
 
   *::-webkit-scrollbar-thumb {
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--muted);
     border-radius: 9999px;
-    background: #94a3b8;
+    background: var(--border);
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
+    background: var(--muted-foreground);
+  }
+
+  /* Selection — gold tint, brand-aligned */
+  ::selection {
+    background: color-mix(in oklab, var(--anubis-gold) 30%, transparent);
+    color: var(--foreground);
   }
 }
 
+/* shadcn token bindings — keep variable names so every existing
+   component picks up the new palette without code changes. */
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -155,73 +160,106 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Anubis-only extras — reach for these when shadcn semantics don't fit */
+  --color-anubis-gold: var(--anubis-gold);
+  --color-anubis-gold-deep: var(--anubis-gold-deep);
+  --color-anubis-gold-hi: var(--anubis-gold-hi);
+  --color-anubis-success: var(--anubis-success);
 }
 
+/* -----------------------------------------------------------
+   LIGHT — Canvas #FAFAF7 (warm off-white)
+   ----------------------------------------------------------- */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.488 0.243 264.376);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
+  /* Brand extras (gold stays identical on both themes) */
+  --anubis-gold: #d9a441;
+  --anubis-gold-deep: #b8893a;
+  --anubis-gold-hi: #f0c75e;
+  --anubis-success: #3e9a5e;
+
+  /* shadcn semantic tokens */
+  --background: #fafaf7;
+  --foreground: #14161b;
+  --card: #ffffff;
+  --card-foreground: #14161b;
+  --popover: #ffffff;
+  --popover-foreground: #14161b;
+  --primary: #d9a441;
+  --primary-foreground: #14161b;
+  --secondary: #f3f1ea;
+  --secondary-foreground: #14161b;
+  --muted: #f3f1ea;
+  --muted-foreground: #6e7378;
+  --accent: #f3f1ea;
+  --accent-foreground: #14161b;
+  --destructive: #c75a4e;
+  --destructive-foreground: #fafaf7;
+  --border: #e8e6df;
+  --input: #e8e6df;
+  --ring: #d9a441;
+
+  /* Charts — gold-led sequence, brand neutrals + state colors */
+  --chart-1: #d9a441;
+  --chart-2: #b8893a;
+  --chart-3: #3e9a5e;
+  --chart-4: #6e7378;
+  --chart-5: #c75a4e;
+
+  --radius: 0.5rem;
+
+  /* Sidebar — slightly elevated from canvas */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14161b;
+  --sidebar-primary: #d9a441;
+  --sidebar-primary-foreground: #14161b;
+  --sidebar-accent: #f3f1ea;
+  --sidebar-accent-foreground: #14161b;
+  --sidebar-border: #e8e6df;
+  --sidebar-ring: #d9a441;
 }
 
+/* -----------------------------------------------------------
+   DARK — Canvas #0B0C0F (near-black, OLED-friendly)
+   ----------------------------------------------------------- */
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.424 0.199 265.638);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
+  --anubis-gold: #d9a441;
+  --anubis-gold-deep: #b8893a;
+  --anubis-gold-hi: #f0c75e;
+  --anubis-success: #5fb97a;
+
+  --background: #0b0c0f;
+  --foreground: #f5f2ea;
+  --card: #14161b;
+  --card-foreground: #f5f2ea;
+  --popover: #14161b;
+  --popover-foreground: #f5f2ea;
+  --primary: #d9a441;
+  --primary-foreground: #0b0c0f;
+  --secondary: #1b1e25;
+  --secondary-foreground: #f5f2ea;
+  --muted: #1b1e25;
+  --muted-foreground: #9aa0a6;
+  --accent: #1b1e25;
+  --accent-foreground: #f5f2ea;
+  --destructive: #e07a6f;
+  --destructive-foreground: #14161b;
+  --border: #23262d;
+  --input: #23262d;
+  --ring: #d9a441;
+
+  --chart-1: #d9a441;
+  --chart-2: #b8893a;
+  --chart-3: #5fb97a;
+  --chart-4: #9aa0a6;
+  --chart-5: #e07a6f;
+
+  --sidebar: #14161b;
+  --sidebar-foreground: #f5f2ea;
+  --sidebar-primary: #d9a441;
+  --sidebar-primary-foreground: #0b0c0f;
+  --sidebar-accent: #1b1e25;
+  --sidebar-accent-foreground: #f5f2ea;
+  --sidebar-border: #23262d;
+  --sidebar-ring: #d9a441;
 }

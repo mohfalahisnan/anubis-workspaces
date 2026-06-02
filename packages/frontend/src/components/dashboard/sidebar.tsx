@@ -1,19 +1,18 @@
-import { SparklesIcon } from 'lucide-react'
-
 import { cn } from '@/lib/utils'
+import { AnubisMark } from '@/components/brand/anubis-mark'
 import { Badge } from '@/components/ui/badge'
 import { navItems } from './data'
 
 export function Sidebar() {
   return (
-    <aside className='hidden w-60 shrink-0 flex-col border-r border-border bg-card/40 lg:flex'>
+    <aside className='hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex'>
       <div className='flex h-16 items-center gap-2.5 px-5'>
-        <div className='flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'>
-          <SparklesIcon className='size-4' />
-        </div>
+        <AnubisMark size={28} />
         <div className='leading-tight'>
-          <div className='text-sm font-semibold tracking-tight'>Content OS</div>
-          <div className='text-[11px] text-muted-foreground'>AI Agent workspace</div>
+          <div className='text-[15px] font-semibold tracking-[-0.02em]'>Anubis</div>
+          <div className='text-[11px] text-muted-foreground'>
+            Your AI agent content OS
+          </div>
         </div>
       </div>
 

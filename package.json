@@ -39,5 +39,11 @@
     "vite-plugin-electron": "^1.0.0",
     "vite-plugin-electron-renderer": "^1.0.0",
     "vitest": "^4.1.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.2.15",
+      "@types/react-dom": "^19.2.3"
+    }
   }
 }

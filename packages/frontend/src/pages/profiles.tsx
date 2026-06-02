@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ChevronDownIcon,
   CopyIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -11,6 +10,7 @@ import type { ProfileSummary } from '@anubis/shared'
 
 import { createProfile, deleteProfile, getProfile, listProfiles } from '@/api'
 import { cn } from '@/lib/utils'
+import { useNavigation } from '@/lib/navigation'
 
 /* -----------------------------------------------------------
    Profiles screen
@@ -36,6 +36,7 @@ const DEFAULT_NEW_PROFILE_CONFIG = {
 } as const
 
 export function ProfilesPage() {
+  const { navigate } = useNavigation()
   const [profiles, setProfiles] = useState<ProfileSummary[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
@@ -75,7 +76,7 @@ export function ProfilesPage() {
         config: { ...DEFAULT_NEW_PROFILE_CONFIG },
       })
       await refresh()
-      setBanner({ kind: 'success', message: `Created "${created.name}".` })
+      navigate({ page: 'profile-editor', profileId: created.id })
     } catch (e) {
       setBanner({
         kind: 'error',
@@ -188,7 +189,12 @@ export function ProfilesPage() {
         ) : (
           <>
             <Section title='Built-in'>
-              <ProfileGrid profiles={grouped.builtin} onCopy={handleCopy} busy={busy} />
+              <ProfileGrid
+                profiles={grouped.builtin}
+                onCopy={handleCopy}
+                onEdit={(p) => navigate({ page: 'profile-editor', profileId: p.id })}
+                busy={busy}
+              />
             </Section>
 
             <Section
@@ -199,6 +205,7 @@ export function ProfilesPage() {
               <ProfileGrid
                 profiles={grouped.user}
                 onCopy={handleCopy}
+                onEdit={(p) => navigate({ page: 'profile-editor', profileId: p.id })}
                 onDelete={handleDelete}
                 busy={busy}
               />
@@ -248,11 +255,13 @@ function Section({
 function ProfileGrid({
   profiles,
   onCopy,
+  onEdit,
   onDelete,
   busy,
 }: {
   profiles: ProfileSummary[]
   onCopy: (p: ProfileSummary) => void
+  onEdit: (p: ProfileSummary) => void
   onDelete?: (p: ProfileSummary) => void
   busy: boolean
 }) {
@@ -264,6 +273,7 @@ function ProfileGrid({
           key={p.id}
           profile={p}
           onCopy={() => onCopy(p)}
+          onEdit={() => onEdit(p)}
           onDelete={onDelete ? () => onDelete(p) : undefined}
           busy={busy}
         />
@@ -275,11 +285,13 @@ function ProfileGrid({
 function ProfileCard({
   profile,
   onCopy,
+  onEdit,
   onDelete,
   busy,
 }: {
   profile: ProfileSummary
   onCopy: () => void
+  onEdit: () => void
   onDelete?: () => void
   busy: boolean
 }) {
@@ -339,12 +351,11 @@ function ProfileCard({
 
         <button
           type='button'
-          disabled
-          title='Editor coming soon'
-          className='inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-muted-foreground/70 disabled:cursor-not-allowed'
+          onClick={onEdit}
+          disabled={busy}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50'
         >
           Edit
-          <ChevronDownIcon className='size-3' strokeWidth={2} />
         </button>
 
         {onDelete && (

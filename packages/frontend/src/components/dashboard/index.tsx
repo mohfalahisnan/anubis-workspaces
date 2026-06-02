@@ -13,6 +13,7 @@ import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
+import { ProfileEditorPage } from '@/pages/profile-editor'
 import { ProfilesPage } from '@/pages/profiles'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
@@ -25,6 +26,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   'active-conversation': 'Conversations',
   content: 'Content',
   profiles: 'Profiles',
+  'profile-editor': 'Profiles · Edit',
   skills: 'Skills',
   competitors: 'Competitors',
   scheduled: 'Scheduled jobs',
@@ -183,6 +185,8 @@ function CurrentPage() {
       return <ContentPage />
     case 'profiles':
       return <ProfilesPage />
+    case 'profile-editor':
+      return <ProfileEditorPage profileId={route.profileId} />
     case 'skills':
       return (
         <PlaceholderPage

@@ -90,6 +90,45 @@ export async function deleteProfile(id: string): Promise<void> {
   })
 }
 
+export interface UpdateProfileInput {
+  name?: string
+  description?: string
+  configPatch?: Record<string, unknown>
+  sortOrder?: number
+}
+
+export async function updateProfile(
+  id: string,
+  patch: UpdateProfileInput,
+): Promise<ProfileSummary> {
+  const r = await api<{ ok: true; profile: ProfileSummary }>(
+    `/profiles/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.profile
+}
+
+/* ai-agent catalog — drives the model + reasoning dropdowns */
+
+export interface ModelInfo {
+  id: string
+  category: 'recommended' | 'recommended_research_preview' | 'alternative'
+  description: string
+}
+
+export interface AgentCatalog {
+  agents: readonly ('claude' | 'codex')[]
+  models: Record<'claude' | 'codex', ModelInfo[]>
+  defaultModel: Record<'claude' | 'codex', string>
+  reasoningEfforts: readonly ('minimal' | 'low' | 'medium' | 'high')[]
+  defaultReasoningEffort: 'minimal' | 'low' | 'medium' | 'high'
+}
+
+export async function getCatalog(): Promise<AgentCatalog> {
+  const r = await api<{ ok: true; catalog: AgentCatalog }>('/ai-agent/catalog')
+  return r.catalog
+}
+
 export async function listConversations(
   opts: { limit?: number; archived?: boolean } = {},
 ): Promise<ConversationSummary[]> {

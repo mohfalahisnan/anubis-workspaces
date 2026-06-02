@@ -18,6 +18,8 @@ export { CodexPool } from './agents/codex/pool.js'
 export { ClaudeAgent, runClaudeStream } from './agents/claude/runner.js'
 export { buildClaudeArgs } from './agents/claude/build-args.js'
 export { createAiAgentService, AiAgentService } from './service/ai-agent-service.js'
+export { getBuiltinSkillRoots } from './skills/roots.js'
+export type { BuiltinSkillRoots } from './skills/roots.js'
 export type {
   AiAgentServiceOptions,
   AgentEvent,

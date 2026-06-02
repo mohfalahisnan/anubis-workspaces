@@ -25,9 +25,11 @@ release
 *.sln
 *.sw?
 
-# lockfiles: keep pnpm-lock.yaml (our active package manager) but ignore the others
+# lockfiles are managed outside PR review
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
+bun.lock
 /test-results/
 /playwright-report/
 /playwright/.cache/

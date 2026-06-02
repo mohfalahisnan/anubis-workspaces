@@ -101,15 +101,23 @@ function buildElectron() {
   })
 }
 
-function buildResearchCrawler() {
+function buildBackendPackages() {
   return new Promise((resolve, reject) => {
-    const child = runPnpm(['--filter', 'research-crawler', 'build'])
+    const child = runPnpm([
+      '--filter',
+      '@anubis/research-crawler',
+      '--filter',
+      '@anubis/ai-agent',
+      '--filter',
+      '@anubis/conversation',
+      'build',
+    ])
 
     child.once('exit', (code) => {
       if (code === 0) {
         resolve()
       } else {
-        reject(new Error(`Research crawler build failed. code=${code ?? 'null'}`))
+        reject(new Error(`Backend package build failed. code=${code ?? 'null'}`))
       }
     })
   })
@@ -155,7 +163,7 @@ async function main() {
 
   await Promise.all([
     waitForFrontendReady(frontend),
-    buildResearchCrawler().then(() => buildElectron()),
+    buildBackendPackages().then(() => buildElectron()),
   ])
 
   console.log(`\n[desktop] Renderer: ${frontendUrl}`)

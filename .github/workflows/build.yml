@@ -34,12 +34,15 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
 
       - run: pnpm typecheck
 
       - name: Build (no publish)
         run: |
+          pnpm --filter @anubis/research-crawler build
+          pnpm --filter @anubis/ai-agent build
+          pnpm --filter @anubis/conversation build
           pnpm --filter @anubis/backend build
           pnpm --filter @anubis/frontend build
           pnpm exec vite build

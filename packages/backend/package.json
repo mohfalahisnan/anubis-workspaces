@@ -9,10 +9,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@anubis/ai-agent": "workspace:*",
+    "@anubis/conversation": "workspace:*",
+    "@anubis/research-crawler": "workspace:*",
     "@anubis/shared": "workspace:*",
     "@hono/node-server": "^1.19.6",
-    "@anubis/ai-agent": "workspace:*",
-    "@anubis/research-crawler": "workspace:*",
     "hono": "^4.10.7",
     "zod": "^4.4.3"
   }

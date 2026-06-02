@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@anubis/shared": "workspace:*",
-    "@hono/node-server": "^1.19.6",
+    "@hono/node-server": "^2.0.4",
     "hono": "^4.10.7",
     "research-crawler": "workspace:*",
     "zod": "^4.4.3"

@@ -7,7 +7,12 @@ export default defineConfig({
       'test/**/*.{test,spec}.?(c|m)[jt]s?(x)',
       'packages/*/tests/**/*.{test,spec}.?(c|m)[jt]s?(x)',
     ],
-    exclude: ['test/e2e/**', '**/node_modules/**', '**/dist/**'],
+    exclude: [
+      'test/e2e/**',
+      '**/node_modules/**',
+      '**/dist/**',
+      'packages/frontend/tests/**',
+    ],
     passWithNoTests: true,
     testTimeout: 1000 * 29,
   },

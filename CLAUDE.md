@@ -18,8 +18,9 @@ pnpm workspaces (`pnpm-workspace.yaml`): `apps/*` and `packages/*`.
 
 - `apps/desktop` — Electron main + preload (`electron/main`, `electron/preload`). Compiles to `apps/desktop/dist-electron`.
 - `packages/frontend` (`@anubis/frontend`) — React 19 + Vite + Tailwind v4 renderer. shadcn/ui + AI Elements components. Builds to `packages/frontend/dist`.
-- `packages/backend` (`@anubis/backend`) — Hono server exposing `/health` and `/research-crawler/*`.
-- `packages/research-crawler` (`research-crawler`) — standalone crawler core (own version, own CLI, packable to a Node SEA binary). No HTTP/MCP server of its own.
+- `packages/backend` (`@anubis/backend`) — Hono server exposing `/health`, `/research-crawler/*`, and `/ai-agent/*`.
+- `packages/research-crawler` (`research-crawler`) — internal crawler core. No HTTP/MCP server and no standalone binary packaging.
+- `packages/anubis-ai-agent` (`anubis-ai-agent`) — internal Codex/Claude agent core used by backend HTTP routes. No MCP, CLI, or bundled binaries.
 - `packages/shared` (`@anubis/shared`) — types shared between frontend and backend (e.g. `ApiHealthResponse`).
 
 Internal deps use `workspace:*`. Package imports inside `research-crawler` use explicit
@@ -43,13 +44,14 @@ Single test / package-scoped work:
 pnpm vitest run packages/research-crawler/tests/avg-likes.test.ts   # one file
 pnpm vitest run -t "name of test"                                   # by test name
 pnpm --filter research-crawler build         # build one package
+pnpm --filter anubis-ai-agent build          # build the agent package
 pnpm --filter @anubis/backend dev:server     # run backend alone (tsx, watch-free)
-pnpm --filter research-crawler run pack:sea  # build standalone executable
 ```
 
-Build order is load-bearing: `research-crawler` → `@anubis/backend` → `@anubis/frontend`
-→ root `vite build` (electron main/preload) → `electron-builder`. `pretest` builds the
-first three plus `vite build --mode=test` before tests run.
+Build order is load-bearing: `research-crawler` → `anubis-ai-agent` →
+`@anubis/backend` → `@anubis/frontend` → root `vite build`
+(electron main/preload) → `electron-builder`. `pretest` builds the first four
+plus `vite build --mode=test` before tests run.
 
 ## How the desktop app wires together
 
@@ -64,15 +66,16 @@ through `getApiBaseUrl()`. CORS on the backend only allows localhost origins.
 ## Backend ↔ crawler contract
 
 `packages/backend/src/research-crawler.ts` validates request bodies with Zod and calls the
-crawler library directly. Routes: `POST /research-crawler/chrome/open`,
-`/instagram/capture-profile`, `/instagram/discover`. Backend errors are normalized in
-`app.ts` (`ZodError` → 400 with issues, else 500).
+crawler and agent libraries directly. Routes: `POST /research-crawler/chrome/open`,
+`/instagram/capture-profile`, `/instagram/discover`, `GET /ai-agent/catalog`, and
+`POST /ai-agent/run`. Backend errors are normalized in `app.ts` (`ZodError` → 400
+with issues, else 500).
 
 ## research-crawler specifics
 
 - Talks to Chrome over CDP via a `--remote-debugging-port`. It does not bundle a browser; `open-chrome` (or `ensureFlowChrome`) launches/reuses a Chrome instance per profile.
 - Three side-by-side Chrome profiles (`packages/research-crawler/src/core/chrome/profile-resolver.ts`): `login` (port 9222, headed — log in to Instagram once), `public` (9223, headless — post capture), `flow` (9224, headed — Google Flow). The login profile refuses headless without `--force-headless`.
-- Profile dirs (`data/chrome-profile-*`) are anchored to the package root, computed differently for ESM vs the Node SEA bundle (`import.meta.url` is empty in the SEA build — see the comment in `profile-resolver.ts`).
+- Profile dirs (`data/chrome-profile-*`) are anchored to the package root through `import.meta.url`.
 - Most capture commands return the standard envelope (`standard-output.ts`: `{ ok, schemaVersion, output: { profiles, posts }, meta }`); `discover-instagram` / `capture-instagram-profile` return simplified shapes. `avgLikes` is a dominant-cluster mean, not a plain average — see `packages/research-crawler/README.md` and `core/instagram/avg-likes.ts`.
 - Progress streams to stderr via `ProgressReporter`; the backend passes `silentReporter()` so stdout JSON stays clean.
 
@@ -81,4 +84,3 @@ crawler library directly. Routes: `POST /research-crawler/chrome/open`,
 - All packages are ESM (`"type": "module"`). Shared compiler base: `tsconfig.base.json` (ES2022, `strict`, `isolatedModules`).
 - Frontend path alias `@` → `packages/frontend/src` (in `vite.config.ts`).
 - Electron main/preload are bundled by `vite-plugin-electron` with `electron`/`electron-updater` marked external.
-```

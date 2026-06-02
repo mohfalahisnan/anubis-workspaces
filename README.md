@@ -20,7 +20,7 @@ pnpm dev          # builds the crawler + Electron bundle and opens the desktop a
 Run from the repo root:
 
 | Command | Description |
-|---------|-------------|
+| ------- | ----------- |
 | `pnpm dev` | Full desktop dev loop (`scripts/dev.mjs`): Vite dev server + Electron + backend. |
 | `pnpm build` | Build every package in order, then package with electron-builder. |
 | `pnpm test` | Run Vitest unit tests. |
@@ -32,12 +32,13 @@ Package-scoped work:
 ```sh
 pnpm --filter @anubis/backend dev:server     # run the backend alone
 pnpm --filter research-crawler build         # build one package
-pnpm --filter research-crawler run pack:sea  # build a standalone executable
+pnpm --filter anubis-ai-agent build          # build the HTTP-oriented agent core
 pnpm vitest run packages/research-crawler/tests/avg-likes.test.ts   # one test file
 ```
 
-The build order is load-bearing: `research-crawler` → `@anubis/backend` →
-`@anubis/frontend` → root `vite build` (Electron main/preload) → `electron-builder`.
+The build order is load-bearing: `research-crawler` → `anubis-ai-agent` →
+`@anubis/backend` → `@anubis/frontend` → root `vite build`
+(Electron main/preload) → `electron-builder`.
 
 ## Workspace layout
 
@@ -45,8 +46,9 @@ pnpm workspaces over `apps/*` and `packages/*`:
 
 - **`apps/desktop`** — Electron main + preload. Compiles to `apps/desktop/dist-electron`.
 - **`packages/frontend`** (`@anubis/frontend`) — React 19 + Vite + Tailwind v4 renderer with shadcn/ui and AI Elements components.
-- **`packages/backend`** (`@anubis/backend`) — Hono server exposing `/health` and `/research-crawler/*`.
-- **`packages/research-crawler`** (`research-crawler`) — standalone CDP crawler core with its own CLI; see [its README](packages/research-crawler/README.md).
+- **`packages/backend`** (`@anubis/backend`) — Hono server exposing `/health`, `/research-crawler/*`, and `/ai-agent/*`.
+- **`packages/research-crawler`** (`research-crawler`) — internal CDP crawler library used by the backend; see [its README](packages/research-crawler/README.md).
+- **`packages/anubis-ai-agent`** (`anubis-ai-agent`) — HTTP-oriented Codex/Claude agent core used by the backend; see [its README](packages/anubis-ai-agent/README.md).
 - **`packages/shared`** (`@anubis/shared`) — types shared between frontend and backend.
 
 ## How it wires together
@@ -62,12 +64,14 @@ Because the port is dynamic, the renderer always resolves the backend URL throug
 ## Backend API
 
 The Hono backend (`packages/backend/src`) validates request bodies with Zod and calls
-the crawler library directly:
+internal packages directly:
 
 - `GET /health`
 - `POST /research-crawler/chrome/open`
 - `POST /research-crawler/instagram/capture-profile`
 - `POST /research-crawler/instagram/discover`
+- `GET /ai-agent/catalog`
+- `POST /ai-agent/run`
 
 ## License
 

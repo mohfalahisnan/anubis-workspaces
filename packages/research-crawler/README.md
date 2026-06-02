@@ -1,114 +1,69 @@
 # Research Crawler
 
-Headless extraction of the browser scraping/crawling core from Orchapp. It has no UI and no local HTTP server: the CLI calls the crawler functions directly.
+`research-crawler` is the internal Chrome DevTools Protocol crawler library used by
+the Anubis backend. It has no local HTTP server, no MCP server, and no standalone
+binary packaging. The backend imports the package directly and exposes the HTTP API.
 
 ## Install
 
+From the repository root:
+
 ```bash
 pnpm install
-pnpm build
+pnpm --filter research-crawler build
+pnpm --filter research-crawler typecheck
 ```
 
-## Pack
+## Backend Usage
 
-Build a standalone executable for the current OS:
+Use the Anubis backend routes instead of calling this package over a separate
+server:
 
-```bash
-pnpm run pack:sea
-```
+- `POST /research-crawler/chrome/open`
+- `POST /research-crawler/instagram/capture-profile`
+- `POST /research-crawler/instagram/discover`
 
-Output:
+The package exports crawler functions from `src/index.ts` for backend use.
+
+## Chrome Profiles
+
+Chrome must run with remote debugging enabled. The backend can open or reuse
+Chrome profiles through `/research-crawler/chrome/open`.
+
+Three Chrome profiles are kept side by side:
+
+| Profile | Default dir | Default port | Default headless |
+| ------- | ----------- | ------------ | ---------------- |
+| `login` | `data/chrome-profile-login` | `9222` | headed |
+| `public` | `data/chrome-profile-public` | `9223` | headless |
+| `flow` | `data/chrome-profile-flow` | `9224` | headed |
+
+The `login` profile opens visible Chrome so Instagram login can be completed
+manually. The `public` profile is used for raw Instagram post/profile capture.
+The `flow` profile is used for Google Flow automation.
+
+`--headless` and `--headed` style options are still supported by the core launch
+API. The login profile refuses headless unless `forceHeadless` is passed because
+the login flow needs a visible browser.
+
+If Chrome is already listening on the resolved port for the same profile dir, the
+crawler reuses it. A mismatched profile dir on that port is rejected.
+
+## Progress
+
+Crawler services accept a progress reporter. The backend passes `silentReporter()`
+so HTTP responses stay clean. Tests and local scripts can pass a reporter to see
+progress such as:
 
 ```text
-release/research-crawler.exe   # Windows
-release/research-crawler       # macOS/Linux
-```
-
-The executable embeds Node and does not require Node.js on the user's machine. Build macOS and Linux binaries on macOS/Linux runners; Node SEA uses the current platform's Node binary.
-
-## CI/CD
-
-GitHub Actions workflows:
-
-- `.github/workflows/ci.yml` runs typecheck, build, executable packing, CLI smoke test, and artifact upload on Ubuntu, macOS, and Windows.
-- `.github/workflows/release.yml` builds packaged binaries on tags like `v0.1.0`, archives them, and uploads assets to the GitHub Release.
-
-Create a release:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-## CLI
-
-```bash
-pnpm research-crawler --help
-release/research-crawler.exe --help
-
-# Open Chrome with a named profile (login, public, or flow)
-pnpm research-crawler open-chrome --profile login
-pnpm research-crawler open-chrome --profile public --headless
-
-# Capture posts for one or many usernames on the public profile (default)
-pnpm research-crawler capture-instagram-profile --username example --posts-per-profile 30
-pnpm research-crawler capture-instagram-profile --usernames a,b,c --posts-per-profile 20
-pnpm research-crawler capture-instagram-profile --from-file data/discover.json --posts-per-profile 30
-
-# Capture a single post or reel by permalink
-pnpm research-crawler capture-instagram-post --post-url https://www.instagram.com/p/CODE/
-
-# Discover competitor profiles on the login profile (default)
-pnpm research-crawler discover-instagram --source hashtag --hashtag coffee --target-competitors 20
-
-# Generate images in Google Flow from the flow profile
-pnpm research-crawler flow-generate "product photo on a kitchen counter" \
-  --url "https://labs.google/fx/id/tools/flow/project/<project-id>" \
-  --ratio 1:1 --variations 4 --download-dir result/flow
-```
-
-After build, package bins are:
-
-```bash
-research-crawler
-rcrawl
-```
-
-Chrome must run with remote debugging enabled. `open-chrome` starts a separate Chrome profile with `--remote-debugging-port`.
-
-### Profiles
-
-Three Chrome profiles are kept side-by-side:
-
-| Profile | Default dir                    | Default port | Default headless |
-|---------|--------------------------------|--------------|------------------|
-| login   | `data/chrome-profile-login`    | 9222         | headed           |
-| public  | `data/chrome-profile-public`   | 9223         | headless         |
-| flow    | `data/chrome-profile-flow`     | 9224         | headed           |
-
-`open-chrome --profile login` opens a visible Chrome — log in to Instagram once and close. Subsequent `discover-instagram` runs reuse that session. The public profile is used for raw post capture (`capture-instagram-profile`, `capture-instagram-post`).
-
-`flow-generate` defaults to the `flow` profile and launches/reuses that Chrome automatically. Pass `--url "https://labs.google/fx/id/tools/flow/project/<project-id>"` on the first run, log in to Google manually if prompted, then rerun the same command.
-
-`--headless` and `--headed` override the default. The login profile refuses headless unless `--force-headless` is passed, since you cannot complete the login flow without a visible window.
-
-If a Chrome is already listening on the resolved port for the same profile dir, it is reused instead of spawned. A mismatched profile dir on that port is rejected.
-
-### Progress
-
-`discover-instagram` and `capture-instagram-profile` stream progress lines to stderr while running:
-
-```
 [discover] started target=20
 [discover] 3/20 candidates
 [capture:userA] 12/30 responses
 ```
 
-Pass `--quiet` to silence stderr progress (stdout JSON is unaffected).
-
 ## Standard Data Contract
 
-The MCP `capture_instagram_profile` tool and the `capture-instagram-post` command return the full JSON envelope:
+Profile capture returns the full JSON envelope:
 
 ```json
 {
@@ -139,11 +94,11 @@ Output list types:
 - `Profile Data List` is stored in `output.profiles`.
 - `Post Data List` is stored in `output.posts`.
 
-Use `--include-raw` or MCP `includeRaw: true` only when debugging source responses.
+Use `includeRaw: true` only when debugging source responses.
 
-Some commands return a simplified shape instead of the envelope:
+Some services return simplified shapes:
 
-`discover-instagram`:
+`discoverInstagramCompetitors`:
 
 ```json
 {
@@ -153,7 +108,7 @@ Some commands return a simplified shape instead of the envelope:
 }
 ```
 
-`capture-instagram-profile` (`total` = number of posts):
+`captureInstagramData`:
 
 ```json
 {
@@ -163,22 +118,7 @@ Some commands return a simplified shape instead of the envelope:
 }
 ```
 
-`setup-avg-likes` (`total` = number of profiles):
-
-```json
-{
-  "profiles": [{ "username": "example", "followers": 12345, "bio": "...", "avgLikes": 150 }],
-  "total": 1
-}
-```
-
-`avgLikes` is the **dominant-cluster mean**: posts are grouped so that like counts within ~2× of a neighbour share a cluster; the largest cluster's mean is reported. This reflects the engagement *most* posts get and prevents a few viral posts from inflating the figure (e.g. 7 posts @100–200, 3 @500, 2 @3200 → `avgLikes` 150). When likes are smooth (no jump larger than 2×), it equals the overall mean. `capture-instagram-post` keeps the full envelope.
-
-## Backend Usage
-
-This package is an internal crawler library. It does not expose MCP or its own HTTP
-server. Use the Anubis backend routes instead:
-
-- `POST /research-crawler/chrome/open`
-- `POST /research-crawler/instagram/capture-profile`
-- `POST /research-crawler/instagram/discover`
+`avgLikes` is the dominant-cluster mean: posts are grouped so like counts within
+roughly 2x of a neighbour share a cluster, and the largest cluster's mean is
+reported. This reflects the engagement most posts get and prevents a few viral
+posts from inflating the figure.

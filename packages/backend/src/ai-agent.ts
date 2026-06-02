@@ -16,7 +16,7 @@ const runAgentSchema = z.object({
   cwd: z.string().min(1),
   prompt: z.string().min(1),
   model: z.string().min(1).optional(),
-  profile: z.string().min(1).optional(),
+  claudeCliProfile: z.string().min(1).optional(),
   extraEnv: z.record(z.string(), z.string()).optional(),
   appendSystemPrompt: z.string().optional(),
   yolo: z.boolean().optional(),

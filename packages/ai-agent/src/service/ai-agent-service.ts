@@ -22,7 +22,7 @@ export interface RunAgentInput {
   cwd: string
   prompt: string
   model?: string
-  profile?: string
+  claudeCliProfile?: string
   extraEnv?: Record<string, string>
   appendSystemPrompt?: string
   yolo?: boolean
@@ -131,7 +131,7 @@ export class AiAgentService {
       cwd: input.cwd,
       prompt: input.prompt,
       model: input.model,
-      profile: input.profile,
+      claudeCliProfile: input.claudeCliProfile,
       extraEnv: input.extraEnv,
       permissionMode: mode,
       allowedTools: input.allowedTools,

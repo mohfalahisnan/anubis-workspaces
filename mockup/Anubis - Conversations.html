@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anubis — Conversations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --canvas:#0B0C0F; --surface-1:#14161B; --surface-2:#1B1E25; --hairline:#23262D;
+    --gold:#D9A441; --gold-deep:#B8893A; --gold-hi:#F0C75E;
+    --text-strong:#F5F2EA; --text-muted:#9AA0A6;
+    --success:#5FB97A; --danger:#E07A6F;
+    --sans:"Geist","Inter",system-ui,sans-serif;
+    --mono:"Geist Mono","JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--canvas); color:var(--text-strong);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-muted);}
+  ::selection{background:color-mix(in oklab, var(--gold) 30%, transparent); color:var(--text-strong);}
+
+  /* ---------- App chrome ---------- */
+  .topbar{
+    height:52px; flex:0 0 52px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 16px; border-bottom:1px solid var(--hairline); background:var(--canvas);
+  }
+  .topbar .brand{display:flex; align-items:center; gap:10px;}
+  .topbar .wordmark{font-weight:600; font-size:14px; letter-spacing:-.02em;}
+  .topbar .vsep{width:1px; height:18px; background:var(--hairline);}
+  .topbar .crumb{font-size:13px; color:var(--text-muted); letter-spacing:-.01em;}
+  .topbar .right{display:flex; align-items:center; gap:10px;}
+  .icon-btn{width:30px; height:30px; border-radius:7px; border:1px solid transparent; background:transparent;
+    color:var(--text-muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s;}
+  .icon-btn:hover{background:var(--surface-2); color:var(--text-strong);}
+  .avatar{width:28px; height:28px; border-radius:50%; background:var(--surface-2); border:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--text-strong); letter-spacing:.02em;}
+
+  .main{flex:1 1 auto; display:flex; min-height:0;}
+
+  /* ---------- Left list pane ---------- */
+  .listpane{width:320px; flex:0 0 320px; border-right:1px solid var(--hairline); display:flex; flex-direction:column; min-height:0;}
+  .listhead{height:48px; flex:0 0 48px; display:flex; align-items:center; justify-content:space-between; padding:0 16px; border-bottom:1px solid var(--hairline);}
+  .listhead .kicker{letter-spacing:.14em;}
+  .count{font-family:var(--mono); font-size:11px; color:var(--text-muted); background:var(--surface-2); border:1px solid var(--hairline);
+    height:20px; min-width:20px; padding:0 6px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center;}
+  .list{flex:1 1 auto; overflow-y:auto; overflow-x:hidden;}
+  .list::-webkit-scrollbar{width:10px;}
+  .list::-webkit-scrollbar-thumb{background:var(--surface-2); border:3px solid var(--canvas); border-radius:6px;}
+
+  .conv-row{
+    width:100%; height:64px; display:flex; align-items:center; gap:10px; padding:0 14px 0 14px;
+    background:transparent; border:0; border-left:2px solid transparent; cursor:pointer; text-align:left;
+    font-family:var(--sans); color:inherit; transition:background .12s ease, border-color .12s ease;
+  }
+  .conv-row + .conv-row{box-shadow:inset 0 1px 0 color-mix(in oklab, var(--hairline) 60%, transparent);}
+  .conv-row:hover{background:color-mix(in oklab, var(--surface-2) 55%, transparent);}
+  .conv-row.is-selected{background:var(--surface-2); border-left-color:var(--gold);}
+  .conv-main{display:flex; flex-direction:column; gap:5px; min-width:0; flex:1 1 auto;}
+  .conv-title{font-size:14px; color:var(--text-strong); letter-spacing:-.01em; line-height:1.2;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .conv-meta{font-family:var(--mono); font-size:11px; color:var(--text-muted); display:flex; align-items:center; line-height:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .gdot{width:5px; height:5px; border-radius:50%; background:var(--gold); flex:0 0 auto; margin-right:7px;}
+  .conv-meta .sep{opacity:.55; padding:0 5px;}
+  .conv-meta .time{color:color-mix(in oklab, var(--text-muted) 78%, var(--canvas));}
+
+  .status-dot{width:7px; height:7px; border-radius:50%; flex:0 0 auto;}
+  .status-dot.idle{background:var(--text-muted); opacity:.45;}
+  .status-dot.error{background:var(--danger);}
+  .status-dot.running{background:var(--gold-hi); animation:pulse 1.7s ease-out infinite;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 color-mix(in oklab, var(--gold-hi) 55%, transparent);}
+    70%{box-shadow:0 0 0 6px rgba(240,199,94,0);}
+    100%{box-shadow:0 0 0 0 rgba(240,199,94,0);}
+  }
+  @media (prefers-reduced-motion: reduce){ .status-dot.running{animation:none;} }
+
+  /* ---------- Right empty-state pane ---------- */
+  .detail{flex:1 1 auto; display:flex; align-items:center; justify-content:center; padding:40px; min-width:0;
+    background:
+      radial-gradient(90% 60% at 50% 38%, rgba(217,164,65,.04), transparent 62%);}
+  .empty{display:flex; flex-direction:column; align-items:center; text-align:center; max-width:680px; width:100%;}
+  .empty h2{font-size:32px; font-weight:600; letter-spacing:-.02em; line-height:1.12; margin:22px 0 0;}
+  .empty .sub{font-size:16px; color:var(--text-muted); margin:10px 0 0; line-height:1.5;}
+
+  .btn{font-family:var(--sans); font-weight:600; font-size:14px; line-height:1; letter-spacing:-.01em;
+    height:40px; padding:0 18px; border-radius:9px; border:1px solid transparent; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px; transition:background .15s ease;}
+  .btn-primary{background:var(--gold); color:#0B0C0F;}
+  .btn-primary:hover{background:var(--gold-deep);}
+  .btn-primary:focus-visible{outline:none; box-shadow:0 0 0 1px var(--canvas), 0 0 0 3px var(--gold-hi);}
+
+  .cards{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:34px; width:100%;}
+  .scard{position:relative; text-align:left; background:var(--surface-1); border:1px solid var(--hairline);
+    border-radius:13px; padding:16px 16px 17px; cursor:pointer; transition:border-color .15s ease, background .15s ease, transform .15s ease;}
+  .scard:hover{border-color:color-mix(in oklab, var(--gold) 45%, var(--hairline)); background:var(--surface-2); transform:translateY(-1px);}
+  .scard .arrow{position:absolute; top:13px; right:13px; color:var(--gold); transition:transform .15s ease;}
+  .scard:hover .arrow{transform:translate(1px,-1px);}
+  .scard h3{font-size:14px; font-weight:600; letter-spacing:-.01em; margin:0 26px 5px 0; line-height:1.25;}
+  .scard p{font-size:12.5px; color:var(--text-muted); margin:0; line-height:1.45;}
+</style>
+</head>
+<body>
+
+  <!-- App top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g fill="#D9A441"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+      <span class="wordmark">Anubis</span>
+      <span class="vsep"></span>
+      <span class="crumb">Conversations</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn" aria-label="Search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg>
+      </button>
+      <button class="icon-btn" aria-label="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+      <div class="avatar">MK</div>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- Left list pane -->
+    <aside class="listpane">
+      <div class="listhead">
+        <span class="kicker">Conversations</span>
+        <span class="count">8</span>
+      </div>
+      <div class="list" role="listbox" aria-label="Conversations">
+        <button class="conv-row" data-profile="Claude · Research" data-time="2m" data-status="running">
+          <span class="conv-main">
+            <span class="conv-title">Audit @kayla.studio's last 30 posts</span>
+            <span class="conv-meta"><span class="gdot"></span>Claude · Research<span class="sep">·</span><span class="time">2m</span></span>
+          </span>
+          <span class="status-dot running"></span>
+        </button>
+        <button class="conv-row" data-status="idle">
+          <span class="conv-main">
+            <span class="conv-title">Draft June content calendar from brief</span>
+            <span class="conv-meta"><span class="gdot"></span>Claude · Writing<span class="sep">·</span><span class="time">18m</span></span>
+          </span>
+          <span class="status-dot idle"></span>
+        </button>
+        <button class="conv-row" data-status="idle">
+          <span class="conv-main">
+            <span class="conv-title">Refactor the StreamRelay flush logic</span>
+            <span class="conv-meta"><span class="gdot"></span>Codex · Coding<span class="sep">·</span><span class="time">1h</span></span>
+          </span>
+          <span class="status-dot idle"></span>
+        </button>
+        <button class="conv-row is-selected" aria-selected="true" data-status="idle">
+          <span class="conv-main">
+            <span class="conv-title">Compare top 5 productivity creators</span>
+            <span class="conv-meta"><span class="gdot"></span>Claude · Research<span class="sep">·</span><span class="time">3h</span></span>
+          </span>
+          <span class="status-dot idle"></span>
+        </button>
+        <button class="conv-row" data-status="error">
+          <span class="conv-main">
+            <span class="conv-title">Migrate auth to the new token schema</span>
+            <span class="conv-meta"><span class="gdot"></span>Codex · Coding<span class="sep">·</span><span class="time">5h</span></span>
+          </span>
+          <span class="status-dot error"></span>
+        </button>
+        <button class="conv-row" data-status="idle">
+          <span class="conv-main">
+            <span class="conv-title">Pull weekly research digest</span>
+            <span class="conv-meta"><span class="gdot"></span>Claude · Research<span class="sep">·</span><span class="time">Yesterday</span></span>
+          </span>
+          <span class="status-dot idle"></span>
+        </button>
+        <button class="conv-row" data-status="running">
+          <span class="conv-main">
+            <span class="conv-title">Spike: try Codex on the design system PR</span>
+            <span class="conv-meta"><span class="gdot"></span>Codex · Coding<span class="sep">·</span><span class="time">Yesterday</span></span>
+          </span>
+          <span class="status-dot running"></span>
+        </button>
+        <button class="conv-row" data-status="idle">
+          <span class="conv-main">
+            <span class="conv-title">Investigate the flaky stream-relay test</span>
+            <span class="conv-meta"><span class="gdot"></span>Codex · Coding<span class="sep">·</span><span class="time">2d</span></span>
+          </span>
+          <span class="status-dot idle"></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Right empty-state pane -->
+    <main class="detail">
+      <div class="empty">
+        <svg width="48" height="48" viewBox="0 0 32 32" aria-label="Anubis mark"><g fill="#D9A441"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+        <h2>Pick a conversation</h2>
+        <p class="sub">Or start a new one with any profile.</p>
+        <div style="margin-top:24px;">
+          <button class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+            New conversation
+          </button>
+        </div>
+        <div class="cards">
+          <button class="scard">
+            <svg class="arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>
+            <h3>Audit competitor posts</h3>
+            <p>Instagram research with the Claude Research profile</p>
+          </button>
+          <button class="scard">
+            <svg class="arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>
+            <h3>Draft a content calendar</h3>
+            <p>From a single brief</p>
+          </button>
+          <button class="scard">
+            <svg class="arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>
+            <h3>Review the staging deploy</h3>
+            <p>Codex on workspace-write</p>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+  const rows = document.querySelectorAll('.conv-row');
+  rows.forEach(row=>{
+    row.addEventListener('click', ()=>{
+      rows.forEach(r=>{ r.classList.remove('is-selected'); r.removeAttribute('aria-selected'); });
+      row.classList.add('is-selected'); row.setAttribute('aria-selected','true');
+    });
+  });
+</script>
+</body>
+</html>

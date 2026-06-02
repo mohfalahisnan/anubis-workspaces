@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anubis — Content</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --canvas:#0B0C0F; --surface-1:#14161B; --surface-2:#1B1E25; --hairline:#23262D;
+    --gold:#D9A441; --gold-deep:#B8893A; --gold-hi:#F0C75E;
+    --text-strong:#F5F2EA; --text-muted:#9AA0A6;
+    --success:#5FB97A; --danger:#E07A6F;
+    --sans:"Geist","Inter",system-ui,sans-serif;
+    --mono:"Geist Mono","JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0; background:var(--canvas); color:var(--text-strong);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;
+    display:flex; flex-direction:column; overflow:hidden;}
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  ::selection{background:color-mix(in oklab, var(--gold) 30%, transparent); color:var(--text-strong);}
+
+  /* ---------- App top bar ---------- */
+  .topbar{height:52px; flex:0 0 52px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 16px; border-bottom:1px solid var(--hairline);}
+  .topbar .brand{display:flex; align-items:center; gap:10px;}
+  .topbar .wordmark{font-weight:600; font-size:14px; letter-spacing:-.02em;}
+  .topbar .vsep{width:1px; height:18px; background:var(--hairline);}
+  .topbar .crumb{font-size:13px; color:var(--text-muted); letter-spacing:-.01em;}
+  .topbar .right{display:flex; align-items:center; gap:10px;}
+  .icon-btn{width:30px; height:30px; border-radius:7px; border:1px solid transparent; background:transparent;
+    color:var(--text-muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s;}
+  .icon-btn:hover{background:var(--surface-2); color:var(--text-strong);}
+  .avatar-acc{width:28px; height:28px; border-radius:50%; background:var(--surface-2); border:1px solid var(--hairline);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; letter-spacing:.02em;}
+
+  /* ---------- Page ---------- */
+  .page{flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 28px 48px;}
+  .page::-webkit-scrollbar{width:11px;}
+  .page::-webkit-scrollbar-thumb{background:var(--surface-2); border:3px solid var(--canvas); border-radius:6px;}
+  .container{max-width:1240px; margin:0 auto;}
+
+  .pagehead{display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-top:28px;}
+  .pagehead h1{font-size:30px; font-weight:600; letter-spacing:-.025em; line-height:1.1; margin:0;}
+  .pagehead .sub{font-size:14px; color:var(--text-muted); margin:8px 0 0; line-height:1.5; max-width:560px;}
+  .actions{display:flex; align-items:center; gap:10px; flex:0 0 auto;}
+  .btn{height:38px; padding:0 15px; border-radius:9px; border:1px solid transparent; cursor:pointer;
+    font-family:var(--sans); font-weight:600; font-size:13.5px; letter-spacing:-.01em;
+    display:inline-flex; align-items:center; gap:8px; transition:.15s; white-space:nowrap;}
+  .btn-ghost{background:transparent; color:var(--text-muted); font-weight:500;}
+  .btn-ghost:hover{background:var(--surface-2); color:var(--text-strong);}
+  .btn-primary{background:var(--gold); color:#0B0C0F;}
+  .btn-primary:hover{background:var(--gold-deep);}
+
+  /* ---------- Sticky filter rail ---------- */
+  .toolbar-sticky{position:sticky; top:0; z-index:5; background:var(--canvas); padding:18px 0 14px;}
+  .filterbar{height:56px; display:flex; align-items:center; gap:8px; padding:0 12px;
+    background:var(--surface-1); border:1px solid var(--hairline); border-radius:11px;}
+  .search{display:flex; align-items:center; gap:8px; flex:0 1 280px; min-width:130px; color:var(--text-muted); margin-right:6px;}
+  .search input{flex:1 1 auto; background:transparent; border:0; outline:none; color:var(--text-strong);
+    font-family:var(--sans); font-size:13.5px; padding:0; min-width:0;}
+  .search input::placeholder{color:var(--text-muted);}
+  .fpill{height:32px; padding:0 9px 0 11px; border-radius:8px; border:1px solid var(--hairline); background:var(--canvas);
+    color:var(--text-muted); cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+    font-family:var(--sans); font-size:12.5px; transition:.15s;}
+  .fpill:hover{border-color:color-mix(in oklab, var(--gold) 32%, var(--hairline));}
+  .fpill b{color:var(--text-strong); font-weight:500;}
+  .fpill svg{color:var(--text-muted);}
+  .viewtoggle{margin-left:auto; display:inline-flex; gap:2px; padding:3px; border:1px solid var(--hairline);
+    border-radius:9px; background:var(--canvas);}
+  .viewtoggle button{width:32px; height:28px; border:0; border-radius:6px; background:transparent; color:var(--text-muted);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; position:relative;}
+  .viewtoggle button:hover{color:var(--text-strong);}
+  .viewtoggle button.active{color:var(--gold); box-shadow:inset 0 -2px 0 var(--gold);}
+
+  /* ---------- Card grid ---------- */
+  .grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px;}
+  .pcard{background:var(--surface-1); border:1px solid var(--hairline); border-radius:13px; overflow:hidden;
+    transition:border-color .15s ease, transform .15s ease, box-shadow .15s ease;}
+  .pcard:hover{border-color:color-mix(in oklab, var(--gold) 24%, var(--hairline)); transform:translateY(-2px);
+    box-shadow:0 10px 28px -18px rgba(0,0,0,.85);}
+
+  .media{position:relative; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;}
+  .media .fmt-icon{color:rgba(255,255,255,.55);}
+  .fmt-chip{position:absolute; top:9px; left:9px; display:inline-flex; align-items:center; height:20px; padding:0 8px;
+    border-radius:6px; background:rgba(11,12,15,.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    font-family:var(--mono); font-size:10px; letter-spacing:.01em; color:rgba(245,242,234,.95);}
+  .star{position:absolute; top:8px; right:8px; width:28px; height:28px; border:0; border-radius:8px; cursor:pointer;
+    background:rgba(11,12,15,.42); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,.92); transition:.15s; padding:0;}
+  .star:hover{background:rgba(11,12,15,.62);}
+  .star.on{color:var(--gold);}
+
+  .body{padding:12px;}
+  .r1{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; color:var(--text-strong); min-width:0;}
+  .r1 .h{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .r1 .sep{color:var(--text-muted);}
+  .r1 .date{color:var(--text-muted); flex:0 0 auto;}
+  .caption{margin:8px 0 0; font-size:13px; line-height:1.45; color:var(--text-strong); letter-spacing:-.003em;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:38px;}
+  .metrics{display:flex; align-items:center; gap:13px; margin-top:10px;}
+  .metric{display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;}
+  .metric svg{color:var(--text-muted); flex:0 0 auto;}
+  .hook{display:inline-flex; align-items:center; margin-top:11px; height:21px; padding:0 8px; border-radius:6px;
+    background:var(--surface-2); color:var(--text-muted); font-size:10px; font-weight:500; letter-spacing:.05em; text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+  <!-- App top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><g fill="#D9A441"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+      <span class="wordmark">Anubis</span>
+      <span class="vsep"></span>
+      <span class="crumb">Content</span>
+    </div>
+    <div class="right">
+      <button class="icon-btn" aria-label="Search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg></button>
+      <div class="avatar-acc">MK</div>
+    </div>
+  </header>
+
+  <div class="page">
+    <div class="container">
+
+      <!-- Page header -->
+      <div class="pagehead">
+        <div>
+          <h1>Content</h1>
+          <p class="sub">1,847 posts captured across 24 competitors. Star the winners to add them to the similarity index.</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path><path d="M3 21v-5h5"></path></svg>
+            Rebuild similarity index
+          </button>
+          <button class="btn btn-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+            Capture posts
+          </button>
+        </div>
+      </div>
+
+      <!-- Sticky filter rail -->
+      <div class="toolbar-sticky">
+        <div class="filterbar">
+          <label class="search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4-4"></path></svg>
+            <input type="text" placeholder="Search captions, handles, hooks…">
+          </label>
+          <button class="fpill">Competitor: <b>All</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <button class="fpill">Format: <b>All</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <button class="fpill">Hook: <b>All</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <button class="fpill">In index: <b>Any</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <div class="viewtoggle">
+            <button class="active" aria-label="Grid view" aria-pressed="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></button>
+            <button aria-label="Table view" aria-pressed="false"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M3 12h18"></path><path d="M3 18h18"></path></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card grid -->
+      <div class="grid" id="grid"></div>
+
+    </div>
+  </div>
+
+<script>
+  const COLORS = {
+    '@ali.abdaal':'#B5663F', '@kayla.studio':'#4E6E8E', '@jamesclear':'#5E7D55',
+    '@studyquill':'#7E5E92', '@marie_forleo':'#A85F6B', '@notion':'#565B63',
+    '@magnoliabakery':'#9C6A3F', '@raditya_dika':'#3F8079', '@linear':'#46617E'
+  };
+
+  const icons = {
+    carousel:'<svg class="fmt-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="13" height="13" rx="2"></rect><path d="M4 16V6a2 2 0 0 1 2-2h10"></path></svg>',
+    reel:'<svg class="fmt-icon" width="34" height="34" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M9 7.5v9a1 1 0 0 0 1.52.85l7.2-4.5a1 1 0 0 0 0-1.7l-7.2-4.5A1 1 0 0 0 9 7.5z"></path></svg>',
+    static:'<svg class="fmt-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>'
+  };
+  const starOutline = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.8l1.1-6.5L2.6 9.8l6.5-.9z"></path></svg>';
+  const starFilled = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18.8 6.2 21.8l1.1-6.5L2.6 9.8l6.5-.9z"></path></svg>';
+  const icHeart = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.4 3-5.5A4.5 4.5 0 0 0 12 5 4.5 4.5 0 0 0 2 8.5c0 2.1 1.5 4 3 5.5l7 7Z"></path></svg>';
+  const icMsg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.4 8.5 8.5 0 0 1-3.9-.9L3 20l1-3.1A8.38 8.38 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 9 8.5Z"></path></svg>';
+  const icEng = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg>';
+
+  const posts = [
+    {h:'@ali.abdaal',     date:'3d',  fmt:'carousel', chip:'Carousel · 7',  star:true,
+     cap:"I used to think productivity was about doing more. After 10 years it's actually about saying no faster.",
+     likes:'11.4K', comm:'312', eng:'4.2%', hook:'Contrarian Take'},
+    {h:'@kayla.studio',   date:'1d',  fmt:'reel', chip:'Reel · 0:38', star:false,
+     cap:"5 brand kit mistakes I see every week (and the 30-second fix for each).",
+     likes:'4.2K', comm:'89', eng:'3.1%', hook:'Numbered List'},
+    {h:'@jamesclear',     date:'5d',  fmt:'static', chip:'Static', star:true,
+     cap:"You do not rise to the level of your goals. You fall to the level of your systems.",
+     likes:'32.6K', comm:'540', eng:'5.8%', hook:'Aphorism'},
+    {h:'@studyquill',     date:'2d',  fmt:'carousel', chip:'Carousel · 10', star:false,
+     cap:"How I plan a 40-hour study week without burning out — my full Sunday reset.",
+     likes:'9.1K', comm:'204', eng:'3.7%', hook:'How-To'},
+    {h:'@marie_forleo',   date:'6d',  fmt:'reel', chip:'Reel · 1:02', star:false,
+     cap:"The one question that ends overthinking in 60 seconds.",
+     likes:'3.8K', comm:'142', eng:'2.9%', hook:'Curiosity Gap'},
+    {h:'@notion',         date:'4d',  fmt:'carousel', chip:'Carousel · 6', star:true,
+     cap:"8 Notion templates our team actually uses every single day.",
+     likes:'9.7K', comm:'276', eng:'4.0%', hook:'Numbered List'},
+    {h:'@magnoliabakery', date:'12h', fmt:'reel', chip:'Reel · 0:24', star:false,
+     cap:"Watch us pipe 200 cupcakes before the morning rush opens.",
+     likes:'18.4K', comm:'410', eng:'6.2%', hook:'Process Reveal'},
+    {h:'@raditya_dika',   date:'1d',  fmt:'reel', chip:'Reel · 0:51', star:false,
+     cap:"Hal-hal kecil yang ternyata bikin hari kamu jauh lebih baik.",
+     likes:'24.8K', comm:'612', eng:'5.1%', hook:'Relatable Confession'},
+    {h:'@linear',         date:'1w',  fmt:'static', chip:'Static', star:false,
+     cap:"Speed is a feature. Everything we ship is built around it.",
+     likes:'2.1K', comm:'58', eng:'2.4%', hook:'Bold Claim'},
+    {h:'@ali.abdaal',     date:'6d',  fmt:'reel', chip:'Reel · 0:45', star:true,
+     cap:"The 2-minute rule that completely rewired how I start hard tasks.",
+     likes:'8.9K', comm:'198', eng:'3.9%', hook:'How-To'},
+    {h:'@kayla.studio',   date:'4d',  fmt:'carousel', chip:'Carousel · 5', star:false,
+     cap:"Before / after: a small bakery rebrand that doubled their saves.",
+     likes:'5.6K', comm:'121', eng:'3.4%', hook:'Before & After'},
+    {h:'@jamesclear',     date:'2w',  fmt:'carousel', chip:'Carousel · 8', star:false,
+     cap:"Atomic Habits in 8 slides: the cheat sheet I wish I'd had at 25.",
+     likes:'27.2K', comm:'489', eng:'5.5%', hook:'Numbered List'},
+  ];
+
+  const grid = document.getElementById('grid');
+  posts.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'pcard';
+    card.innerHTML = `
+      <div class="media" style="background:${COLORS[p.h]||'#555'}">
+        ${icons[p.fmt]}
+        <span class="fmt-chip">${p.chip}</span>
+        <button class="star ${p.star?'on':''}" aria-label="Toggle similarity index">${p.star?starFilled:starOutline}</button>
+      </div>
+      <div class="body">
+        <div class="r1"><span class="h">${p.h}</span><span class="sep">·</span><span class="date">${p.date}</span></div>
+        <p class="caption">${p.cap}</p>
+        <div class="metrics">
+          <span class="metric">${icHeart}${p.likes}</span>
+          <span class="metric">${icMsg}${p.comm}</span>
+          <span class="metric">${icEng}${p.eng}</span>
+        </div>
+        <span class="hook">Hook: ${p.hook}</span>
+      </div>`;
+    grid.appendChild(card);
+  });
+
+  /* star toggle */
+  grid.addEventListener('click', e=>{
+    const b = e.target.closest('.star'); if(!b) return;
+    const on = b.classList.toggle('on');
+    b.innerHTML = on ? starFilled : starOutline;
+  });
+
+  /* view toggle */
+  document.querySelectorAll('.viewtoggle button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.viewtoggle button').forEach(x=>{x.classList.remove('active'); x.setAttribute('aria-pressed','false');});
+      b.classList.add('active'); b.setAttribute('aria-pressed','true');
+    });
+  });
+</script>
+</body>
+</html>

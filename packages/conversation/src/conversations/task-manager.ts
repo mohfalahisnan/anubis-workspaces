@@ -1,0 +1,135 @@
+import type { AgentEventMap, AiAgentService } from '@anubis/ai-agent'
+import { TypedEmitter } from '@anubis/ai-agent'
+import { nowMs } from '../util/time.js'
+import type { ResolvedProfile } from '../profiles/types.js'
+
+export interface AgentTask {
+  conversationId: string
+  agent: 'claude' | 'codex'
+  status: 'pending' | 'running' | 'finished' | 'error'
+  agentSessionId?: string
+  lastActivityAt: number
+  emitter: TypedEmitter<AgentEventMap>
+  sendMessage(input: { prompt: string; msgId: string }): Promise<void>
+  cancel(): Promise<void>
+}
+
+export interface ConversationLite {
+  id: string
+  agent: 'claude' | 'codex'
+  workspacePath: string
+}
+
+export interface TurnInput {
+  prompt: string
+  msgId: string
+  appendSystemPrompt?: string
+  prevAgentSessionId?: string
+}
+
+export interface TaskManagerOpts {
+  idleMs: number
+  scanIntervalMs?: number
+}
+
+export class TaskManager {
+  private tasks = new Map<string, AgentTask>()
+  private building = new Map<string, Promise<AgentTask>>()
+  private timer: NodeJS.Timeout | null = null
+
+  constructor(
+    private aiAgent: Pick<AiAgentService, 'streamAgent'>,
+    private opts: TaskManagerOpts,
+  ) {
+    const interval = opts.scanIntervalMs ?? 60_000
+    this.timer = setInterval(() => this.scan(), interval)
+    this.timer.unref?.()
+  }
+
+  subscribe(conversationId: string): TypedEmitter<AgentEventMap> | null {
+    return this.tasks.get(conversationId)?.emitter ?? null
+  }
+
+  async getOrBuild(
+    conv: ConversationLite,
+    profile: ResolvedProfile,
+    turn: TurnInput,
+  ): Promise<AgentTask> {
+    const existing = this.tasks.get(conv.id)
+    if (existing) {
+      existing.lastActivityAt = nowMs()
+      return existing
+    }
+    const inflight = this.building.get(conv.id)
+    if (inflight) return inflight
+
+    const promise = (async () => {
+      const { stream, agentSessionId } = await this.aiAgent.streamAgent({
+        agent: profile.agent,
+        workspaceId: conv.id,
+        sessionId: conv.id,
+        prevAgentSessionId: turn.prevAgentSessionId,
+        cwd: conv.workspacePath,
+        prompt: turn.prompt,
+        model: profile.model,
+        claudeCliProfile: profile.claudeCliProfile,
+        extraEnv: profile.env,
+        appendSystemPrompt: turn.appendSystemPrompt ?? profile.appendSystemPrompt,
+        reasoningEffort: profile.reasoningEffort,
+        sandboxMode: profile.sandboxMode,
+        approvalPolicy: profile.approvalPolicy,
+        permissionMode: profile.permissionMode,
+        allowedTools: profile.allowedTools,
+        disallowedTools: profile.disallowedTools,
+      })
+      const task: AgentTask = {
+        conversationId: conv.id,
+        agent: conv.agent,
+        status: 'running',
+        agentSessionId,
+        lastActivityAt: nowMs(),
+        emitter: stream,
+        sendMessage: async () => {
+          throw new Error('Re-sending into an existing task is not supported yet; spawn a new turn instead.')
+        },
+        cancel: async () => {
+          this.tasks.delete(conv.id)
+        },
+      }
+      task.emitter.on('session', (d) => { task.agentSessionId = d.sessionId; task.lastActivityAt = nowMs() })
+      task.emitter.on('partial', () => { task.lastActivityAt = nowMs() })
+      task.emitter.on('tool_call', () => { task.lastActivityAt = nowMs() })
+      task.emitter.on('tool_result', () => { task.lastActivityAt = nowMs() })
+      task.emitter.on('done', () => { task.status = 'finished' })
+      task.emitter.on('error', () => { task.status = 'error' })
+      this.tasks.set(conv.id, task)
+      return task
+    })()
+
+    this.building.set(conv.id, promise)
+    try {
+      return await promise
+    } finally {
+      this.building.delete(conv.id)
+    }
+  }
+
+  async kill(conversationId: string, _reason: 'idle' | 'user' | 'shutdown'): Promise<void> {
+    const t = this.tasks.get(conversationId)
+    if (!t) return
+    await t.cancel()
+    this.tasks.delete(conversationId)
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.timer) { clearInterval(this.timer); this.timer = null }
+    await Promise.all([...this.tasks.keys()].map(id => this.kill(id, 'shutdown')))
+  }
+
+  private scan(): void {
+    const now = nowMs()
+    for (const [id, t] of this.tasks) {
+      if (now - t.lastActivityAt > this.opts.idleMs) void this.kill(id, 'idle')
+    }
+  }
+}

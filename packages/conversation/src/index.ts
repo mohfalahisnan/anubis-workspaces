@@ -1,1 +1,98 @@
-export const PACKAGE_NAME = '@anubis/conversation'
+import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
+import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
+import { openDatabase } from './db/client.js'
+import { runMigrations } from './db/migrate.js'
+import { MIGRATIONS } from './db/migrations/index.js'
+import { ProfilesRepo } from './db/repositories/profiles-repo.js'
+import { ConversationsRepo } from './db/repositories/conversations-repo.js'
+import { MessagesRepo } from './db/repositories/messages-repo.js'
+import { ArtifactsRepo } from './db/repositories/artifacts-repo.js'
+import { AgentSessionsRepo } from './db/repositories/agent-sessions-repo.js'
+import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
+import { ProfileService } from './profiles/profile-service.js'
+import { SkillLoader, type SkillRoots } from './skills/loader.js'
+import { SseBroadcaster } from './sse/broadcaster.js'
+import { CronService } from './cron/cron-service.js'
+import { NodeCronScheduler } from './cron/node-cron-scheduler.js'
+import { TaskManager } from './conversations/task-manager.js'
+import { ConversationService } from './conversations/conversation-service.js'
+
+export interface CreateConversationServiceOpts {
+  dataDir: string
+  skillRoots: SkillRoots
+  aiAgent?: AiAgentService
+  idleMs?: number
+}
+
+export interface ConversationStack {
+  conversation: ConversationService
+  profiles: ProfileService
+  skills: SkillLoader
+  sse: SseBroadcaster
+  cron: CronService
+  taskManager: TaskManager
+  aiAgent: AiAgentService
+  shutdown(): Promise<void>
+}
+
+export function createConversationService(opts: CreateConversationServiceOpts): ConversationStack {
+  mkdirSync(opts.dataDir, { recursive: true })
+  const db = openDatabase(join(opts.dataDir, 'anubis.db'))
+  runMigrations(db, MIGRATIONS)
+
+  const profilesRepo = new ProfilesRepo(db)
+  const conversationsRepo = new ConversationsRepo(db)
+  const messagesRepo = new MessagesRepo(db)
+  const artifactsRepo = new ArtifactsRepo(db)
+  const sessionsRepo = new AgentSessionsRepo(db)
+  const cronRepo = new CronJobsRepo(db)
+
+  const profiles = new ProfileService(profilesRepo)
+  profiles.seedBuiltins()
+
+  const skills = new SkillLoader(opts.skillRoots)
+  const sse = new SseBroadcaster()
+  const aiAgent = opts.aiAgent ?? createAiAgentService()
+  const tm = new TaskManager(aiAgent, { idleMs: opts.idleMs ?? 10 * 60_000 })
+
+  const cron = new CronService({
+    repo: cronRepo,
+    fire: async (conversationId, prompt) => {
+      try { await conversation.sendMessage(conversationId, { content: prompt }) }
+      catch (e) { console.error('[cron] fire failed', conversationId, e) }
+    },
+    scheduler: new NodeCronScheduler(),
+  })
+
+  const conversation = new ConversationService({
+    db, profiles, skills, sse, cron, tm, aiAgent,
+    conversations: conversationsRepo,
+    messages: messagesRepo,
+    artifacts: artifactsRepo,
+    sessions: sessionsRepo,
+  })
+
+  cron.loadFromDb()
+
+  return {
+    conversation, profiles, skills, sse, cron, taskManager: tm, aiAgent,
+    async shutdown() {
+      cron.shutdown()
+      await tm.shutdown()
+      db.close()
+    },
+  }
+}
+
+export type { Conversation, Message, Artifact, AgentSession, ConversationExtra, ConversationStatus, MessageRole } from './conversations/types.js'
+export type { Profile, ProfileConfig, ProfileOverride, ProfileSource, ResolvedProfile } from './profiles/types.js'
+export type { SkillDefinition, SkillIndex, SkillSource } from './skills/types.js'
+export { toIndex as toSkillIndex } from './skills/types.js'
+export type { CronJob } from './db/repositories/cron-jobs-repo.js'
+export { ConversationService } from './conversations/conversation-service.js'
+export { ProfileService } from './profiles/profile-service.js'
+export { SkillLoader } from './skills/loader.js'
+export { CronService } from './cron/cron-service.js'
+export { SseBroadcaster } from './sse/broadcaster.js'
+export type { SseEvent } from './sse/broadcaster.js'

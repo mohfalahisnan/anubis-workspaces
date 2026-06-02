@@ -6,6 +6,7 @@ export const SandboxModeSchema = z.enum(['read-only', 'workspace-write', 'danger
 export const ApprovalPolicySchema = z.enum(['untrusted', 'on-request', 'on-failure', 'never'])
 export const PermissionModeSchema = z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions'])
 export const ProfileSourceSchema = z.enum(['builtin', 'user'])
+export type ProfileSource = z.infer<typeof ProfileSourceSchema>
 
 export const ProfileConfigSchema = z.object({
   agent: AgentSchema,

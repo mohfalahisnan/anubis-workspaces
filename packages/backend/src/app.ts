@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { ZodError } from 'zod'
 import type { ApiHealthResponse } from '@anubis/shared'
+import { researchCrawlerRoutes } from './research-crawler.js'
 
 const app = new Hono()
 
@@ -24,6 +26,29 @@ app.get('/health', (c) => {
   }
 
   return c.json(body)
+})
+
+app.route('/research-crawler', researchCrawlerRoutes)
+
+app.onError((error, c) => {
+  if (error instanceof ZodError) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'Invalid request body.',
+        issues: error.issues,
+      },
+    }, 400)
+  }
+
+  return c.json({
+    ok: false,
+    error: {
+      code: 'INTERNAL_SERVER_ERROR',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    },
+  }, 500)
 })
 
 export default app

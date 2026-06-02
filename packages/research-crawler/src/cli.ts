@@ -9,7 +9,6 @@ import { applyAvgLikesToOutput } from './core/instagram/avg-likes.js'
 import { captureInstagramData, discoverInstagramCompetitors } from './core/instagram-crawler.js'
 import { silentReporter, stderrReporter, type ProgressReporter } from './core/progress/progress-reporter.js'
 import type { StandardCrawlerOutput } from './core/standard-output.js'
-import { runMcpServer } from './mcp/server.js'
 
 type ParsedArgs = {
   command: string
@@ -26,11 +25,6 @@ async function main(argv: string[]): Promise<void> {
   const args = parseArgs(argv)
   if (args.values.has('help') || args.values.has('h')) {
     printHelp()
-    return
-  }
-
-  if (args.command === 'mcp') {
-    await runMcpServer()
     return
   }
 
@@ -506,7 +500,6 @@ function printHelp(): void {
   process.stdout.write(`Research Crawler
 
 Usage:
-  research-crawler mcp
   research-crawler open-chrome [--profile login|public|flow] [--headless|--headed] [--force-headless]
                                [--url URL] [--profile-dir DIR] [--remote-debugging-port 9222]
   research-crawler capture-instagram-profile --username NAME [--posts-per-profile 30] [--output result.json]

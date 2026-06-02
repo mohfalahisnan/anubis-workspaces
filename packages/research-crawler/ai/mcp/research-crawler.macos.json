@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "research-crawler": {
-      "command": "/Applications/research-crawler/research-crawler",
-      "args": ["mcp"]
-    }
-  }
-}

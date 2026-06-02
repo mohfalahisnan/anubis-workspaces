@@ -174,36 +174,11 @@ Some commands return a simplified shape instead of the envelope:
 
 `avgLikes` is the **dominant-cluster mean**: posts are grouped so that like counts within ~2× of a neighbour share a cluster; the largest cluster's mean is reported. This reflects the engagement *most* posts get and prevents a few viral posts from inflating the figure (e.g. 7 posts @100–200, 3 @500, 2 @3200 → `avgLikes` 150). When likes are smooth (no jump larger than 2×), it equals the overall mean. `capture-instagram-post` keeps the full envelope.
 
-## MCP
+## Backend Usage
 
-Run the stdio MCP server:
+This package is an internal crawler library. It does not expose MCP or its own HTTP
+server. Use the Anubis backend routes instead:
 
-```bash
-pnpm research-crawler mcp
-```
-
-Example MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "research-crawler": {
-      "command": "D:/workspaces/coding/projects/research-crawler/release/research-crawler.exe",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-Tools:
-
-- `open_chrome`
-- `capture_instagram_profile`
-
-## AI Client Setup
-
-Copy-ready setup files live in [ai/](ai/):
-
-- [ai/README.md](ai/README.md) explains user setup.
-- [ai/mcp/](ai/mcp/) contains MCP config snippets for Windows, macOS, Linux, and local development.
-- [ai/skills/research-crawler](ai/skills/research-crawler) contains a portable AI skill that tells assistants when and how to use the MCP tools.
+- `POST /research-crawler/chrome/open`
+- `POST /research-crawler/instagram/capture-profile`
+- `POST /research-crawler/instagram/discover`

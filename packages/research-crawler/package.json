@@ -1,25 +1,22 @@
 {
   "name": "research-crawler",
   "version": "0.2.2",
-  "description": "Headless browser scraping and crawling core with a CLI.",
+  "description": "Headless browser scraping and crawling core for the Anubis backend.",
   "type": "module",
-  "main": "./dist/cli.js",
-  "types": "./dist/cli.d.ts",
-  "bin": {
-    "research-crawler": "./dist/cli.js",
-    "rcrawl": "./dist/cli.js"
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsx src/cli.ts",
-    "research-crawler": "node dist/cli.js",
-    "bundle": "esbuild src/cli.ts --bundle --platform=node --target=node24 --format=cjs --outfile=build/research-crawler.cjs",
-    "pack:sea": "pnpm build && node scripts/pack-sea.mjs",
     "benchmark:capture": "pnpm build && node scripts/benchmark-capture.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -101,6 +101,20 @@ function buildElectron() {
   })
 }
 
+function buildResearchCrawler() {
+  return new Promise((resolve, reject) => {
+    const child = runPnpm(['--filter', 'research-crawler', 'build'])
+
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(`Research crawler build failed. code=${code ?? 'null'}`))
+      }
+    })
+  })
+}
+
 function getFreePort(host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
     const server = net.createServer()
@@ -141,7 +155,7 @@ async function main() {
 
   await Promise.all([
     waitForFrontendReady(frontend),
-    buildElectron(),
+    buildResearchCrawler().then(() => buildElectron()),
   ])
 
   console.log(`\n[desktop] Renderer: ${frontendUrl}`)

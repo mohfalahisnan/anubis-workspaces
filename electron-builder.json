@@ -10,10 +10,16 @@
     "apps/desktop/dist-electron",
     "packages/frontend/dist",
     "packages/backend/dist",
-    "packages/backend/package.json"
+    "packages/backend/package.json",
+    "packages/backend/node_modules/**",
+    "packages/research-crawler/dist",
+    "packages/research-crawler/package.json"
   ],
   "asarUnpack": [
-    "packages/backend/dist/**"
+    "packages/backend/dist/**",
+    "packages/backend/node_modules/**",
+    "packages/research-crawler/dist/**",
+    "packages/research-crawler/package.json"
   ],
   "mac": {
     "identity": null,

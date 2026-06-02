@@ -1,79 +1,74 @@
-# electron-vite-react
+# Anubis
 
-[![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite)
-![GitHub stars](https://img.shields.io/github/stars/electron-vite/electron-vite-react?color=fa6470)
-![GitHub issues](https://img.shields.io/github/issues/electron-vite/electron-vite-react?color=d8b22d)
-![GitHub license](https://img.shields.io/github/license/electron-vite/electron-vite-react)
-[![Required Node.js >= 20.19.0 || >= 22.12.0](https://img.shields.io/static/v1?label=node&message=%3E=20.19.0%20||%20%3E=22.12.0&logo=node.js&color=3f893e)](https://nodejs.org/about/releases)
+Anubis is an Electron desktop app for research crawling. The Electron main process
+launches a local [Hono](https://hono.dev) HTTP backend as a child process, and the
+React renderer talks to it over HTTP. The backend wraps `research-crawler`, a
+CDP-driven (Chrome DevTools Protocol) browser-automation library that scrapes
+Instagram and drives Google Flow.
 
-English | [简体中文](README.zh-CN.md)
+Requires **Node.js >= 22** and **pnpm 10** (`pnpm@10.12.4`, see `packageManager`).
 
-## Overview
-
-- Ready out of the box.
-- Based on the official [template-react-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts).
-- Supports Electron and Node.js APIs in the renderer process.
-- Supports C/C++ native addons.
-- Includes debugger configuration.
-- Easy to extend to multiple windows.
-
-## Quick Start
+## Quick start
 
 ```sh
-# clone the project
-git clone https://github.com/electron-vite/electron-vite-react.git
-
-# enter the project directory
-cd electron-vite-react
-
-# install dependencies
 pnpm install
-
-# start development
-pnpm dev
+pnpm dev          # builds the crawler + Electron bundle and opens the desktop app
 ```
 
-## Available Scripts
+## Scripts
 
-- `pnpm dev`: start the Vite dev server.
-- `pnpm build`: build the renderer and package the app with electron-builder.
-- `pnpm preview`: preview the production web build locally.
-- `pnpm test`: run Vitest unit tests.
-- `pnpm test:e2e`: build the test mode bundle and run Playwright tests.
-- `pnpm typecheck`: run the TypeScript type checker.
+Run from the repo root:
 
-## Project Structure
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Full desktop dev loop (`scripts/dev.mjs`): Vite dev server + Electron + backend. |
+| `pnpm build` | Build every package in order, then package with electron-builder. |
+| `pnpm test` | Run Vitest unit tests. |
+| `pnpm test:e2e` | Build the test bundle, then run Playwright end-to-end tests. |
+| `pnpm typecheck` | Run `tsc --noEmit` across all packages. |
 
-```tree
-├── build/            Packaging assets
-├── dist-electron/    Compiled Electron output
-├── electron/         Main-process and preload source
-│   ├── main/
-│   └── preload/
-├── public/           Static assets
-├── src/              Renderer source code
-│   ├── components/
-│   │   └── update/
-│   ├── demos/
-│   └── type/
-└── test/             Unit and end-to-end tests
-    └── e2e/
+Package-scoped work:
+
+```sh
+pnpm --filter @anubis/backend dev:server     # run the backend alone
+pnpm --filter research-crawler build         # build one package
+pnpm --filter research-crawler run pack:sea  # build a standalone executable
+pnpm vitest run packages/research-crawler/tests/avg-likes.test.ts   # one test file
 ```
 
-Files under `electron/` are compiled into `dist-electron/`.
+The build order is load-bearing: `research-crawler` → `@anubis/backend` →
+`@anubis/frontend` → root `vite build` (Electron main/preload) → `electron-builder`.
 
-## Security Note
+## Workspace layout
 
-The `renderer: {}` preset in `vite.config.ts` is only a Vite adapter that polyfills Electron, Node.js APIs and native modules for the renderer process. It is not the same as enabling Node integration. If you want direct Node.js access in the renderer, enable `nodeIntegration` in the `BrowserWindow` webPreferences in the main process and review the security impact carefully.
+pnpm workspaces over `apps/*` and `packages/*`:
 
-## Features
+- **`apps/desktop`** — Electron main + preload. Compiles to `apps/desktop/dist-electron`.
+- **`packages/frontend`** (`@anubis/frontend`) — React 19 + Vite + Tailwind v4 renderer with shadcn/ui and AI Elements components.
+- **`packages/backend`** (`@anubis/backend`) — Hono server exposing `/health` and `/research-crawler/*`.
+- **`packages/research-crawler`** (`research-crawler`) — standalone CDP crawler core with its own CLI; see [its README](packages/research-crawler/README.md).
+- **`packages/shared`** (`@anubis/shared`) — types shared between frontend and backend.
 
-1. Electron auto update with docs in [src/components/update/README.md](src/components/update/README.md).
-2. Vitest unit tests and Playwright end-to-end tests.
-3. TailwindCSS v4.
+## How it wires together
 
-## Resources
+1. `scripts/dev.mjs` reserves a free port, starts the frontend Vite server, builds `research-crawler` and the Electron bundle, then launches Electron with `VITE_DEV_SERVER_URL` pointing at the renderer.
+2. The Electron main process spawns the backend as a child process with `ANUBIS_BACKEND_PORT=0`, so the OS picks the port. In dev it runs the backend via `tsx`; when packaged it runs the compiled `server.js` with `ELECTRON_RUN_AS_NODE=1`.
+3. The backend prints a `backend-ready` JSON line on stdout; the main process parses it to learn the URL.
+4. The renderer gets the backend URL through the `anubis:get-backend-url` IPC channel, exposed as `window.anubis.backend.getBaseUrl()`. Outside Electron it falls back to `VITE_API_BASE_URL` or `http://127.0.0.1:3000`.
 
-- Auto-update docs: [English](src/components/update/README.md) | [简体中文](src/components/update/README.zh-CN.md)
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+Because the port is dynamic, the renderer always resolves the backend URL through
+`getApiBaseUrl()` rather than hardcoding it. The backend's CORS only allows localhost origins.
+
+## Backend API
+
+The Hono backend (`packages/backend/src`) validates request bodies with Zod and calls
+the crawler library directly:
+
+- `GET /health`
+- `POST /research-crawler/chrome/open`
+- `POST /research-crawler/instagram/capture-profile`
+- `POST /research-crawler/instagram/discover`
+
+## License
+
+MIT — see [LICENSE](LICENSE).

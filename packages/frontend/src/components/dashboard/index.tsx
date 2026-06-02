@@ -15,6 +15,7 @@ import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
 import { ProfileEditorPage } from '@/pages/profile-editor'
 import { ProfilesPage } from '@/pages/profiles'
+import { SkillsPage } from '@/pages/skills'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -188,12 +189,7 @@ function CurrentPage() {
     case 'profile-editor':
       return <ProfileEditorPage profileId={route.profileId} />
     case 'skills':
-      return (
-        <PlaceholderPage
-          title='Skills catalog'
-          hint='Auto-inject, opt-in, and user skills will list here. The backend route already returns them — UI is next.'
-        />
-      )
+      return <SkillsPage />
     case 'competitors':
       return (
         <PlaceholderPage

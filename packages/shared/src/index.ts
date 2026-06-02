@@ -16,6 +16,13 @@ export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
 export type SkillSource = 'builtin-auto' | 'builtin-opt-in' | 'user'
 
+export interface ProfileHomeInfo {
+  /** Absolute path to the profile's isolated agent home directory. */
+  path: string
+  /** True if the directory has been created (i.e. the profile has been used at least once). */
+  exists: boolean
+}
+
 export interface ProfileSummary {
   id: string
   name: string
@@ -30,6 +37,8 @@ export interface ProfileSummary {
   lastUsedAt?: number
   createdAt: number
   updatedAt: number
+  /** Per-profile isolated agent home; populated by the backend route layer. */
+  home?: ProfileHomeInfo
 }
 
 export interface ConversationExtra {
@@ -66,6 +75,13 @@ export interface SkillSummary {
   description: string
   whenToUse?: string
   source: SkillSource
+}
+
+export interface SkillDetail extends SkillSummary {
+  /** Absolute path to the SKILL.md file on disk. */
+  path: string
+  /** Markdown body of the skill, with the frontmatter stripped. */
+  body: string
 }
 
 export interface CronJobSummary {

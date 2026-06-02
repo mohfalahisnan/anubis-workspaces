@@ -11,6 +11,7 @@ import type {
   MessageSummary,
   ProfileListResponse,
   ProfileSummary,
+  SkillDetail,
   SkillListResponse,
   SkillSummary,
 } from '@anubis/shared'
@@ -88,6 +89,16 @@ export async function deleteProfile(id: string): Promise<void> {
   await api<{ ok: true }>(`/profiles/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+export async function resetProfileHome(
+  id: string,
+): Promise<{ existed: boolean }> {
+  const r = await api<{ ok: true; existed: boolean }>(
+    `/profiles/${encodeURIComponent(id)}/reset-home`,
+    { method: 'POST' },
+  )
+  return { existed: r.existed }
 }
 
 export interface UpdateProfileInput {
@@ -186,6 +197,20 @@ export async function cancelConversation(conversationId: string): Promise<void> 
 export async function listSkills(): Promise<SkillSummary[]> {
   const r = await api<SkillListResponse>('/skills')
   return r.items
+}
+
+export async function getSkill(name: string): Promise<SkillDetail> {
+  const r = await api<{ ok: true; skill: SkillDetail }>(
+    `/skills/${encodeURIComponent(name)}`,
+  )
+  return r.skill
+}
+
+export async function reloadSkills(): Promise<{ count: number }> {
+  const r = await api<{ ok: true; count: number }>('/skills/reload', {
+    method: 'POST',
+  })
+  return { count: r.count }
 }
 
 export async function listCronJobs(): Promise<CronJobSummary[]> {

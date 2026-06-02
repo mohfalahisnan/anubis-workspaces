@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CopyIcon,
+  FolderIcon,
   PlusIcon,
   RefreshCwIcon,
+  RotateCcwIcon,
   Trash2Icon,
 } from 'lucide-react'
 
 import type { ProfileSummary } from '@anubis/shared'
 
-import { createProfile, deleteProfile, getProfile, listProfiles } from '@/api'
+import {
+  createProfile,
+  deleteProfile,
+  getProfile,
+  listProfiles,
+  resetProfileHome,
+} from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 
@@ -131,6 +139,35 @@ export function ProfilesPage() {
     }
   }
 
+  async function handleResetHome(source: ProfileSummary) {
+    const ok = window.confirm(
+      `Reset profile data for "${source.name}"?\n\n` +
+        `This deletes the agent's auth tokens, MCP config, and session ` +
+        `history for this profile. You'll be asked to log in again the ` +
+        `next time you use it.`,
+    )
+    if (!ok) return
+    setBusy(true)
+    setBanner(null)
+    try {
+      const { existed } = await resetProfileHome(source.id)
+      await refresh()
+      setBanner({
+        kind: 'success',
+        message: existed
+          ? `Reset profile data for "${source.name}".`
+          : `Nothing to reset — "${source.name}" hadn't been used yet.`,
+      })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not reset the profile.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const total = profiles?.length ?? 0
 
   return (
@@ -193,6 +230,7 @@ export function ProfilesPage() {
                 profiles={grouped.builtin}
                 onCopy={handleCopy}
                 onEdit={(p) => navigate({ page: 'profile-editor', profileId: p.id })}
+                onResetHome={handleResetHome}
                 busy={busy}
               />
             </Section>
@@ -207,6 +245,7 @@ export function ProfilesPage() {
                 onCopy={handleCopy}
                 onEdit={(p) => navigate({ page: 'profile-editor', profileId: p.id })}
                 onDelete={handleDelete}
+                onResetHome={handleResetHome}
                 busy={busy}
               />
             </Section>
@@ -257,12 +296,14 @@ function ProfileGrid({
   onCopy,
   onEdit,
   onDelete,
+  onResetHome,
   busy,
 }: {
   profiles: ProfileSummary[]
   onCopy: (p: ProfileSummary) => void
   onEdit: (p: ProfileSummary) => void
   onDelete?: (p: ProfileSummary) => void
+  onResetHome: (p: ProfileSummary) => void
   busy: boolean
 }) {
   if (profiles.length === 0) return null
@@ -275,6 +316,7 @@ function ProfileGrid({
           onCopy={() => onCopy(p)}
           onEdit={() => onEdit(p)}
           onDelete={onDelete ? () => onDelete(p) : undefined}
+          onResetHome={() => onResetHome(p)}
           busy={busy}
         />
       ))}
@@ -287,12 +329,14 @@ function ProfileCard({
   onCopy,
   onEdit,
   onDelete,
+  onResetHome,
   busy,
 }: {
   profile: ProfileSummary
   onCopy: () => void
   onEdit: () => void
   onDelete?: () => void
+  onResetHome: () => void
   busy: boolean
 }) {
   const agent = profile.config.agent
@@ -338,6 +382,8 @@ function ProfileCard({
         </p>
       )}
 
+      {profile.home && <HomeBlock home={profile.home} />}
+
       <div className='mt-1 flex items-center gap-2 border-t border-border pt-3'>
         <button
           type='button'
@@ -358,6 +404,21 @@ function ProfileCard({
           Edit
         </button>
 
+        <button
+          type='button'
+          onClick={onResetHome}
+          disabled={busy || !profile.home?.exists}
+          title={
+            profile.home?.exists
+              ? 'Reset auth, MCP config, and session history for this profile'
+              : 'Nothing to reset — this profile has not been used yet'
+          }
+          className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40'
+        >
+          <RotateCcwIcon className='size-[13px]' strokeWidth={2} />
+          Reset
+        </button>
+
         {onDelete && (
           <button
             type='button'
@@ -372,6 +433,44 @@ function ProfileCard({
         )}
       </div>
     </article>
+  )
+}
+
+function HomeBlock({ home }: { home: NonNullable<ProfileSummary['home']> }) {
+  return (
+    <div className='flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-2'>
+      <FolderIcon
+        className={cn(
+          'mt-0.5 size-[13px] shrink-0',
+          home.exists ? 'text-[var(--anubis-gold)]' : 'text-muted-foreground/60',
+        )}
+        strokeWidth={1.6}
+      />
+      <div className='min-w-0 flex-1'>
+        <div className='flex items-center gap-2'>
+          <span className='font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground'>
+            Home
+          </span>
+          <span
+            className={cn(
+              'inline-flex h-4 items-center rounded-sm px-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em]',
+              home.exists
+                ? 'bg-[color-mix(in_oklab,var(--anubis-success)_18%,transparent)] text-[var(--anubis-success)]'
+                : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {home.exists ? 'Provisioned' : 'Empty'}
+          </span>
+        </div>
+        <p
+          className='mt-0.5 truncate font-mono text-[11px] text-muted-foreground'
+          title={home.path}
+          dir='rtl'
+        >
+          {home.path}
+        </p>
+      </div>
+    </div>
   )
 }
 

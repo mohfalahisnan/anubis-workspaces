@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anubis — Brand Identity v1</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --canvas:#0B0C0F; --surface-1:#14161B; --surface-2:#1B1E25; --hairline:#23262D;
+    --gold:#D9A441; --gold-deep:#B8893A; --gold-hi:#F0C75E;
+    --text-strong:#F5F2EA; --text-muted:#9AA0A6;
+    --success:#5FB97A; --danger:#E07A6F;
+    --sans:"Geist","Inter",system-ui,sans-serif;
+    --mono:"Geist Mono","JetBrains Mono",ui-monospace,monospace;
+  }
+  /* Theme scopes for component proof on dark + light */
+  .theme-dark{
+    --canvas:#0B0C0F; --surface-1:#14161B; --surface-2:#1B1E25; --hairline:#23262D;
+    --text-strong:#F5F2EA; --text-muted:#9AA0A6;
+    --success:#5FB97A; --danger:#E07A6F;
+  }
+  .theme-light{
+    --canvas:#FAFAF7; --surface-1:#FFFFFF; --surface-2:#F3F1EA; --hairline:#E8E6DF;
+    --text-strong:#14161B; --text-muted:#6E7378;
+    --success:#3E9A5E; --danger:#C75A4E;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--canvas); color:var(--text-strong);
+    font-family:var(--sans); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1, "ss01" 1;
+  }
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;}
+  .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-muted);}
+
+  /* ---- Components (theme-aware) ---- */
+  .btn{font-family:var(--sans); font-weight:500; font-size:14px; line-height:1; letter-spacing:-.01em;
+    height:38px; padding:0 16px; border-radius:8px; border:1px solid transparent; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px; transition:background .15s ease,border-color .15s ease,color .15s ease; }
+  .btn-primary{background:var(--gold); color:#0B0C0F; font-weight:600;}
+  .btn-primary:hover{background:var(--gold-deep);}
+  .btn-secondary{background:var(--surface-2); color:var(--text-strong); border-color:var(--hairline);}
+  .btn-secondary:hover{border-color:var(--gold-deep);}
+  .btn-ghost{background:transparent; color:var(--text-strong);}
+  .btn-ghost:hover{background:var(--surface-2);}
+
+  .field{font-family:var(--sans); font-size:14px; color:var(--text-strong); background:var(--surface-1);
+    height:40px; padding:0 13px; border-radius:8px; border:1px solid var(--hairline); width:100%; outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;}
+  .field::placeholder{color:var(--text-muted);}
+  .field:focus, .field.is-focused{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold-hi);}
+
+  .badge{display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 9px; border-radius:6px;
+    font-size:12px; font-weight:500; letter-spacing:-.005em; border:1px solid var(--hairline);
+    background:var(--surface-2); color:var(--text-muted);}
+  .badge-gold{background:color-mix(in oklab, var(--gold) 16%, transparent); border-color:color-mix(in oklab, var(--gold) 38%, transparent); color:var(--gold);}
+  .badge-green{background:color-mix(in oklab, var(--success) 16%, transparent); border-color:color-mix(in oklab, var(--success) 38%, transparent); color:var(--success);}
+  .badge-red{background:color-mix(in oklab, var(--danger) 16%, transparent); border-color:color-mix(in oklab, var(--danger) 38%, transparent); color:var(--danger);}
+
+  .pill{display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 13px 0 11px; border-radius:999px;
+    font-size:13px; font-weight:500; border:1px solid var(--hairline); background:var(--surface-1); color:var(--text-strong);}
+  .pill .dot{width:6px; height:6px; border-radius:50%; background:var(--gold);}
+
+  .seg{display:inline-flex; padding:3px; gap:2px; background:var(--surface-2); border:1px solid var(--hairline); border-radius:9px;}
+  .seg button{font-family:var(--sans); font-size:13px; font-weight:500; height:30px; padding:0 14px; border:0; border-radius:6px;
+    background:transparent; color:var(--text-muted); cursor:pointer; transition:background .15s, color .15s; letter-spacing:-.01em;}
+  .seg button[aria-selected="true"]{background:var(--surface-1); color:var(--text-strong); box-shadow:0 1px 0 rgba(0,0,0,.25);}
+  .theme-light .seg button[aria-selected="true"]{box-shadow:0 1px 2px rgba(20,22,27,.08);}
+  .seg button[aria-selected="true"] .sk{color:var(--gold);}
+
+  .hr{height:1px; width:100%; background:var(--hairline);}
+
+  .card{background:var(--surface-1); border:1px solid var(--hairline); border-radius:16px;}
+  .swatch{border:1px solid var(--hairline); border-radius:12px; overflow:hidden; background:var(--surface-1);}
+  .swatch .chip{height:84px; width:100%;}
+  .ring{box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);}
+
+  .lbl-strong{font-weight:600; letter-spacing:-.01em;}
+  ::selection{background:color-mix(in oklab, var(--gold) 30%, transparent); color:var(--text-strong);}
+</style>
+</head>
+<body>
+<div class="mx-auto w-full max-w-[1120px] px-6 py-14 md:py-20 flex flex-col gap-6">
+
+  <!-- Top meta bar -->
+  <header class="flex items-center justify-between pb-2">
+    <div class="flex items-center gap-2.5">
+      <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><g fill="var(--gold)"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+      <span class="text-[15px]" style="font-weight:600;letter-spacing:-.02em;">Anubis</span>
+    </div>
+    <span class="kicker">Brand Identity · v1 · 2026</span>
+  </header>
+
+  <!-- 1. HERO -->
+  <section class="card relative overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none" style="background:radial-gradient(120% 80% at 50% -10%, rgba(217,164,65,.05), transparent 60%);"></div>
+    <div class="relative flex flex-col items-center text-center px-6 py-24 md:py-32">
+      <div class="flex items-center gap-5">
+        <svg width="72" height="72" viewBox="0 0 32 32" aria-label="Anubis mark"><g fill="var(--gold)"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+        <span style="font-weight:600; font-size:64px; letter-spacing:-.035em; line-height:1;">Anubis</span>
+      </div>
+      <p class="mt-7 text-[18px]" style="color:var(--text-muted); letter-spacing:-.01em;">Your AI agent content OS.</p>
+    </div>
+  </section>
+
+  <!-- 2. LOGO LOCKUPS -->
+  <section class="card p-7 md:p-9">
+    <div class="flex items-baseline justify-between mb-7">
+      <h2 class="text-[20px] lbl-strong">Logo lockups</h2>
+      <span class="kicker">Mark gold on dark · black on light</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <!-- Horizontal -->
+      <div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-xl flex items-center justify-center h-[120px]" style="background:#0B0C0F;border:1px solid #23262D;">
+            <div class="flex items-center gap-3"><svg width="34" height="34" viewBox="0 0 32 32"><g fill="#D9A441"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg><span style="font-weight:600;font-size:26px;letter-spacing:-.03em;color:#F5F2EA;">Anubis</span></div>
+          </div>
+          <div class="rounded-xl flex items-center justify-center h-[120px]" style="background:#FFFFFF;border:1px solid #E8E6DF;">
+            <div class="flex items-center gap-3"><svg width="34" height="34" viewBox="0 0 32 32"><g fill="#0B0C0F"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg><span style="font-weight:600;font-size:26px;letter-spacing:-.03em;color:#14161B;">Anubis</span></div>
+          </div>
+        </div>
+        <p class="kicker mt-3">Horizontal</p>
+      </div>
+      <!-- Stacked -->
+      <div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-xl flex items-center justify-center h-[120px]" style="background:#0B0C0F;border:1px solid #23262D;">
+            <div class="flex flex-col items-center gap-2.5"><svg width="34" height="34" viewBox="0 0 32 32"><g fill="#D9A441"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg><span style="font-weight:600;font-size:20px;letter-spacing:-.025em;color:#F5F2EA;">Anubis</span></div>
+          </div>
+          <div class="rounded-xl flex items-center justify-center h-[120px]" style="background:#FFFFFF;border:1px solid #E8E6DF;">
+            <div class="flex flex-col items-center gap-2.5"><svg width="34" height="34" viewBox="0 0 32 32"><g fill="#0B0C0F"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg><span style="font-weight:600;font-size:20px;letter-spacing:-.025em;color:#14161B;">Anubis</span></div>
+          </div>
+        </div>
+        <p class="kicker mt-3">Stacked</p>
+      </div>
+      <!-- Mark only -->
+      <div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-xl flex items-center justify-center h-[120px]" style="background:#0B0C0F;border:1px solid #23262D;">
+            <svg width="46" height="46" viewBox="0 0 32 32"><g fill="#D9A441"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+          </div>
+          <div class="rounded-xl flex items-center justify-center h-[120px]" style="background:#FFFFFF;border:1px solid #E8E6DF;">
+            <svg width="46" height="46" viewBox="0 0 32 32"><g fill="#0B0C0F"><path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/></g></svg>
+          </div>
+        </div>
+        <p class="kicker mt-3">Mark only</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. COLOR TOKENS -->
+  <section class="card p-7 md:p-9">
+    <div class="flex items-baseline justify-between mb-7">
+      <h2 class="text-[20px] lbl-strong">Color tokens</h2>
+      <span class="kicker">Black &amp; gold · warm neutrals</span>
+    </div>
+    <div id="color-groups" class="flex flex-col gap-7"></div>
+  </section>
+
+  <!-- 4. TYPE SCALE -->
+  <section class="card p-7 md:p-9">
+    <div class="flex items-baseline justify-between mb-7">
+      <h2 class="text-[20px] lbl-strong">Type scale</h2>
+      <span class="kicker">Geist · Geist Mono · 3 weights</span>
+    </div>
+    <div id="type-rows" class="flex flex-col"></div>
+  </section>
+
+  <!-- 5. COMPONENTS — DARK -->
+  <section class="theme-dark card p-7 md:p-9" style="background:var(--surface-1);">
+    <div class="flex items-baseline justify-between mb-7">
+      <h2 class="text-[20px] lbl-strong" style="color:var(--text-strong)">Components — dark</h2>
+      <span class="kicker">Canvas #0B0C0F</span>
+    </div>
+    <div data-components></div>
+  </section>
+
+  <!-- 6. COMPONENTS — LIGHT -->
+  <section class="theme-light card p-7 md:p-9" style="background:var(--canvas); border-color:var(--hairline);">
+    <div class="flex items-baseline justify-between mb-7">
+      <h2 class="text-[20px] lbl-strong" style="color:var(--text-strong)">Components — light</h2>
+      <span class="kicker" style="color:var(--text-muted)">Canvas #FAFAF7 · gold survives inversion</span>
+    </div>
+    <div data-components></div>
+  </section>
+
+  <!-- 7. VOICE & TONE -->
+  <section class="card p-7 md:p-9">
+    <div class="flex items-baseline justify-between mb-7">
+      <h2 class="text-[20px] lbl-strong">Voice &amp; tone</h2>
+      <span class="kicker">Plainspoken · Specific · Calm</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="rounded-xl p-6" style="background:var(--surface-2);border:1px solid var(--hairline);">
+        <div class="mono text-[13px] mb-3" style="color:var(--gold)">01</div>
+        <p class="text-[17px] lbl-strong mb-1.5">Plainspoken.</p>
+        <p class="text-[14px]" style="color:var(--text-muted);line-height:1.55;">Say the thing. No jargon, no metaphors that need decoding. A strategist should grok any label in a glance.</p>
+      </div>
+      <div class="rounded-xl p-6" style="background:var(--surface-2);border:1px solid var(--hairline);">
+        <div class="mono text-[13px] mb-3" style="color:var(--gold)">02</div>
+        <p class="text-[17px] lbl-strong mb-1.5">Specific.</p>
+        <p class="text-[14px]" style="color:var(--text-muted);line-height:1.55;">Numbers, names, and times over adjectives. "Runs nightly at 02:00" beats "runs automatically."</p>
+      </div>
+      <div class="rounded-xl p-6" style="background:var(--surface-2);border:1px solid var(--hairline);">
+        <div class="mono text-[13px] mb-3" style="color:var(--gold)">03</div>
+        <p class="text-[17px] lbl-strong mb-1.5">Calm. Never hypes.</p>
+        <p class="text-[14px]" style="color:var(--text-muted);line-height:1.55;">No exclamation marks, no "supercharge," no urgency theatre. The work is impressive on its own.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="flex items-center justify-between pt-2 pb-4">
+    <span class="kicker">Anubis — Brand Identity v1</span>
+    <span class="kicker">© 2026</span>
+  </footer>
+</div>
+
+<script>
+/* ---------- Color tokens ---------- */
+const MARK_PATH = '<path d="M8 13 L12.2 10.6 L29 15.8 L29 18.2 L16 19 L12 26.5 L9 26.5 Z"/><ellipse cx="10.4" cy="7.2" rx="2.8" ry="5.7" transform="rotate(16 10.4 7.2)"/>';
+
+const groups = [
+  { name:'Surface', items:[
+    {hex:'#0B0C0F', token:'--canvas',    role:'True brand black'},
+    {hex:'#14161B', token:'--surface-1', role:'Elevated'},
+    {hex:'#1B1E25', token:'--surface-2', role:'Hover / selected'},
+    {hex:'#23262D', token:'--hairline',  role:'Divider'},
+  ]},
+  { name:'Text', items:[
+    {hex:'#F5F2EA', token:'--text-strong', role:'On dark · warm off-white'},
+    {hex:'#9AA0A6', token:'--text-muted',  role:'Secondary'},
+    {hex:'#14161B', token:'--text-strong', role:'On light'},
+  ]},
+  { name:'Accent', items:[
+    {hex:'#D9A441', token:'--gold',     role:'Primary accent'},
+    {hex:'#B8893A', token:'--gold-deep', role:'Pressed / hover'},
+    {hex:'#F0C75E', token:'--gold-hi',  role:'Focus glow · 1px ring'},
+  ]},
+  { name:'State', items:[
+    {hex:'#5FB97A', token:'--success', role:'Success'},
+    {hex:'#E07A6F', token:'--danger',  role:'Danger'},
+  ]},
+];
+
+function isLight(hex){
+  const c = hex.replace('#',''); const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+  return (0.2126*r+0.7152*g+0.0722*b) > 150;
+}
+const cg = document.getElementById('color-groups');
+groups.forEach(group=>{
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `<p class="kicker mb-3">${group.name}</p>`;
+  const grid = document.createElement('div');
+  grid.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3';
+  group.items.forEach(it=>{
+    const el = document.createElement('div');
+    el.className = 'swatch';
+    el.innerHTML = `
+      <div class="chip ring" style="background:${it.hex}"></div>
+      <div class="px-3.5 py-3">
+        <div class="mono text-[13px]" style="color:var(--text-strong)">${it.hex}</div>
+        <div class="mono text-[12px] mt-1" style="color:var(--gold)">${it.token}</div>
+        <div class="text-[12px] mt-1.5" style="color:var(--text-muted)">${it.role}</div>
+      </div>`;
+    grid.appendChild(el);
+  });
+  wrap.appendChild(grid);
+  cg.appendChild(wrap);
+});
+
+/* ---------- Type scale ---------- */
+const types = [
+  {name:'H1',      sample:'Your AI agent content OS',        css:'font-size:48px;font-weight:600;line-height:1.05;letter-spacing:-.03em;',  meta:'48 / 600 / 1.05 / −0.03em'},
+  {name:'H2',      sample:'Competitor research, automated',  css:'font-size:32px;font-weight:600;line-height:1.12;letter-spacing:-.02em;',  meta:'32 / 600 / 1.12 / −0.02em'},
+  {name:'H3',      sample:'Recurring jobs & schedules',      css:'font-size:22px;font-weight:500;line-height:1.25;letter-spacing:-.01em;',  meta:'22 / 500 / 1.25 / −0.01em'},
+  {name:'Body',    sample:'Drive Claude and Codex agents across every workspace, then watch the results land in one calm feed.', css:'font-size:16px;font-weight:400;line-height:1.6;', meta:'16 / 400 / 1.6'},
+  {name:'Caption', sample:'LAST RUN · 4 MINUTES AGO',        css:'font-size:13px;font-weight:500;line-height:1.4;letter-spacing:.04em;color:var(--text-muted);', meta:'13 / 500 / 1.4 / +0.04em'},
+  {name:'Mono',    sample:'job_4f2a · 0 2 * * 1  · #A3E1FF', css:'font-size:14px;font-weight:400;line-height:1.5;font-family:var(--mono);font-variant-numeric:tabular-nums;', meta:'Geist Mono · 14 / 400 / 1.5'},
+];
+const tr = document.getElementById('type-rows');
+types.forEach((t,i)=>{
+  const row = document.createElement('div');
+  row.className = 'grid grid-cols-[64px_1fr] md:grid-cols-[80px_1fr_auto] items-baseline gap-4 py-5';
+  if(i>0) row.style.borderTop = '1px solid var(--hairline)';
+  row.innerHTML = `
+    <div class="kicker">${t.name}</div>
+    <div style="${t.css}" class="min-w-0 truncate md:whitespace-normal">${t.sample}</div>
+    <div class="mono text-[12px] hidden md:block text-right" style="color:var(--text-muted)">${t.meta}</div>`;
+  tr.appendChild(row);
+});
+
+/* ---------- Component set (rendered into both dark & light scopes) ---------- */
+function componentMarkup(){
+  return `
+  <div class="flex flex-col gap-8">
+    <!-- Buttons -->
+    <div>
+      <p class="kicker mb-3" style="color:var(--text-muted)">Buttons</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <button class="btn btn-primary">Run job now</button>
+        <button class="btn btn-secondary">Save draft</button>
+        <button class="btn btn-ghost">Cancel</button>
+      </div>
+    </div>
+    <!-- Inputs -->
+    <div>
+      <p class="kicker mb-3" style="color:var(--text-muted)">Input field</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[560px]">
+        <div><div class="mono text-[11px] mb-1.5" style="color:var(--text-muted)">idle</div><input class="field" placeholder="@competitor_handle"></div>
+        <div><div class="mono text-[11px] mb-1.5" style="color:var(--text-muted)">focused</div><input class="field is-focused" value="@competitor_handle"></div>
+      </div>
+    </div>
+    <!-- Badges -->
+    <div>
+      <p class="kicker mb-3" style="color:var(--text-muted)">Badges</p>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <span class="badge">Draft</span>
+        <span class="badge badge-gold">Scheduled</span>
+        <span class="badge badge-green">Completed</span>
+        <span class="badge badge-red">Failed</span>
+      </div>
+    </div>
+    <!-- Pill + Segmented -->
+    <div class="flex flex-wrap items-end gap-x-10 gap-y-6">
+      <div>
+        <p class="kicker mb-3" style="color:var(--text-muted)">Pill</p>
+        <span class="pill"><span class="dot"></span>Instagram · Research</span>
+      </div>
+      <div>
+        <p class="kicker mb-3" style="color:var(--text-muted)">Segmented control</p>
+        <div class="seg" role="tablist">
+          <button role="tab" aria-selected="true"><span class="sk">Feed</span></button>
+          <button role="tab" aria-selected="false">Jobs</button>
+          <button role="tab" aria-selected="false">Agents</button>
+        </div>
+      </div>
+    </div>
+    <!-- Divider -->
+    <div>
+      <p class="kicker mb-3" style="color:var(--text-muted)">Hairline divider</p>
+      <div class="hr"></div>
+    </div>
+  </div>`;
+}
+document.querySelectorAll('[data-components]').forEach(el=> el.innerHTML = componentMarkup());
+
+/* segmented control interactivity */
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    seg.querySelectorAll('button').forEach(x=>{ x.setAttribute('aria-selected','false'); x.innerHTML = x.textContent; });
+    b.setAttribute('aria-selected','true'); b.innerHTML = `<span class="sk">${b.textContent}</span>`;
+  });
+});
+</script>
+</body>
+</html>

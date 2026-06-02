@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { createAiAgentService } from 'anubis-ai-agent'
+import { createAiAgentService } from '@anubis/ai-agent'
 
 const agentSchema = z.enum(['codex', 'claude'])
 const reasoningEffortSchema = z.enum(['minimal', 'low', 'medium', 'high'])

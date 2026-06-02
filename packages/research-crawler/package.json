@@ -1,5 +1,5 @@
 {
-  "name": "research-crawler",
+  "name": "@anubis/research-crawler",
   "version": "0.2.2",
   "description": "Headless browser scraping and crawling core for the Anubis backend.",
   "type": "module",

@@ -1,6 +1,6 @@
 # Anubis AI Agent
 
-`anubis-ai-agent` is the internal agent core used by the Anubis backend. It is
+`@anubis/ai-agent` is the internal agent core used by the Anubis backend. It is
 HTTP-oriented: the package exposes library APIs and the backend exposes routes.
 It does not provide MCP tools, a CLI, standalone binaries, or packaged runtime
 assets.
@@ -11,8 +11,8 @@ From the repository root:
 
 ```bash
 pnpm install
-pnpm --filter anubis-ai-agent build
-pnpm --filter anubis-ai-agent typecheck
+pnpm --filter @anubis/ai-agent build
+pnpm --filter @anubis/ai-agent typecheck
 ```
 
 ## Backend Usage

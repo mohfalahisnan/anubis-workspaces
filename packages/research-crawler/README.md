@@ -1,6 +1,6 @@
 # Research Crawler
 
-`research-crawler` is the internal Chrome DevTools Protocol crawler library used by
+`@anubis/research-crawler` is the internal Chrome DevTools Protocol crawler library used by
 the Anubis backend. It has no local HTTP server, no MCP server, and no standalone
 binary packaging. The backend imports the package directly and exposes the HTTP API.
 
@@ -10,8 +10,8 @@ From the repository root:
 
 ```bash
 pnpm install
-pnpm --filter research-crawler build
-pnpm --filter research-crawler typecheck
+pnpm --filter @anubis/research-crawler build
+pnpm --filter @anubis/research-crawler typecheck
 ```
 
 ## Backend Usage

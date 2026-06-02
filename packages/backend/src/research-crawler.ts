@@ -5,7 +5,7 @@ import {
   discoverInstagramCompetitors,
   launchChrome,
   silentReporter,
-} from 'research-crawler'
+} from '@anubis/research-crawler'
 
 const profileSchema = z.enum(['login', 'public', 'flow'])
 

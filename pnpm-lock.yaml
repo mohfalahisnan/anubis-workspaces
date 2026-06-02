@@ -61,7 +61,7 @@ importers:
         specifier: ^6.8.3
         version: 6.8.3
 
-  packages/anubis-ai-agent:
+  packages/ai-agent:
     dependencies:
       split2:
         specifier: ^4.2.0
@@ -79,21 +79,21 @@ importers:
 
   packages/backend:
     dependencies:
+      '@anubis/ai-agent':
+        specifier: workspace:*
+        version: link:../ai-agent
+      '@anubis/research-crawler':
+        specifier: workspace:*
+        version: link:../research-crawler
       '@anubis/shared':
         specifier: workspace:*
         version: link:../shared
       '@hono/node-server':
         specifier: ^1.19.6
         version: 1.19.14(hono@4.12.23)
-      anubis-ai-agent:
-        specifier: workspace:*
-        version: link:../anubis-ai-agent
       hono:
         specifier: ^4.10.7
         version: 4.12.23
-      research-crawler:
-        specifier: workspace:*
-        version: link:../research-crawler
       zod:
         specifier: ^4.4.3
         version: 4.4.3

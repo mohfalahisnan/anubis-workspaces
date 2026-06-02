@@ -1,5 +1,5 @@
 {
-  "name": "anubis-ai-agent",
+  "name": "@anubis/ai-agent",
   "version": "0.1.5",
   "description": "HTTP-oriented AI agent core for the Anubis backend.",
   "type": "module",

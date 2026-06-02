@@ -44,7 +44,7 @@ export class CodexAgent {
     await client.request('initialize', {
       clientInfo: {
         name: 'anubis_ai_agent',
-        title: 'anubis-ai-agent',
+        title: '@anubis/ai-agent',
         version: '0.1.5',
       },
     })

@@ -1,15 +1,19 @@
 import {
   ActivityIcon,
   BarChart3Icon,
-  BotIcon,
+  CalendarClockIcon,
   FileTextIcon,
   ImageIcon,
+  ImagesIcon,
   LayoutDashboardIcon,
+  LibraryIcon,
+  ScrollTextIcon,
   SendIcon,
   Settings2Icon,
   ShieldCheckIcon,
+  SlidersHorizontalIcon,
   SparklesIcon,
-  WorkflowIcon,
+  UsersRoundIcon,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -22,10 +26,12 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboardIcon, active: true },
-  { label: 'Agents', icon: BotIcon, badge: '12' },
-  { label: 'Content', icon: FileTextIcon },
-  { label: 'Pipelines', icon: WorkflowIcon },
-  { label: 'Analytics', icon: BarChart3Icon },
+  { label: 'Conversations', icon: ScrollTextIcon },
+  { label: 'Competitors', icon: UsersRoundIcon },
+  { label: 'Content', icon: ImagesIcon },
+  { label: 'Profiles', icon: SlidersHorizontalIcon },
+  { label: 'Skills', icon: LibraryIcon },
+  { label: 'Scheduled', icon: CalendarClockIcon },
   { label: 'Settings', icon: Settings2Icon },
 ]
 

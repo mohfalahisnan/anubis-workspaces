@@ -1,20 +1,99 @@
-import type { ApiHealthResponse } from '@anubis/shared'
+import type {
+  ApiHealthResponse,
+  ConversationCreateResponse,
+  ConversationListResponse,
+  ConversationSummary,
+  CreateConversationInput,
+  CronJobListResponse,
+  CronJobSummary,
+  ProfileListResponse,
+  ProfileSummary,
+  SkillListResponse,
+  SkillSummary,
+} from '@anubis/shared'
 
-export async function getApiBaseUrl() {
-  if (window.anubis) {
+/* ------------------------------------------------------------
+   Base URL resolution
+   ------------------------------------------------------------ */
+
+export async function getApiBaseUrl(): Promise<string> {
+  if (typeof window !== 'undefined' && window.anubis) {
     return window.anubis.backend.getBaseUrl()
   }
 
   return import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3000'
 }
 
-export async function getHealth() {
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = await getApiBaseUrl()
-  const response = await fetch(new URL('/health', baseUrl))
+  const response = await fetch(new URL(path, baseUrl), {
+    ...init,
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+      ...init?.headers,
+    },
+  })
 
   if (!response.ok) {
-    throw new Error(`Backend health check failed with ${response.status}`)
+    let detail = `HTTP ${response.status}`
+    try {
+      const body = await response.json() as { error?: unknown }
+      if (body.error) {
+        detail = typeof body.error === 'string'
+          ? body.error
+          : JSON.stringify(body.error)
+      }
+    } catch {
+      // swallow — keep the generic detail
+    }
+    throw new Error(`${path} failed: ${detail}`)
   }
 
-  return response.json() as Promise<ApiHealthResponse>
+  return response.json() as Promise<T>
+}
+
+/* ------------------------------------------------------------
+   Endpoints
+   ------------------------------------------------------------ */
+
+export function getHealth(): Promise<ApiHealthResponse> {
+  return api<ApiHealthResponse>('/health')
+}
+
+export async function listProfiles(): Promise<ProfileSummary[]> {
+  const r = await api<ProfileListResponse>('/profiles')
+  return r.items
+}
+
+export async function listConversations(
+  opts: { limit?: number; archived?: boolean } = {},
+): Promise<ConversationSummary[]> {
+  const params = new URLSearchParams()
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  if (opts.archived !== undefined) params.set('archived', String(opts.archived))
+  const qs = params.toString()
+  const path = qs ? `/conversations?${qs}` : '/conversations'
+  const r = await api<ConversationListResponse>(path)
+  return r.items
+}
+
+export async function createConversation(
+  input: CreateConversationInput,
+): Promise<ConversationSummary> {
+  const r = await api<ConversationCreateResponse>('/conversations', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.conversation
+}
+
+export async function listSkills(): Promise<SkillSummary[]> {
+  const r = await api<SkillListResponse>('/skills')
+  return r.items
+}
+
+export async function listCronJobs(): Promise<CronJobSummary[]> {
+  const r = await api<CronJobListResponse>('/cron-jobs')
+  return r.items
 }

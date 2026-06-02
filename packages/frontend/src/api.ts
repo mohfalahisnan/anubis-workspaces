@@ -4,6 +4,7 @@ import type {
   ConversationListResponse,
   ConversationSummary,
   CreateConversationInput,
+  CreateProfileInput,
   CronJobListResponse,
   CronJobSummary,
   MessageListResponse,
@@ -66,6 +67,27 @@ export function getHealth(): Promise<ApiHealthResponse> {
 export async function listProfiles(): Promise<ProfileSummary[]> {
   const r = await api<ProfileListResponse>('/profiles')
   return r.items
+}
+
+export async function getProfile(id: string): Promise<ProfileSummary> {
+  const r = await api<{ ok: true; profile: ProfileSummary }>(
+    `/profiles/${encodeURIComponent(id)}`,
+  )
+  return r.profile
+}
+
+export async function createProfile(input: CreateProfileInput): Promise<ProfileSummary> {
+  const r = await api<{ ok: true; profile: ProfileSummary }>('/profiles', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.profile
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  await api<{ ok: true }>(`/profiles/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function listConversations(

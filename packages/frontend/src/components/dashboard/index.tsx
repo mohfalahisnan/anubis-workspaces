@@ -13,6 +13,7 @@ import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
+import { ProfilesPage } from '@/pages/profiles'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -181,12 +182,7 @@ function CurrentPage() {
     case 'content':
       return <ContentPage />
     case 'profiles':
-      return (
-        <PlaceholderPage
-          title='Profiles'
-          hint='The profile manager screen is queued — it will surface the five builtin profiles plus your custom ones.'
-        />
-      )
+      return <ProfilesPage />
     case 'skills':
       return (
         <PlaceholderPage

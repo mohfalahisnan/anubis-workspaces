@@ -1,0 +1,415 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ChevronDownIcon,
+  CopyIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+} from 'lucide-react'
+
+import type { ProfileSummary } from '@anubis/shared'
+
+import { createProfile, deleteProfile, getProfile, listProfiles } from '@/api'
+import { cn } from '@/lib/utils'
+
+/* -----------------------------------------------------------
+   Profiles screen
+   -----------------------------------------------------------
+   - Lists every profile (builtin + user), grouped by source.
+   - "New Profile" creates a user profile seeded with sensible
+     Claude defaults; the user can then tweak it via the (future)
+     editor.
+   - "Copy" duplicates any profile — builtin or user — as a
+     new user-source profile carrying the same config. The
+     backend already forces source='user' on POST /profiles,
+     so this is pure client-side composition.
+   ----------------------------------------------------------- */
+
+type Banner =
+  | { kind: 'error'; message: string }
+  | { kind: 'success'; message: string }
+
+const DEFAULT_NEW_PROFILE_CONFIG = {
+  agent: 'claude',
+  model: 'claude-sonnet-4-6',
+  permissionMode: 'plan',
+} as const
+
+export function ProfilesPage() {
+  const [profiles, setProfiles] = useState<ProfileSummary[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [banner, setBanner] = useState<Banner | null>(null)
+
+  const refresh = useCallback(async () => {
+    try {
+      const items = await listProfiles()
+      setProfiles(items)
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Failed to load profiles.',
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const grouped = useMemo(() => {
+    const builtin: ProfileSummary[] = []
+    const user: ProfileSummary[] = []
+    for (const p of profiles ?? []) {
+      ;(p.source === 'builtin' ? builtin : user).push(p)
+    }
+    return { builtin, user }
+  }, [profiles])
+
+  async function handleNew() {
+    setBusy(true)
+    setBanner(null)
+    try {
+      const created = await createProfile({
+        name: 'Untitled profile',
+        description: 'A new profile — rename, pick a model, then start using it.',
+        config: { ...DEFAULT_NEW_PROFILE_CONFIG },
+      })
+      await refresh()
+      setBanner({ kind: 'success', message: `Created "${created.name}".` })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not create the profile.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCopy(source: ProfileSummary) {
+    setBusy(true)
+    setBanner(null)
+    try {
+      // Fetch the latest config so we copy any in-flight overrides too.
+      const full = await getProfile(source.id)
+      const copied = await createProfile({
+        name: `${full.name} (copy)`,
+        description: full.description,
+        // The shared type allows extra fields via the index signature.
+        config: full.config,
+      })
+      await refresh()
+      setBanner({ kind: 'success', message: `Copied to "${copied.name}".` })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not copy the profile.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(source: ProfileSummary) {
+    if (source.source !== 'user') return
+    const ok = window.confirm(`Delete "${source.name}"? This can't be undone.`)
+    if (!ok) return
+    setBusy(true)
+    setBanner(null)
+    try {
+      await deleteProfile(source.id)
+      await refresh()
+      setBanner({ kind: 'success', message: `Deleted "${source.name}".` })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not delete the profile.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const total = profiles?.length ?? 0
+
+  return (
+    <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
+      <div className='mx-auto w-full max-w-[1240px] px-7 pb-12'>
+        {/* Header */}
+        <div className='flex flex-col gap-6 pt-7 sm:flex-row sm:items-start sm:justify-between'>
+          <div>
+            <h1 className='text-[30px] font-semibold leading-[1.1] tracking-[-0.025em]'>
+              Profiles
+            </h1>
+            <p className='mt-2 max-w-xl text-[14px] leading-relaxed text-muted-foreground'>
+              {total === 0
+                ? 'No profiles yet. Create one to start a conversation.'
+                : `${total} profile${total === 1 ? '' : 's'} — built-in presets and your own.`}
+            </p>
+          </div>
+          <div className='flex shrink-0 items-center gap-2.5'>
+            <button
+              type='button'
+              onClick={() => void refresh()}
+              disabled={busy}
+              className='inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+            >
+              <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
+              Refresh
+            </button>
+            <button
+              type='button'
+              onClick={() => void handleNew()}
+              disabled={busy}
+              className='inline-flex h-9 items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-3.5 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              <PlusIcon className='size-[15px]' strokeWidth={2.4} />
+              New Profile
+            </button>
+          </div>
+        </div>
+
+        {banner && (
+          <div
+            role='status'
+            className={cn(
+              'mt-5 rounded-md border px-3.5 py-2.5 text-[13px]',
+              banner.kind === 'error'
+                ? 'border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] text-destructive'
+                : 'border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] text-foreground',
+            )}
+          >
+            {banner.message}
+          </div>
+        )}
+
+        {profiles === null ? (
+          <LoadingGrid />
+        ) : (
+          <>
+            <Section title='Built-in'>
+              <ProfileGrid profiles={grouped.builtin} onCopy={handleCopy} busy={busy} />
+            </Section>
+
+            <Section
+              title='My profiles'
+              emptyHint='No custom profiles yet. Tap "New Profile" to scaffold one, or copy a built-in to start.'
+              show
+            >
+              <ProfileGrid
+                profiles={grouped.user}
+                onCopy={handleCopy}
+                onDelete={handleDelete}
+                busy={busy}
+              />
+            </Section>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Section header ---------- */
+
+function Section({
+  title,
+  children,
+  emptyHint,
+  show = false,
+}: {
+  title: string
+  children: React.ReactNode
+  emptyHint?: string
+  show?: boolean
+}) {
+  const isEmpty =
+    Array.isArray(children) === false &&
+    (children as React.ReactElement<{ profiles?: ProfileSummary[] }> | null)?.props?.profiles?.length === 0
+  if (isEmpty && !show && !emptyHint) return null
+  return (
+    <section className='mt-8'>
+      <h2 className='mb-3 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
+        {title}
+      </h2>
+      {isEmpty && emptyHint ? (
+        <p className='rounded-md border border-dashed border-border bg-card/50 px-3.5 py-4 text-[13px] text-muted-foreground'>
+          {emptyHint}
+        </p>
+      ) : (
+        children
+      )}
+    </section>
+  )
+}
+
+/* ---------- Card grid ---------- */
+
+function ProfileGrid({
+  profiles,
+  onCopy,
+  onDelete,
+  busy,
+}: {
+  profiles: ProfileSummary[]
+  onCopy: (p: ProfileSummary) => void
+  onDelete?: (p: ProfileSummary) => void
+  busy: boolean
+}) {
+  if (profiles.length === 0) return null
+  return (
+    <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+      {profiles.map((p) => (
+        <ProfileCard
+          key={p.id}
+          profile={p}
+          onCopy={() => onCopy(p)}
+          onDelete={onDelete ? () => onDelete(p) : undefined}
+          busy={busy}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ProfileCard({
+  profile,
+  onCopy,
+  onDelete,
+  busy,
+}: {
+  profile: ProfileSummary
+  onCopy: () => void
+  onDelete?: () => void
+  busy: boolean
+}) {
+  const agent = profile.config.agent
+  const model =
+    typeof profile.config.model === 'string' ? profile.config.model : undefined
+
+  return (
+    <article
+      className={cn(
+        'group relative flex flex-col gap-3 overflow-hidden rounded-md border border-border bg-card p-4 transition-colors',
+        'hover:border-[color-mix(in_oklab,var(--anubis-gold)_28%,var(--border))]',
+      )}
+    >
+      <header className='flex items-start justify-between gap-3'>
+        <div className='min-w-0'>
+          <h3 className='truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-foreground'>
+            {profile.name}
+          </h3>
+          <p className='mt-1 font-mono text-[11.5px] text-muted-foreground'>
+            {profile.id}
+          </p>
+        </div>
+        <SourceBadge source={profile.source} />
+      </header>
+
+      <div className='flex flex-wrap items-center gap-1.5'>
+        <AgentChip agent={agent} />
+        {model && (
+          <span className='inline-flex h-[22px] items-center rounded-md border border-border bg-muted px-2 font-mono text-[11px] text-muted-foreground'>
+            {model}
+          </span>
+        )}
+        {profile.lastUsedAt && (
+          <span className='font-mono text-[11px] text-muted-foreground/70'>
+            · used {relativeTime(profile.lastUsedAt)}
+          </span>
+        )}
+      </div>
+
+      {profile.description && (
+        <p className='line-clamp-2 text-[13px] leading-[1.5] text-muted-foreground'>
+          {profile.description}
+        </p>
+      )}
+
+      <div className='mt-1 flex items-center gap-2 border-t border-border pt-3'>
+        <button
+          type='button'
+          onClick={onCopy}
+          disabled={busy}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+        >
+          <CopyIcon className='size-[13px]' strokeWidth={2} />
+          Copy
+        </button>
+
+        <button
+          type='button'
+          disabled
+          title='Editor coming soon'
+          className='inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-muted-foreground/70 disabled:cursor-not-allowed'
+        >
+          Edit
+          <ChevronDownIcon className='size-3' strokeWidth={2} />
+        </button>
+
+        {onDelete && (
+          <button
+            type='button'
+            onClick={onDelete}
+            disabled={busy}
+            className='ml-auto inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive disabled:opacity-50'
+            aria-label={`Delete ${profile.name}`}
+          >
+            <Trash2Icon className='size-[13px]' strokeWidth={2} />
+            Delete
+          </button>
+        )}
+      </div>
+    </article>
+  )
+}
+
+/* ---------- Bits ---------- */
+
+function SourceBadge({ source }: { source: ProfileSummary['source'] }) {
+  if (source === 'builtin') {
+    return (
+      <span className='inline-flex shrink-0 items-center rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_38%,transparent)] bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)] px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--anubis-gold)]'>
+        Built-in
+      </span>
+    )
+  }
+  return (
+    <span className='inline-flex shrink-0 items-center rounded-md border border-border bg-muted px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground'>
+      Custom
+    </span>
+  )
+}
+
+function AgentChip({ agent }: { agent: ProfileSummary['config']['agent'] }) {
+  return (
+    <span className='inline-flex h-[22px] items-center gap-1.5 rounded-md border border-border bg-background px-2 font-mono text-[11px] text-foreground'>
+      <span className='inline-block size-1.5 rounded-full bg-[var(--anubis-gold)]' />
+      {agent === 'claude' ? 'Claude' : 'Codex'}
+    </span>
+  )
+}
+
+function LoadingGrid() {
+  return (
+    <div className='mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className='h-[154px] animate-pulse rounded-md border border-border bg-card'
+        />
+      ))}
+    </div>
+  )
+}
+
+function relativeTime(ms: number): string {
+  const d = Date.now() - ms
+  const min = Math.round(d / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.round(hr / 24)
+  return `${day}d ago`
+}

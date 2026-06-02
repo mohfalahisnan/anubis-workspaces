@@ -89,6 +89,18 @@ export interface CreateConversationInput {
   override?: Record<string, unknown>
 }
 
+export interface ProfileConfigInput {
+  agent: AgentKind
+  model?: string
+  [key: string]: unknown
+}
+
+export interface CreateProfileInput {
+  name: string
+  description?: string
+  config: ProfileConfigInput
+}
+
 /* Common response envelopes */
 
 export interface ListResponse<T> {

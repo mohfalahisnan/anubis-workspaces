@@ -14,6 +14,7 @@ const runAgentSchema = z.object({
   sessionId: z.string().min(1).optional(),
   prevAgentSessionId: z.string().min(1).optional(),
   cwd: z.string().min(1),
+  profileId: z.string().min(1).optional(),
   prompt: z.string().min(1),
   model: z.string().min(1).optional(),
   claudeCliProfile: z.string().min(1).optional(),

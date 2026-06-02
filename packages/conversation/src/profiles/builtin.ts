@@ -1,0 +1,81 @@
+import type { Profile } from './types.js'
+
+const NOW = 0
+
+export const BUILTIN_PROFILES: Profile[] = [
+  {
+    id: 'claude-coding',
+    name: 'Claude — Coding (plan mode)',
+    description: 'Claude Sonnet with plan-mode permissions and auto-inject skills only.',
+    source: 'builtin',
+    config: {
+      agent: 'claude',
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'plan',
+    },
+    sortOrder: 10,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: 'claude-yolo',
+    name: 'Claude — Yolo',
+    description: 'Claude Sonnet with bypassPermissions. Use only in scratch workspaces.',
+    source: 'builtin',
+    config: {
+      agent: 'claude',
+      model: 'claude-sonnet-4-6',
+      permissionMode: 'bypassPermissions',
+    },
+    sortOrder: 20,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: 'claude-research',
+    name: 'Claude — Research (Opus)',
+    description: 'Claude Opus with plan permissions and a research-focused system prompt.',
+    source: 'builtin',
+    config: {
+      agent: 'claude',
+      model: 'claude-opus-4-7',
+      permissionMode: 'plan',
+      appendSystemPrompt: 'You are in research mode. Cite sources. Prefer breadth-first exploration over premature synthesis.',
+    },
+    sortOrder: 30,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: 'codex-coding',
+    name: 'Codex — Coding (workspace-write)',
+    description: 'Codex GPT-5.4 with workspace-write sandbox and on-request approvals.',
+    source: 'builtin',
+    config: {
+      agent: 'codex',
+      model: 'gpt-5.4',
+      sandboxMode: 'workspace-write',
+      approvalPolicy: 'on-request',
+      reasoningEffort: 'medium',
+    },
+    sortOrder: 40,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: 'codex-yolo',
+    name: 'Codex — Yolo',
+    description: 'Codex GPT-5.4 with full-access sandbox and no approvals. Scratch workspaces only.',
+    source: 'builtin',
+    config: {
+      agent: 'codex',
+      model: 'gpt-5.4',
+      sandboxMode: 'danger-full-access',
+      approvalPolicy: 'never',
+      reasoningEffort: 'medium',
+    },
+    sortOrder: 50,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+]

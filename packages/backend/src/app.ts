@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { ZodError } from 'zod'
 import type { ApiHealthResponse } from '@anubis/shared'
 import { researchCrawlerRoutes } from './research-crawler.js'
+import { aiAgentRoutes } from './ai-agent.js'
 
 const app = new Hono()
 
@@ -29,6 +30,7 @@ app.get('/health', (c) => {
 })
 
 app.route('/research-crawler', researchCrawlerRoutes)
+app.route('/ai-agent', aiAgentRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

@@ -1,0 +1,29 @@
+{
+  "name": "anubis-ai-agent",
+  "version": "0.1.5",
+  "description": "HTTP-oriented AI agent core for the Anubis backend.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "split2": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "@types/split2": "^4.2.3",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

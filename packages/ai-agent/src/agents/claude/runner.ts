@@ -65,7 +65,7 @@ export interface ClaudeRunOpts {
   cwd: string
   prompt: string
   model?: string
-  profile?: string
+  claudeCliProfile?: string
   extraEnv?: Record<string, string>
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
   allowedTools?: string[]

@@ -65,7 +65,8 @@ app.whenReady().then(async () => {
   const backendRoot = app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked')
     : APP_ROOT
-  const backend = await startBackend(backendRoot, Boolean(VITE_DEV_SERVER_URL))
+  const dataDir = path.join(app.getPath('userData'), 'anubis')
+  const backend = await startBackend(backendRoot, Boolean(VITE_DEV_SERVER_URL), dataDir)
   backendUrl = backend.url
   stopBackend = backend.stop
 

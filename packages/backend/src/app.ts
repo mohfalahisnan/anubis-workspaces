@@ -4,6 +4,10 @@ import { ZodError } from 'zod'
 import type { ApiHealthResponse } from '@anubis/shared'
 import { researchCrawlerRoutes } from './research-crawler.js'
 import { aiAgentRoutes } from './ai-agent.js'
+import { conversationRoutes } from './conversation.js'
+import { profileRoutes } from './profile.js'
+import { skillRoutes } from './skill.js'
+import { cronRoutes } from './cron.js'
 
 const app = new Hono()
 
@@ -31,6 +35,10 @@ app.get('/health', (c) => {
 
 app.route('/research-crawler', researchCrawlerRoutes)
 app.route('/ai-agent', aiAgentRoutes)
+app.route('/conversations', conversationRoutes)
+app.route('/profiles', profileRoutes)
+app.route('/skills', skillRoutes)
+app.route('/cron-jobs', cronRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

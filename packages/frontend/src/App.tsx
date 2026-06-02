@@ -1,6 +1,7 @@
 import { getApiBaseUrl, getHealth } from '@/api'
 import { useEffect, useState } from 'react'
 import InteractiveDotGrid from './components/aicanvas/dot-grid'
+import { ModeToggle } from './components/mode-toggle'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -32,7 +33,10 @@ function App() {
   }, [])
 
   return (
-    <div className='dark h-screen w-screen'>
+    <div className='relative h-screen w-screen'>
+      <header className='absolute right-0 top-0 z-10 flex items-center justify-end p-4'>
+        <ModeToggle />
+      </header>
       <InteractiveDotGrid />
       Hallo Worlds
     </div>

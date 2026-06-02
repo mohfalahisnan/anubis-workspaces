@@ -7,6 +7,12 @@ import { composeAppendSystemPrompt } from '../skills/inject.js'
 import type { SkillLoader } from '../skills/loader.js'
 import type { ProfileService } from '../profiles/profile-service.js'
 import type { ProfileOverride, ResolvedProfile } from '../profiles/types.js'
+import {
+  ensureAgentHome,
+  envFor,
+  homePathFor,
+  resetProfileHome,
+} from '../profiles/agent-home.js'
 import type { ConversationsRepo } from '../db/repositories/conversations-repo.js'
 import type { MessagesRepo } from '../db/repositories/messages-repo.js'
 import type { ArtifactsRepo } from '../db/repositories/artifacts-repo.js'
@@ -49,6 +55,12 @@ export interface ConversationServiceDeps {
   messages: MessagesRepo
   artifacts: ArtifactsRepo
   sessions: AgentSessionsRepo
+  /**
+   * Root directory under which each profile gets its own isolated
+   * agent home folder ({agentHomeRoot}/{profileId}/{agent}/).
+   * Composition root sets this to {ANUBIS_DATA_DIR}/agent-homes.
+   */
+  agentHomeRoot: string
 }
 
 export class ConversationService {
@@ -148,10 +160,27 @@ export class ConversationService {
       .filter((s): s is NonNullable<typeof s> => Boolean(s))
     const appendSystemPrompt = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
 
-    const prevSession = this.deps.sessions.findByConversation(id)?.agentSessionId
+    // Auto-isolate this profile's agent home. profile.env always wins
+    // so power users can override (e.g. point two profiles at the same
+    // identity) if they really want to.
+    let prevSession = this.deps.sessions.findByConversation(id)?.agentSessionId
+    let envWithHome: Record<string, string> | undefined = resolved.env
+    if (cur.profileId) {
+      const { path, isNew } = ensureAgentHome(
+        this.deps.agentHomeRoot,
+        cur.profileId,
+        cur.agent,
+      )
+      envWithHome = { ...envFor(cur.agent, path), ...(resolved.env ?? {}) }
+      // First turn after the home dir was provisioned: the agent has no
+      // record of the prior resume id (it lived in the OLD shared home),
+      // so we start fresh inside the new isolated home.
+      if (isNew) prevSession = undefined
+    }
+    const resolvedForTurn: ResolvedProfile = { ...resolved, env: envWithHome, appendSystemPrompt }
     const task = await this.deps.tm.getOrBuild(
       { id, agent: cur.agent, workspacePath: cur.workspacePath },
-      { ...resolved, appendSystemPrompt },
+      resolvedForTurn,
       { prompt: input.content, msgId, appendSystemPrompt, prevAgentSessionId: prevSession },
     )
 
@@ -176,6 +205,23 @@ export class ConversationService {
   async cancel(id: string): Promise<void> {
     await this.deps.tm.kill(id, 'user')
     this.deps.conversations.updateStatus(id, 'error')
+  }
+
+  /**
+   * Returns the on-disk path to a profile's isolated agent home,
+   * regardless of whether it has been created yet.
+   */
+  agentHomePath(profileId: string, agent: 'claude' | 'codex'): string {
+    return homePathFor(this.deps.agentHomeRoot, profileId, agent)
+  }
+
+  /**
+   * Deletes a profile's agent home directory. The next turn that
+   * uses this profile will create a fresh one — auth tokens, MCP
+   * config, and session history all reset.
+   */
+  resetProfileHome(profileId: string, agent: 'claude' | 'codex'): { existed: boolean } {
+    return resetProfileHome(this.deps.agentHomeRoot, profileId, agent)
   }
 
   private resolveOrThrow(

@@ -99,18 +99,18 @@ from `<MdxContent>` down to `<Button>` so `send` knows where to post.
 
 `markdown.tsx` is a thin wrapper around `streamdown` (already a dep,
 streaming-tolerant by design, ships with code highlight + math + mermaid +
-CJK plugins we already have installed). We pass it the segment text plus a
-rehype plugin chain:
-
-- `rehype-sanitize` with `defaultSchema` extended to allow `class` and `style`
-  on common tags. No `<script>`, no `on*` handlers, no `javascript:` URLs.
+CJK plugins we already have installed). Streamdown bundles `rehype-harden`
+and `rehype-sanitize` internally with safe defaults — `<script>`, `on*`
+handlers, and `javascript:` URLs are already stripped. We pass `mode="streaming"`
+and use the `allowedTags` config to allow a small extra set of safe inline
+HTML elements (`class`, `style`, basic structural tags) that the default
+schema may not cover.
 
 No Shadow DOM. We diverge from AionUi here on purpose — we want assistant
 HTML to inherit Anubis brand styles, not be visually walled off.
 
-New dependency added to `packages/frontend/package.json`:
-
-- `rehype-sanitize` (~3 KB)
+**No new dependencies.** Streamdown + its bundled sanitizer cover the full
+markdown + safe-HTML pipeline.
 
 ## Live streaming via SSE
 
@@ -254,7 +254,6 @@ disposition were settled in brainstorming.)
 | `packages/frontend/src/components/mdx/components/*.tsx` | NEW — five components. |
 | `packages/frontend/src/lib/conversation-stream.ts` | NEW — SSE hook. |
 | `packages/frontend/src/pages/active-conversation.tsx` | EDIT — use new hook + `<MdxContent>`; delete mock transcript; real status counters. |
-| `packages/frontend/package.json` | EDIT — add `rehype-sanitize`. |
 | `packages/frontend/tests/mdx/parser.test.ts` | NEW. |
 | `packages/frontend/tests/mdx/props-parser.test.ts` | NEW. |
 | `packages/frontend/tests/mdx/components.test.tsx` | NEW. |

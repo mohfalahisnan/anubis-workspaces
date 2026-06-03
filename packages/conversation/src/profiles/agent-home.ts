@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 /* ============================================================
@@ -67,4 +67,56 @@ export function resetProfileHome(
   if (!existsSync(path)) return { existed: false }
   rmSync(path, { recursive: true, force: true })
   return { existed: true }
+}
+
+/**
+ * The filename inside a profile's home that indicates a usable login session.
+ * Encapsulated so a future CLI rename only needs editing here.
+ */
+export const CREDENTIAL_FILE: Record<'claude' | 'codex', string> = {
+  claude: '.credentials.json',
+  codex: 'auth.json',
+}
+
+export function hasCredentials(
+  profileId: string,
+  agent: 'claude' | 'codex',
+  agentHomeRoot: string,
+): boolean {
+  const home = homePathFor(agentHomeRoot, profileId, agent)
+  return existsSync(join(home, CREDENTIAL_FILE[agent]))
+}
+
+export interface CopyHomeOpts {
+  systemSource: string
+  profileId: string
+  agent: 'claude' | 'codex'
+  agentHomeRoot: string
+}
+
+export function copyHomeFromSystem(opts: CopyHomeOpts): { copied: boolean } {
+  const dest = homePathFor(opts.agentHomeRoot, opts.profileId, opts.agent)
+  if (hasCredentials(opts.profileId, opts.agent, opts.agentHomeRoot)) {
+    return { copied: false }
+  }
+  if (!existsSync(opts.systemSource)) return { copied: false }
+  mkdirSync(dest, { recursive: true })
+  cpSync(opts.systemSource, dest, { recursive: true })
+  return { copied: true }
+}
+
+export interface CopyProfileHomeOpts {
+  srcProfileId: string
+  destProfileId: string
+  agent: 'claude' | 'codex'
+  agentHomeRoot: string
+}
+
+export function copyProfileHome(opts: CopyProfileHomeOpts): { copied: boolean } {
+  const src = homePathFor(opts.agentHomeRoot, opts.srcProfileId, opts.agent)
+  const dest = homePathFor(opts.agentHomeRoot, opts.destProfileId, opts.agent)
+  if (!existsSync(src)) return { copied: false }
+  mkdirSync(dest, { recursive: true })
+  cpSync(src, dest, { recursive: true })
+  return { copied: true }
 }

@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
 import app from './app.js'
+import { ensureExtensionStarted, shutdownStack } from './services.js'
 
 const hostname = process.env.ANUBIS_BACKEND_HOST ?? '127.0.0.1'
 const requestedPort = Number(process.env.ANUBIS_BACKEND_PORT ?? process.env.PORT ?? 0)
@@ -18,9 +19,17 @@ const server = serve(
   },
 )
 
+// Lazy-start the extension WS server alongside HTTP startup. Failures
+// are logged but don't take down the backend — the /extension/* routes
+// will surface a clean error if the user tries to use the extension
+// before it recovers.
+ensureExtensionStarted().catch((e) => {
+  console.error('[extension] failed to start WS server', e)
+})
+
 function shutdown() {
   server.close(() => {
-    process.exit(0)
+    void shutdownStack().finally(() => process.exit(0))
   })
 }
 

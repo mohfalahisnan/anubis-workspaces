@@ -166,6 +166,24 @@ export interface AppConfig {
   loginProfileDir?: string
 }
 
+export interface ChromeProfileInfo {
+  /** Subdirectory name as Chrome stores it ('Default', 'Profile 3', …). */
+  directory: string
+  /** Human-friendly name from Local State, falling back to `directory`. */
+  name: string
+  /** Absolute path — what we save to AppConfig.loginProfileDir. */
+  path: string
+  /** GAIA / email if Local State exposed one. */
+  email?: string
+}
+
+export interface ChromeProfilesPayload {
+  ok: boolean
+  /** The platform-detected user-data directory (or null if unknown). */
+  userDataDir: string | null
+  profiles: ChromeProfileInfo[]
+}
+
 export interface DiscoveredCandidate {
   username: string
   fullName?: string

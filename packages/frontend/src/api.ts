@@ -2,6 +2,7 @@ import type {
   ApiHealthResponse,
   AppConfig,
   CapturedPostListResponse,
+  ChromeProfilesPayload,
   CapturedPostSummary,
   CaptureResultPayload,
   CompetitorListResponse,
@@ -89,6 +90,12 @@ export async function updateAppConfig(patch: AppConfig): Promise<AppConfig> {
     body: JSON.stringify(patch),
   })
   return r.config
+}
+
+/* ---------- System introspection ---------- */
+
+export async function listLocalChromeProfiles(): Promise<ChromeProfilesPayload> {
+  return api<ChromeProfilesPayload>('/system/chrome-profiles')
 }
 
 export async function listProfiles(): Promise<ProfileSummary[]> {

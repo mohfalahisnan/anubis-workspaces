@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CodeIcon, FolderOpenIcon, SaveIcon } from 'lucide-react'
+import {
+  CheckCircle2Icon,
+  CodeIcon,
+  RefreshCwIcon,
+  SaveIcon,
+  UserRoundIcon,
+} from 'lucide-react'
 
-import type { AppConfig } from '@anubis/shared'
+import type { AppConfig, ChromeProfileInfo, ChromeProfilesPayload } from '@anubis/shared'
 
-import { getAppConfig, updateAppConfig } from '@/api'
+import {
+  getAppConfig,
+  listLocalChromeProfiles,
+  updateAppConfig,
+} from '@/api'
 import { cn } from '@/lib/utils'
 
 type Banner = { kind: 'success' | 'error'; message: string }
@@ -13,14 +23,24 @@ export function SettingsPage() {
   const [form, setForm] = useState<AppConfig>({})
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
+  const [chrome, setChrome] = useState<ChromeProfilesPayload | null>(null)
+  const [chromeLoading, setChromeLoading] = useState(true)
+  const [customPath, setCustomPath] = useState(false)
 
   useEffect(() => {
     let active = true
-    getAppConfig()
-      .then((cfg) => {
+    Promise.all([getAppConfig(), listLocalChromeProfiles()])
+      .then(([cfg, chromeInfo]) => {
         if (!active) return
         setInitial(cfg)
         setForm(cfg)
+        setChrome(chromeInfo)
+        // If the saved login path is NOT one of the detected profiles,
+        // surface the custom-path input so the user can see what's set.
+        const knownPaths = new Set(chromeInfo.profiles.map((p) => p.path))
+        if (cfg.loginProfileDir && !knownPaths.has(cfg.loginProfileDir)) {
+          setCustomPath(true)
+        }
       })
       .catch((e: unknown) => {
         if (!active) return
@@ -31,6 +51,9 @@ export function SettingsPage() {
               ? `Couldn't load settings: ${e.message}`
               : 'Could not load settings.',
         })
+      })
+      .finally(() => {
+        if (active) setChromeLoading(false)
       })
     return () => {
       active = false
@@ -44,6 +67,16 @@ export function SettingsPage() {
       (form.loginProfileDir ?? '') !== (initial.loginProfileDir ?? '')
     )
   }, [form, initial])
+
+  async function refreshChrome() {
+    setChromeLoading(true)
+    try {
+      const next = await listLocalChromeProfiles()
+      setChrome(next)
+    } finally {
+      setChromeLoading(false)
+    }
+  }
 
   async function handleSave() {
     setBusy(true)
@@ -116,38 +149,71 @@ export function SettingsPage() {
         )}
 
         <Section
-          title='Research-crawler'
-          hint='Where the crawler should find Chrome and which signed-in profile to use.'
+          title='Research-crawler · Chrome profile'
+          hint='Which Chrome profile to launch when a flow asks for the “login” profile (e.g. Find competitors, or capture with Logged-in mode).'
+          right={
+            <button
+              type='button'
+              onClick={() => void refreshChrome()}
+              disabled={chromeLoading}
+              className='inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+            >
+              <RefreshCwIcon
+                className={cn('size-[13px]', chromeLoading && 'animate-spin')}
+                strokeWidth={2}
+              />
+              Rescan
+            </button>
+          }
         >
-          <Field
-            label='Login profile directory'
-            htmlFor='cfg-profile-dir'
-            hint='Full path to the Chrome user-data dir where you are signed into Instagram. On Windows this looks like “C:\\Users\\<you>\\AppData\\Local\\Google\\Chrome\\User Data\\Profile 3”. Used whenever a flow asks for the login profile (e.g. discovery, or capture with Logged-in mode).'
-          >
-            <div className='relative'>
-              <FolderOpenIcon
-                className='pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-muted-foreground'
-                strokeWidth={1.8}
+          {chromeLoading && chrome === null ? (
+            <ProfilesSkeleton />
+          ) : chrome === null || !chrome.ok ? (
+            <NotInstalled detectedDir={chrome?.userDataDir ?? null} />
+          ) : chrome.profiles.length === 0 ? (
+            <NoProfiles userDataDir={chrome.userDataDir} />
+          ) : (
+            <>
+              <ProfileGrid
+                profiles={chrome.profiles}
+                selected={form.loginProfileDir ?? ''}
+                onPick={(path) => {
+                  setCustomPath(false)
+                  setForm((f) => ({ ...f, loginProfileDir: path }))
+                }}
               />
-              <input
-                id='cfg-profile-dir'
-                type='text'
-                value={form.loginProfileDir ?? ''}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, loginProfileDir: e.target.value }))
-                }
-                placeholder='C:\Users\you\AppData\Local\Google\Chrome\User Data\Profile 3'
-                spellCheck={false}
-                className={cn(textInput, 'pl-9 font-mono text-[12.5px]')}
-              />
-            </div>
-          </Field>
+              <p className='mt-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground'>
+                User data dir:{' '}
+                <span className='text-foreground/80'>{chrome.userDataDir}</span>
+              </p>
+              <button
+                type='button'
+                onClick={() => setCustomPath((v) => !v)}
+                className='self-start text-[12px] text-[var(--anubis-gold)] hover:underline'
+              >
+                {customPath ? 'Use a detected profile instead' : 'Use a custom path…'}
+              </button>
+              {customPath && (
+                <input
+                  type='text'
+                  value={form.loginProfileDir ?? ''}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, loginProfileDir: e.target.value }))
+                  }
+                  placeholder='C:\Users\you\AppData\Local\Google\Chrome\User Data\Profile 3'
+                  spellCheck={false}
+                  className={cn(textInput, 'font-mono text-[12.5px]')}
+                />
+              )}
+            </>
+          )}
+        </Section>
 
-          <Field
-            label='Chrome executable path'
-            htmlFor='cfg-chrome-path'
-            hint='Optional. Only needed when Chrome is not on the system PATH. Point at chrome.exe (Windows), Google Chrome.app/Contents/MacOS/Google Chrome (macOS), or google-chrome (Linux).'
-          >
+        <Section
+          title='Chrome executable path'
+          hint='Optional. Only set this if Chrome is not on the system PATH (mostly only Windows quirks).'
+        >
+          <Field htmlFor='cfg-chrome-path' hint=''>
             <div className='relative'>
               <CodeIcon
                 className='pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-muted-foreground'
@@ -157,81 +223,172 @@ export function SettingsPage() {
                 id='cfg-chrome-path'
                 type='text'
                 value={form.chromePath ?? ''}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, chromePath: e.target.value }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, chromePath: e.target.value }))}
                 placeholder='C:\Program Files\Google\Chrome\Application\chrome.exe'
                 spellCheck={false}
                 className={cn(textInput, 'pl-9 font-mono text-[12.5px]')}
               />
             </div>
           </Field>
-
-          <details className='group rounded-md border border-border bg-card p-3.5 text-[12.5px]'>
-            <summary className='cursor-pointer select-none font-medium text-foreground'>
-              How to find your Chrome profile directory
-            </summary>
-            <div className='mt-2 space-y-2 text-muted-foreground'>
-              <p>
-                Open Chrome, hit <code className='font-mono text-foreground/80'>chrome://version</code>
-                {' '}in the address bar, and look at the{' '}
-                <span className='font-medium text-foreground/90'>Profile Path</span> row.
-                That's the full path — paste it above.
-              </p>
-              <p>
-                Common layouts:
-              </p>
-              <ul className='ml-5 list-disc space-y-1'>
-                <li>
-                  <span className='font-mono text-foreground/80'>
-                    Windows: %LOCALAPPDATA%\Google\Chrome\User Data\Profile N
-                  </span>
-                </li>
-                <li>
-                  <span className='font-mono text-foreground/80'>
-                    macOS: ~/Library/Application Support/Google/Chrome/Profile N
-                  </span>
-                </li>
-                <li>
-                  <span className='font-mono text-foreground/80'>
-                    Linux: ~/.config/google-chrome/Profile N
-                  </span>
-                </li>
-              </ul>
-              <p>
-                <span className='font-medium text-foreground/90'>Heads up:</span>{' '}
-                Chrome can't be running with that profile already open — the crawler
-                opens its own window. Close any Chrome windows using Profile N first,
-                or use a profile you don't keep open day-to-day.
-              </p>
-            </div>
-          </details>
         </Section>
+
+        <p className='mt-6 text-[11.5px] leading-relaxed text-muted-foreground'>
+          <span className='font-medium text-foreground/80'>Heads up:</span> Chrome
+          can't be running with the selected profile already open — the crawler
+          launches its own window. Close any browser windows using that profile
+          first, or use one you don't keep open day-to-day.
+        </p>
       </div>
     </div>
   )
 }
 
-/* ---------- presentational bits ---------- */
+/* ---------- Chrome-profile picker ---------- */
+
+function ProfileGrid({
+  profiles,
+  selected,
+  onPick,
+}: {
+  profiles: ChromeProfileInfo[]
+  selected: string
+  onPick: (path: string) => void
+}) {
+  return (
+    <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+      {profiles.map((p) => {
+        const isSelected = p.path === selected
+        return (
+          <button
+            key={p.directory}
+            type='button'
+            onClick={() => onPick(p.path)}
+            aria-pressed={isSelected}
+            className={cn(
+              'group flex items-start gap-3 rounded-md border bg-card p-3 text-left transition-all',
+              isSelected
+                ? 'border-[var(--anubis-gold)] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]'
+                : 'border-border hover:border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] hover:bg-muted',
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'flex size-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
+                isSelected
+                  ? 'bg-[var(--anubis-gold)] text-[#0B0C0F]'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {p.name.slice(0, 1).toUpperCase() || (
+                <UserRoundIcon className='size-4' strokeWidth={1.5} />
+              )}
+            </span>
+            <div className='min-w-0 flex-1'>
+              <div className='flex items-center gap-1.5'>
+                <span className='truncate text-[13.5px] font-medium text-foreground'>
+                  {p.name}
+                </span>
+                {isSelected && (
+                  <CheckCircle2Icon
+                    className='size-3.5 shrink-0 text-[var(--anubis-gold)]'
+                    strokeWidth={2}
+                  />
+                )}
+              </div>
+              <div className='truncate font-mono text-[10.5px] text-muted-foreground'>
+                {p.directory}
+              </div>
+              {p.email && (
+                <div className='truncate text-[11px] text-muted-foreground/80'>
+                  {p.email}
+                </div>
+              )}
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ProfilesSkeleton() {
+  return (
+    <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className='h-[68px] animate-pulse rounded-md border border-border bg-card'
+        />
+      ))}
+    </div>
+  )
+}
+
+function NotInstalled({ detectedDir }: { detectedDir: string | null }) {
+  return (
+    <div className='rounded-md border border-dashed border-border bg-card/50 p-4 text-[13px] text-muted-foreground'>
+      <p className='text-foreground'>Couldn't find Google Chrome.</p>
+      <p className='mt-1.5'>
+        {detectedDir ? (
+          <>
+            Expected the user-data dir at{' '}
+            <code className='font-mono text-foreground/80'>{detectedDir}</code>,
+            but it doesn't exist. Install Chrome, sign into Instagram in any
+            profile, then click <span className='font-medium'>Rescan</span>.
+          </>
+        ) : (
+          <>
+            Your platform isn't one Anubis knows how to auto-detect. Use{' '}
+            <span className='font-medium'>Use a custom path…</span> below to
+            paste your profile directory manually.
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
+function NoProfiles({ userDataDir }: { userDataDir: string | null }) {
+  return (
+    <div className='rounded-md border border-dashed border-border bg-card/50 p-4 text-[13px] text-muted-foreground'>
+      Found Chrome at{' '}
+      <code className='font-mono text-foreground/80'>{userDataDir ?? '—'}</code>, but
+      no profiles inside it. Open Chrome, sign into the account you want to use
+      for Instagram captures, then click Rescan.
+    </div>
+  )
+}
+
+/* ---------- generic bits ---------- */
 
 function Section({
   title,
   hint,
+  right,
   children,
 }: {
   title: string
   hint?: string
+  right?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <section className='mt-8 border-t border-border pt-6'>
-      <div className='mb-4'>
-        <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
-          {title}
-        </h2>
-        {hint && <p className='mt-1 text-[12.5px] text-muted-foreground'>{hint}</p>}
+      <div className='mb-4 flex items-start justify-between gap-4'>
+        <div>
+          <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
+            {title}
+          </h2>
+          {hint && (
+            <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
+              {hint}
+            </p>
+          )}
+        </div>
+        {right}
       </div>
-      <div className='flex flex-col gap-5'>{children}</div>
+      <div className='flex flex-col gap-3'>{children}</div>
     </section>
   )
 }
@@ -242,19 +399,21 @@ function Field({
   hint,
   children,
 }: {
-  label: string
+  label?: string
   htmlFor?: string
   hint?: string
   children: React.ReactNode
 }) {
   return (
     <div className='flex flex-col gap-1.5'>
-      <label
-        htmlFor={htmlFor}
-        className='text-[12.5px] font-medium tracking-[-0.005em] text-foreground'
-      >
-        {label}
-      </label>
+      {label && (
+        <label
+          htmlFor={htmlFor}
+          className='text-[12.5px] font-medium tracking-[-0.005em] text-foreground'
+        >
+          {label}
+        </label>
+      )}
       {children}
       {hint && (
         <p className='text-[11.5px] leading-relaxed text-muted-foreground'>{hint}</p>

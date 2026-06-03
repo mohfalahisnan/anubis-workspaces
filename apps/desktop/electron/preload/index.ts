@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('anubis', {
   backend: {
     getBaseUrl: () => ipcRenderer.invoke('anubis:get-backend-url') as Promise<string>,
   },
+  shell: {
+    /** Reveal a folder or file in the host OS file manager. Resolves to
+     *  an empty string on success or an error message on failure. */
+    openPath: (target: string) =>
+      ipcRenderer.invoke('anubis:open-path', target) as Promise<string>,
+  },
   updater: {
     check: () => ipcRenderer.invoke('check-update'),
     startDownload: () => ipcRenderer.invoke('start-download'),

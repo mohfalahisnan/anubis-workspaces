@@ -6,6 +6,7 @@ import {
   hasCredentials,
   copyHomeFromSystem,
   copyProfileHome,
+  writeProfileInstructions,
   CREDENTIAL_FILE,
 } from '../../src/profiles/agent-home.js'
 
@@ -109,5 +110,55 @@ describe('copyProfileHome', () => {
       agentHomeRoot: root,
     })
     expect(r.copied).toBe(false)
+  })
+})
+
+describe('writeProfileInstructions', () => {
+  it('writes CLAUDE.md with the content and AGENTS.md as a pointer', () => {
+    const home = join(root, 'p1', 'claude')
+    const wrote = writeProfileInstructions(home, 'Be terse. Always cite sources.')
+    expect(wrote).toBe(true)
+
+    const claude = readFileSync(join(home, 'CLAUDE.md'), 'utf8')
+    const agents = readFileSync(join(home, 'AGENTS.md'), 'utf8')
+
+    expect(claude).toContain('Be terse. Always cite sources.')
+    // AGENTS.md must NOT duplicate the instructions; it just points to CLAUDE.md
+    expect(agents).not.toContain('Be terse')
+    expect(agents.toLowerCase()).toContain('claude.md')
+  })
+
+  it('is idempotent on identical content', () => {
+    const home = join(root, 'p1', 'claude')
+    expect(writeProfileInstructions(home, 'rule X')).toBe(true)
+    // Second call with same content: nothing to do.
+    expect(writeProfileInstructions(home, 'rule X')).toBe(false)
+  })
+
+  it('overwrites when content changes', () => {
+    const home = join(root, 'p1', 'claude')
+    writeProfileInstructions(home, 'rule X')
+    writeProfileInstructions(home, 'rule Y')
+    expect(readFileSync(join(home, 'CLAUDE.md'), 'utf8')).toContain('rule Y')
+    expect(readFileSync(join(home, 'CLAUDE.md'), 'utf8')).not.toContain('rule X')
+  })
+
+  it('removes the files when content goes empty', () => {
+    const home = join(root, 'p1', 'codex')
+    writeProfileInstructions(home, 'rule X')
+    expect(existsSync(join(home, 'CLAUDE.md'))).toBe(true)
+    expect(existsSync(join(home, 'AGENTS.md'))).toBe(true)
+
+    const changed = writeProfileInstructions(home, undefined)
+    expect(changed).toBe(true)
+    expect(existsSync(join(home, 'CLAUDE.md'))).toBe(false)
+    expect(existsSync(join(home, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('creates the home dir if missing', () => {
+    const home = join(root, 'fresh', 'claude')
+    expect(existsSync(home)).toBe(false)
+    writeProfileInstructions(home, 'hello')
+    expect(existsSync(join(home, 'CLAUDE.md'))).toBe(true)
   })
 })

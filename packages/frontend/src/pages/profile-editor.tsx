@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeftIcon } from 'lucide-react'
+import { ArrowLeftIcon, CheckIcon, CopyIcon, FolderIcon, FolderOpenIcon, PlusIcon, XIcon } from 'lucide-react'
 
-import type { AgentKind, ProfileSummary } from '@anubis/shared'
+import type { AgentKind, ProfileSummary, SkillSummary } from '@anubis/shared'
 
 import {
   getCatalog,
   getProfile,
+  listSkills,
   updateProfile,
   type AgentCatalog,
 } from '@/api'
@@ -34,6 +35,13 @@ type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 type ApprovalPolicy = 'untrusted' | 'on-request' | 'on-failure' | 'never'
 type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
+interface EnvRow {
+  /** Stable per-row id so React keys don't shuffle as the user edits. */
+  id: string
+  key: string
+  value: string
+}
+
 interface FormState {
   name: string
   description: string
@@ -45,6 +53,14 @@ interface FormState {
   approvalPolicy: ApprovalPolicy | ''
   claudeCliProfile: string
   appendSystemPrompt: string
+  /** Lines (one tool per line). */
+  allowedTools: string
+  disallowedTools: string
+  env: EnvRow[]
+  /** Names of opt-in / user skills the user has explicitly turned on. */
+  enabledSkills: string[]
+  /** Names of builtin-auto skills the user has explicitly turned off. */
+  disabledBuiltinSkills: string[]
 }
 
 const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'plan', 'bypassPermissions']
@@ -57,6 +73,7 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
   const { navigate } = useNavigation()
   const [profile, setProfile] = useState<ProfileSummary | null>(null)
   const [catalog, setCatalog] = useState<AgentCatalog | null>(null)
+  const [skills, setSkills] = useState<SkillSummary[] | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
   const [initial, setInitial] = useState<FormState | null>(null)
   const [busy, setBusy] = useState(false)
@@ -65,12 +82,13 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
 
   useEffect(() => {
     let active = true
-    Promise.all([getProfile(profileId), getCatalog()])
-      .then(([p, c]) => {
+    Promise.all([getProfile(profileId), getCatalog(), listSkills()])
+      .then(([p, c, s]) => {
         if (!active) return
         const f = formStateFromProfile(p, c)
         setProfile(p)
         setCatalog(c)
+        setSkills(s)
         setForm(f)
         setInitial(f)
       })
@@ -274,6 +292,23 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
           </Field>
         </Section>
 
+        {/* Profile home — read-only, surfaces the isolated config dir
+            that Claude/Codex are pointed at via CLAUDE_CONFIG_DIR /
+            CODEX_HOME. Useful for power users who want to drop
+            credentials in by hand or inspect what Anubis wrote. */}
+        {profile.home && (
+          <Section
+            title='Profile home'
+            hint='Each profile has its own config / credentials / instruction folder. CLAUDE.md and AGENTS.md are auto-generated here.'
+          >
+            <ProfileHomePath
+              path={profile.home.path}
+              exists={profile.home.exists}
+              hasCredentials={profile.home.hasCredentials}
+            />
+          </Section>
+        )}
+
         {/* Agent & Model */}
         <Section title='Agent & Model'>
           <Field label='Agent'>
@@ -395,14 +430,78 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
           </Field>
         </Section>
 
-        {/* Coming soon */}
+        {/* Skills */}
         <Section
-          title='Tools, env vars, skills'
-          hint='Per-tool allowlists, environment variables, and skill checklists land in the next pass.'
+          title='Skills'
+          hint='Auto-injected skills are on by default — disable them per profile. Opt-in and user skills are off by default until you enable them here.'
         >
-          <div className='rounded-md border border-dashed border-border bg-card/50 p-4 text-[12.5px] text-muted-foreground'>
-            Not editable yet — for now, manage these by editing the profile config directly via the API.
-          </div>
+          <SkillsEditor
+            skills={skills}
+            enabled={form.enabledSkills}
+            disabled={form.disabledBuiltinSkills}
+            onChange={(next) =>
+              setForm((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      enabledSkills: next.enabled,
+                      disabledBuiltinSkills: next.disabled,
+                    }
+                  : prev,
+              )
+            }
+          />
+        </Section>
+
+        {/* Environment variables */}
+        <Section
+          title='Environment variables'
+          hint='Injected into the spawned CLI process. Useful for API keys, regional endpoints, or feature flags.'
+        >
+          <EnvEditor
+            rows={form.env}
+            onChange={(env) => update('env', env)}
+          />
+        </Section>
+
+        {/* Tools */}
+        <Section
+          title='Tools'
+          hint={
+            isClaude
+              ? 'Passed to Claude as --allowedTools / --disallowedTools. One pattern per line (e.g. Bash, Edit, mcp__github__*).'
+              : 'Codex does not honour these directly yet; left here for parity with Claude profiles.'
+          }
+        >
+          <Field
+            label='Allowed tools'
+            htmlFor='profile-allowed'
+            hint='If non-empty, ONLY these tools are available. One per line.'
+          >
+            <textarea
+              id='profile-allowed'
+              rows={4}
+              value={form.allowedTools}
+              onChange={(e) => update('allowedTools', e.target.value)}
+              placeholder={'Bash\nEdit\nmcp__github__*'}
+              className={cn(textInput, 'h-auto min-h-[96px] resize-y py-2.5 font-mono text-[12.5px] leading-[1.55]')}
+            />
+          </Field>
+
+          <Field
+            label='Disallowed tools'
+            htmlFor='profile-disallowed'
+            hint='Blocked even when in the allow list. One per line.'
+          >
+            <textarea
+              id='profile-disallowed'
+              rows={3}
+              value={form.disallowedTools}
+              onChange={(e) => update('disallowedTools', e.target.value)}
+              placeholder={'Bash(rm *)\nWebFetch'}
+              className={cn(textInput, 'h-auto min-h-[76px] resize-y py-2.5 font-mono text-[12.5px] leading-[1.55]')}
+            />
+          </Field>
         </Section>
       </div>
     </div>
@@ -421,6 +520,13 @@ function formStateFromProfile(p: ProfileSummary, catalog: AgentCatalog): FormSta
   const reasoningEffort = isReasoning(cfg.reasoningEffort)
     ? (cfg.reasoningEffort as ReasoningEffort)
     : catalog.defaultReasoningEffort
+
+  const envObj = (cfg.env as Record<string, string> | undefined) ?? {}
+  const envRows: EnvRow[] = Object.entries(envObj).map(([key, value], i) => ({
+    id: `env-${i}-${key}`,
+    key,
+    value,
+  }))
 
   return {
     name: p.name,
@@ -441,7 +547,36 @@ function formStateFromProfile(p: ProfileSummary, catalog: AgentCatalog): FormSta
       typeof cfg.claudeCliProfile === 'string' ? cfg.claudeCliProfile : '',
     appendSystemPrompt:
       typeof cfg.appendSystemPrompt === 'string' ? cfg.appendSystemPrompt : '',
+    allowedTools: Array.isArray(cfg.allowedTools) ? cfg.allowedTools.join('\n') : '',
+    disallowedTools: Array.isArray(cfg.disallowedTools) ? cfg.disallowedTools.join('\n') : '',
+    env: envRows,
+    enabledSkills: Array.isArray(cfg.enabledSkills) ? [...cfg.enabledSkills] : [],
+    disabledBuiltinSkills: Array.isArray(cfg.disabledBuiltinSkills)
+      ? [...cfg.disabledBuiltinSkills]
+      : [],
   }
+}
+
+function parseToolLines(raw: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t || seen.has(t)) continue
+    seen.add(t)
+    out.push(t)
+  }
+  return out
+}
+
+function buildEnvObject(rows: EnvRow[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const r of rows) {
+    const k = r.key.trim()
+    if (!k) continue
+    out[k] = r.value
+  }
+  return out
 }
 
 function buildConfigPatch(form: FormState): Record<string, unknown> {
@@ -460,6 +595,13 @@ function buildConfigPatch(form: FormState): Record<string, unknown> {
   if (form.appendSystemPrompt.trim()) {
     out.appendSystemPrompt = form.appendSystemPrompt
   }
+  // Always include the array/record fields so an emptied UI clears them on
+  // the server (shallow merge replaces the key with [] / {}).
+  out.allowedTools = parseToolLines(form.allowedTools)
+  out.disallowedTools = parseToolLines(form.disallowedTools)
+  out.env = buildEnvObject(form.env)
+  out.enabledSkills = [...form.enabledSkills].sort()
+  out.disabledBuiltinSkills = [...form.disabledBuiltinSkills].sort()
   return out
 }
 
@@ -563,6 +705,312 @@ function Segmented({
         )
       })}
     </div>
+  )
+}
+
+/* ---------- Skills editor ---------- */
+
+function SkillsEditor({
+  skills,
+  enabled,
+  disabled,
+  onChange,
+}: {
+  skills: SkillSummary[] | null
+  enabled: string[]
+  disabled: string[]
+  onChange: (next: { enabled: string[]; disabled: string[] }) => void
+}) {
+  if (skills === null) {
+    return (
+      <div className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
+        Loading skills…
+      </div>
+    )
+  }
+  if (skills.length === 0) {
+    return (
+      <div className='rounded-md border border-dashed border-border bg-card/50 p-4 text-[12.5px] text-muted-foreground'>
+        No skills discovered. Drop SKILL.md files under the user skills root to add your own.
+      </div>
+    )
+  }
+
+  const enabledSet = new Set(enabled)
+  const disabledSet = new Set(disabled)
+
+  const groups: { source: SkillSummary['source']; title: string; hint: string }[] = [
+    {
+      source: 'builtin-auto',
+      title: 'Auto-injected (built-in)',
+      hint: 'On by default. Untick to disable for this profile.',
+    },
+    {
+      source: 'builtin-opt-in',
+      title: 'Opt-in (built-in)',
+      hint: 'Off by default. Tick to enable for this profile.',
+    },
+    { source: 'user', title: 'Your skills', hint: 'Off by default. Tick to enable.' },
+  ]
+
+  function toggle(skill: SkillSummary, checked: boolean) {
+    if (skill.source === 'builtin-auto') {
+      // On = remove from disabled list; Off = add.
+      const next = new Set(disabledSet)
+      if (checked) next.delete(skill.name)
+      else next.add(skill.name)
+      onChange({ enabled, disabled: [...next].sort() })
+    } else {
+      const next = new Set(enabledSet)
+      if (checked) next.add(skill.name)
+      else next.delete(skill.name)
+      onChange({ enabled: [...next].sort(), disabled })
+    }
+  }
+
+  function isOn(skill: SkillSummary): boolean {
+    return skill.source === 'builtin-auto'
+      ? !disabledSet.has(skill.name)
+      : enabledSet.has(skill.name)
+  }
+
+  return (
+    <div className='flex flex-col gap-5'>
+      {groups.map((g) => {
+        const items = skills.filter((s) => s.source === g.source)
+        if (items.length === 0) return null
+        return (
+          <div key={g.source} className='flex flex-col gap-2'>
+            <div className='flex items-baseline justify-between'>
+              <h3 className='text-[12.5px] font-medium text-foreground'>{g.title}</h3>
+              <span className='text-[11.5px] text-muted-foreground'>{g.hint}</span>
+            </div>
+            <div className='flex flex-col gap-1 rounded-md border border-border bg-card'>
+              {items.map((skill, i) => {
+                const on = isOn(skill)
+                return (
+                  <label
+                    key={skill.name}
+                    className={cn(
+                      'flex cursor-pointer items-start gap-3 px-3.5 py-2.5 transition-colors hover:bg-muted/55',
+                      i > 0 && 'border-t border-border',
+                    )}
+                  >
+                    <input
+                      type='checkbox'
+                      checked={on}
+                      onChange={(e) => toggle(skill, e.target.checked)}
+                      className='mt-[3px] size-[14px] cursor-pointer accent-[var(--anubis-gold)]'
+                    />
+                    <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+                      <span className='truncate text-[13px] font-medium text-foreground'>
+                        {skill.name}
+                      </span>
+                      {skill.description && (
+                        <span className='text-[12px] leading-[1.45] text-muted-foreground'>
+                          {skill.description}
+                        </span>
+                      )}
+                      {skill.whenToUse && (
+                        <span className='text-[11.5px] italic text-muted-foreground/85'>
+                          When to use: {skill.whenToUse}
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ---------- Env editor ---------- */
+
+let envRowSeq = 0
+function nextEnvRowId(): string {
+  envRowSeq += 1
+  return `env-row-${envRowSeq}`
+}
+
+function EnvEditor({
+  rows,
+  onChange,
+}: {
+  rows: EnvRow[]
+  onChange: (next: EnvRow[]) => void
+}) {
+  // Detect duplicate keys to warn the user — the last one wins on save.
+  const dupKeys = new Set<string>()
+  const seen = new Set<string>()
+  for (const r of rows) {
+    const k = r.key.trim()
+    if (!k) continue
+    if (seen.has(k)) dupKeys.add(k)
+    seen.add(k)
+  }
+
+  function add() {
+    onChange([...rows, { id: nextEnvRowId(), key: '', value: '' }])
+  }
+  function update(id: string, patch: Partial<EnvRow>) {
+    onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+  function remove(id: string) {
+    onChange(rows.filter((r) => r.id !== id))
+  }
+
+  return (
+    <div className='flex flex-col gap-2'>
+      {rows.length === 0 ? (
+        <div className='rounded-md border border-dashed border-border bg-card/50 px-3.5 py-3 text-[12.5px] text-muted-foreground'>
+          No environment variables. Click + Add to define one.
+        </div>
+      ) : (
+        <div className='flex flex-col gap-1.5'>
+          {rows.map((r) => {
+            const trimmed = r.key.trim()
+            const isDup = trimmed.length > 0 && dupKeys.has(trimmed)
+            return (
+              <div key={r.id} className='flex items-center gap-2'>
+                <input
+                  type='text'
+                  value={r.key}
+                  onChange={(e) => update(r.id, { key: e.target.value })}
+                  placeholder='KEY'
+                  aria-invalid={isDup || undefined}
+                  className={cn(
+                    'h-9 w-[180px] shrink-0 rounded-md border border-border bg-card px-3 font-mono text-[12.5px] uppercase tracking-[0.04em] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]',
+                    isDup && 'border-destructive/60 focus:border-destructive',
+                  )}
+                />
+                <input
+                  type='text'
+                  value={r.value}
+                  onChange={(e) => update(r.id, { value: e.target.value })}
+                  placeholder='value'
+                  className='h-9 min-w-0 flex-1 rounded-md border border-border bg-card px-3 font-mono text-[12.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
+                />
+                <button
+                  type='button'
+                  onClick={() => remove(r.id)}
+                  aria-label={`Remove ${r.key || 'row'}`}
+                  className='flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive'
+                >
+                  <XIcon className='size-4' strokeWidth={2} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className='flex items-center justify-between'>
+        <button
+          type='button'
+          onClick={add}
+          className='inline-flex items-center gap-1.5 self-start rounded-md border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted'
+        >
+          <PlusIcon className='size-[14px]' strokeWidth={2.2} />
+          Add variable
+        </button>
+        {dupKeys.size > 0 && (
+          <span className='text-[11.5px] text-destructive'>
+            Duplicate key{dupKeys.size > 1 ? 's' : ''}: {[...dupKeys].join(', ')} — last value wins.
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Profile home path ---------- */
+
+function ProfileHomePath({
+  path,
+  exists,
+  hasCredentials,
+}: {
+  path: string
+  exists: boolean
+  hasCredentials: boolean
+}) {
+  const [copied, setCopied] = useState(false)
+  const [openErr, setOpenErr] = useState<string | null>(null)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(path)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1400)
+    } catch {
+      // Some browsers without focus can reject — ignore silently.
+    }
+  }
+
+  async function open() {
+    setOpenErr(null)
+    if (!window.anubis) {
+      setOpenErr('Folder opening is only available in the desktop app.')
+      return
+    }
+    const err = await window.anubis.shell.openPath(path)
+    if (err) setOpenErr(err)
+  }
+
+  return (
+    <div className='flex flex-col gap-2'>
+      <div className='flex items-center gap-2'>
+        <code className='flex min-w-0 flex-1 items-center gap-2 truncate rounded-md border border-border bg-card px-3 py-2 font-mono text-[12.5px] text-foreground'>
+          <FolderIcon className='size-[14px] shrink-0 text-[var(--anubis-gold)]' strokeWidth={2} />
+          <span className='truncate' title={path}>{path}</span>
+        </code>
+        <button
+          type='button'
+          onClick={() => void copy()}
+          aria-label='Copy path'
+          className='inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+        >
+          {copied ? <CheckIcon className='size-4' strokeWidth={2} /> : <CopyIcon className='size-4' strokeWidth={2} />}
+        </button>
+        <button
+          type='button'
+          onClick={() => void open()}
+          disabled={!exists}
+          aria-label='Open folder'
+          className='inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          <FolderOpenIcon className='size-4' strokeWidth={2} />
+          Open
+        </button>
+      </div>
+      <div className='flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground'>
+        <Pill ok={exists} okLabel='Folder exists' offLabel='Not created yet' />
+        <Pill ok={hasCredentials} okLabel='Has credentials' offLabel='No credentials' />
+        {!exists && (
+          <span>Folder will be created on first message sent with this profile.</span>
+        )}
+        {openErr && <span className='text-destructive'>Open failed: {openErr}</span>}
+      </div>
+    </div>
+  )
+}
+
+function Pill({ ok, okLabel, offLabel }: { ok: boolean; okLabel: string; offLabel: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.08em]',
+        ok
+          ? 'border-[color-mix(in_oklab,var(--anubis-gold)_38%,transparent)] bg-[color-mix(in_oklab,var(--anubis-gold)_10%,transparent)] text-[var(--anubis-gold)]'
+          : 'border-border bg-muted text-muted-foreground',
+      )}
+    >
+      <span className={cn('size-[6px] rounded-full', ok ? 'bg-[var(--anubis-gold)]' : 'bg-muted-foreground/55')} />
+      {ok ? okLabel : offLabel}
+    </span>
   )
 }
 

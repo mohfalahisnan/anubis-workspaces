@@ -3,6 +3,8 @@ import {
   ArrowDownToLineIcon,
   ArrowUpRightIcon,
   CalendarIcon,
+  CheckIcon,
+  CheckSquareIcon,
   ChevronDownIcon,
   Edit3Icon,
   GalleryHorizontalEndIcon,
@@ -134,10 +136,12 @@ function MediaPane({
   card,
   starred,
   onStar,
+  disableActions,
 }: {
   card: CardModel
   starred: boolean
   onStar: () => void
+  disableActions?: boolean
 }) {
   const [failed, setFailed] = useState(false)
   const showImage = !!card.mediaUrl && !failed
@@ -181,10 +185,11 @@ function MediaPane({
       </span>
       <button
         type='button'
-        onClick={onStar}
+        onClick={(e) => { e.stopPropagation(); onStar() }}
+        disabled={disableActions}
         aria-label='Toggle similarity index'
         className={cn(
-          'absolute right-2 top-2 flex size-7 items-center justify-center rounded-md bg-[rgba(11,12,15,0.42)] backdrop-blur transition-colors hover:bg-[rgba(11,12,15,0.62)]',
+          'absolute right-2 top-2 flex size-7 items-center justify-center rounded-md bg-[rgba(11,12,15,0.42)] backdrop-blur transition-colors hover:bg-[rgba(11,12,15,0.62)] disabled:cursor-not-allowed disabled:opacity-50',
           starred ? 'text-[var(--anubis-gold)]' : 'text-white/90',
         )}
       >
@@ -224,6 +229,9 @@ export function ContentPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [editingPost, setEditingPost] = useState<CapturedPostSummary | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
 
   async function refresh() {
     setBusy(true)
@@ -258,6 +266,51 @@ export function ContentPage() {
       setBanner({
         kind: 'error',
         message: e instanceof Error ? e.message : 'Could not delete post.',
+      })
+    }
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected(new Set())
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkDeletePosts() {
+    if (selected.size === 0) return
+    setBulkConfirm(false)
+    setBusy(true)
+    setBanner(null)
+    const ids = [...selected]
+    const errors: string[] = []
+    for (const id of ids) {
+      try {
+        await deletePost(id)
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e))
+      }
+    }
+    await refresh()
+    setBusy(false)
+    exitSelectMode()
+    if (errors.length === 0) {
+      setBanner({
+        kind: 'success',
+        message: `Deleted ${ids.length} post${ids.length === 1 ? '' : 's'}.`,
+      })
+    } else if (errors.length === ids.length) {
+      setBanner({ kind: 'error', message: `All ${ids.length} deletes failed: ${errors[0]}` })
+    } else {
+      setBanner({
+        kind: 'error',
+        message: `Deleted ${ids.length - errors.length} of ${ids.length}; ${errors.length} failed.`,
       })
     }
   }
@@ -382,16 +435,38 @@ export function ContentPage() {
               <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
               Refresh
             </button>
+            {selectMode ? (
+              <button
+                type='button'
+                onClick={exitSelectMode}
+                disabled={busy}
+                className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+              >
+                <XIcon className='size-[15px]' strokeWidth={2} />
+                Done
+              </button>
+            ) : (
+              <button
+                type='button'
+                onClick={() => setSelectMode(true)}
+                disabled={busy || !!capturing || usingMock}
+                title={usingMock ? 'Select unavailable while showing sample data' : undefined}
+                className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+              >
+                <CheckSquareIcon className='size-[15px]' strokeWidth={2} />
+                Select
+              </button>
+            )}
             <button
               type='button'
               onClick={() => setSelectionOpen(true)}
-              disabled={!!capturing}
+              disabled={!!capturing || selectMode}
               title='Pick which tracked competitors to crawl'
               className={cn(
                 'inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-semibold transition-colors',
                 capturing
                   ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-80'
-                  : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+                  : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)] disabled:opacity-50',
               )}
             >
               <ArrowDownToLineIcon
@@ -519,6 +594,18 @@ export function ContentPage() {
           </div>
         </div>
 
+        {selectMode && (
+          <BulkSelectBar
+            count={selected.size}
+            total={cards.filter((c) => c.post).length}
+            onSelectAll={() => setSelected(new Set(cards.filter((c) => c.post).map((c) => c.post!.id)))}
+            onClear={() => setSelected(new Set())}
+            onDelete={() => setBulkConfirm(true)}
+            busy={busy}
+            label='post'
+          />
+        )}
+
         {cards.length === 0 ? (
           <div className='mt-8 flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center'>
             <ImageIcon className='size-6 text-muted-foreground' strokeWidth={1.5} />
@@ -534,6 +621,9 @@ export function ContentPage() {
                 onStar={() => toggleStar(card.key)}
                 onEdit={card.post ? () => setEditingPost(card.post!) : undefined}
                 onDelete={card.post ? () => void handleDeletePost(card.post!) : undefined}
+                selectMode={selectMode}
+                selected={card.post ? selected.has(card.post.id) : false}
+                onToggleSelect={card.post ? () => toggleSelected(card.post!.id) : undefined}
               />
             ))}
           </div>
@@ -544,6 +634,9 @@ export function ContentPage() {
             onStar={toggleStar}
             onEdit={(post) => setEditingPost(post)}
             onDelete={(post) => void handleDeletePost(post)}
+            selectMode={selectMode}
+            selected={selected}
+            onToggleSelect={toggleSelected}
           />
         )}
       </div>
@@ -562,7 +655,116 @@ export function ContentPage() {
         onClose={() => setEditingPost(null)}
         onSave={(patch) => void handleSavePost(patch)}
       />
+
+      <BulkDeleteDialog
+        open={bulkConfirm}
+        count={selected.size}
+        label='post'
+        onCancel={() => setBulkConfirm(false)}
+        onConfirm={() => void handleBulkDeletePosts()}
+      />
     </div>
+  )
+}
+
+/* ---------- Bulk-select shared bits ---------- */
+
+function BulkSelectBar({
+  count,
+  total,
+  onSelectAll,
+  onClear,
+  onDelete,
+  busy,
+  label,
+}: {
+  count: number
+  total: number
+  onSelectAll: () => void
+  onClear: () => void
+  onDelete: () => void
+  busy: boolean
+  label: string
+}) {
+  const allSelected = count > 0 && count === total
+  return (
+    <div className='mt-5 flex flex-wrap items-center gap-2 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_6%,transparent)] px-3.5 py-2.5'>
+      <span className='text-[13px] font-medium text-foreground'>
+        <span className='tabular-nums'>{count}</span> selected
+        <span className='ml-1 text-muted-foreground'>of {total}</span>
+      </span>
+      <div className='ml-auto flex flex-wrap items-center gap-2'>
+        <button
+          type='button'
+          onClick={allSelected ? onClear : onSelectAll}
+          disabled={busy || total === 0}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+        >
+          {allSelected ? 'Clear all' : 'Select all'}
+        </button>
+        <button
+          type='button'
+          onClick={onClear}
+          disabled={busy || count === 0}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40'
+        >
+          Clear
+        </button>
+        <button
+          type='button'
+          onClick={onDelete}
+          disabled={busy || count === 0}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md bg-destructive px-3 text-[12.5px] font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          <Trash2Icon className='size-[13px]' strokeWidth={2.2} />
+          Delete {count > 0 ? `${count} ${label}${count === 1 ? '' : 's'}` : ''}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function BulkDeleteDialog({
+  open,
+  count,
+  label,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  count: number
+  label: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className='max-w-md bg-card p-0'>
+        <DialogHeader className='border-b border-border px-6 py-4'>
+          <DialogTitle>Delete {count} {label}{count === 1 ? '' : 's'}?</DialogTitle>
+          <DialogDescription>
+            This removes the selected {label}{count === 1 ? '' : 's'} permanently. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className='border-t border-border px-6 py-3'>
+          <button
+            type='button'
+            onClick={onCancel}
+            className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+          >
+            Cancel
+          </button>
+          <button
+            type='button'
+            onClick={onConfirm}
+            className='inline-flex h-9 items-center gap-1.5 rounded-md bg-destructive px-4 text-[13.5px] font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90'
+          >
+            <Trash2Icon className='size-[14px]' strokeWidth={2.2} />
+            Delete {count}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -574,21 +776,55 @@ function PostCard({
   onStar,
   onEdit,
   onDelete,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   card: CardModel
   starred: boolean
   onStar: () => void
   onEdit?: () => void
   onDelete?: () => void
+  selectMode: boolean
+  selected: boolean
+  onToggleSelect?: () => void
 }) {
+  const selectable = selectMode && !!onToggleSelect
   return (
     <article
+      role={selectable ? 'button' : undefined}
+      aria-pressed={selectable ? selected : undefined}
+      onClick={selectable ? onToggleSelect : undefined}
       className={cn(
-        'group overflow-hidden rounded-[13px] border border-border bg-card transition-all',
-        'hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
+        'group relative overflow-hidden rounded-[13px] border border-border bg-card transition-all',
+        selectMode
+          ? selectable
+            ? selected
+              ? 'cursor-pointer border-[var(--anubis-gold)] ring-1 ring-[var(--anubis-gold)]'
+              : 'cursor-pointer hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))]'
+            : 'opacity-50'
+          : 'hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
       )}
     >
-      <MediaPane card={card} starred={starred} onStar={onStar} />
+      {selectable && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-2 top-2 z-[1] flex size-5 items-center justify-center rounded border transition-colors',
+            selected
+              ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
+              : 'border-border bg-card text-transparent',
+          )}
+        >
+          <CheckIcon className='size-3.5' strokeWidth={3} />
+        </span>
+      )}
+      <MediaPane
+        card={card}
+        starred={starred}
+        onStar={onStar}
+        disableActions={selectMode}
+      />
 
       <div className='p-3'>
         <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
@@ -634,7 +870,7 @@ function PostCard({
           ) : (
             <span />
           )}
-          {card.post && (
+          {card.post && !selectMode && (
             <div className='flex items-center gap-1'>
               <IconButton label='Edit post' onClick={onEdit}>
                 <Edit3Icon className='size-3.5' strokeWidth={2} />
@@ -656,12 +892,18 @@ function PostTable({
   onStar,
   onEdit,
   onDelete,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   cards: CardModel[]
   stars: Record<string, boolean>
   onStar: (key: string) => void
   onEdit: (post: CapturedPostSummary) => void
   onDelete: (post: CapturedPostSummary) => void
+  selectMode: boolean
+  selected: Set<string>
+  onToggleSelect: (id: string) => void
 }) {
   return (
     <div className='overflow-hidden rounded-md border border-border bg-card'>
@@ -669,6 +911,7 @@ function PostTable({
         <table className='w-full min-w-[860px] border-collapse text-left text-[13px]'>
           <thead className='border-b border-border bg-background/50 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground'>
             <tr>
+              {selectMode && <th className='w-8 px-3 py-2.5 font-medium' />}
               <th className='px-3 py-2.5 font-medium'>Content</th>
               <th className='px-3 py-2.5 font-medium'>Competitor</th>
               <th className='px-3 py-2.5 font-medium'>Date</th>
@@ -679,39 +922,70 @@ function PostTable({
             </tr>
           </thead>
           <tbody>
-            {cards.map((card) => (
-              <tr key={card.key} className='border-b border-border/70 last:border-0'>
-                <td className='max-w-[360px] px-3 py-3'>
-                  <p className='line-clamp-2 leading-relaxed text-foreground'>{card.caption}</p>
-                </td>
-                <td className='px-3 py-3 font-mono text-[12px] text-foreground'>{card.handle}</td>
-                <td className='px-3 py-3 font-mono text-[12px] text-muted-foreground'>{card.date}</td>
-                <td className='px-3 py-3 text-muted-foreground'>{card.chip}</td>
-                <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.likes}</td>
-                <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.comments}</td>
-                <td className='px-3 py-3'>
-                  <div className='flex justify-end gap-1'>
-                    <IconButton label='Toggle similarity index' onClick={() => onStar(card.key)}>
-                      <StarIcon
-                        className='size-3.5'
-                        strokeWidth={2}
-                        fill={stars[card.key] ? 'currentColor' : 'none'}
-                      />
-                    </IconButton>
-                    {card.post && (
-                      <>
-                        <IconButton label='Edit post' onClick={() => onEdit(card.post!)}>
-                          <Edit3Icon className='size-3.5' strokeWidth={2} />
-                        </IconButton>
-                        <IconButton label='Delete post' onClick={() => onDelete(card.post!)} destructive>
-                          <Trash2Icon className='size-3.5' strokeWidth={2} />
-                        </IconButton>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {cards.map((card) => {
+              const id = card.post?.id
+              const isSelected = !!id && selected.has(id)
+              const selectable = selectMode && !!id
+              return (
+                <tr
+                  key={card.key}
+                  onClick={selectable ? () => onToggleSelect(id!) : undefined}
+                  className={cn(
+                    'border-b border-border/70 last:border-0',
+                    selectable && 'cursor-pointer',
+                    isSelected && 'bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]',
+                    selectMode && !selectable && 'opacity-50',
+                  )}
+                >
+                  {selectMode && (
+                    <td className='px-3 py-3'>
+                      {selectable && (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            'flex size-4 items-center justify-center rounded border transition-colors',
+                            isSelected
+                              ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
+                              : 'border-border bg-card text-transparent',
+                          )}
+                        >
+                          <CheckIcon className='size-3' strokeWidth={3} />
+                        </span>
+                      )}
+                    </td>
+                  )}
+                  <td className='max-w-[360px] px-3 py-3'>
+                    <p className='line-clamp-2 leading-relaxed text-foreground'>{card.caption}</p>
+                  </td>
+                  <td className='px-3 py-3 font-mono text-[12px] text-foreground'>{card.handle}</td>
+                  <td className='px-3 py-3 font-mono text-[12px] text-muted-foreground'>{card.date}</td>
+                  <td className='px-3 py-3 text-muted-foreground'>{card.chip}</td>
+                  <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.likes}</td>
+                  <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.comments}</td>
+                  <td className='px-3 py-3' onClick={(e) => e.stopPropagation()}>
+                    <div className='flex justify-end gap-1'>
+                      <IconButton label='Toggle similarity index' onClick={() => onStar(card.key)} disabled={selectMode}>
+                        <StarIcon
+                          className='size-3.5'
+                          strokeWidth={2}
+                          fill={stars[card.key] ? 'currentColor' : 'none'}
+                        />
+                      </IconButton>
+                      {card.post && !selectMode && (
+                        <>
+                          <IconButton label='Edit post' onClick={() => onEdit(card.post!)}>
+                            <Edit3Icon className='size-3.5' strokeWidth={2} />
+                          </IconButton>
+                          <IconButton label='Delete post' onClick={() => onDelete(card.post!)} destructive>
+                            <Trash2Icon className='size-3.5' strokeWidth={2} />
+                          </IconButton>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -723,11 +997,13 @@ function IconButton({
   label,
   onClick,
   destructive,
+  disabled,
   children,
 }: {
   label: string
   onClick?: () => void
   destructive?: boolean
+  disabled?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -736,7 +1012,7 @@ function IconButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      disabled={!onClick}
+      disabled={disabled || !onClick}
       className={cn(
         'inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors disabled:opacity-40',
         destructive

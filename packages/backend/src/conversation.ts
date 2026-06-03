@@ -17,6 +17,7 @@ const UpdateBody = z.object({
   archived: z.boolean().optional(),
   override: z.record(z.string(), z.unknown()).optional(),
   profileId: z.string().min(1).nullable().optional(),
+  workspacePath: z.string().min(1).optional(),
 }).strict()
 
 const SendBody = z.object({

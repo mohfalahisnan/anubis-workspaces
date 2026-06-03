@@ -113,14 +113,25 @@ export class StreamRelay {
 
       emitter.on('error', (d) => {
         const now = nowMs()
+        // If no partials streamed before the failure, fall back to writing
+        // the error text into the message body. Otherwise we leave the
+        // partial content alone and only attach the error in metadata.
+        const errMessage = d.error.message
+        const codexInfo = (d.error as { codexErrorInfo?: string }).codexErrorInfo
+        const content = this.buffer || `_${errMessage}_`
         this.opts.messages.upsertAssistant({
           id: this.opts.messageRowId, conversationId: this.opts.conversationId,
-          msgId: this.opts.msgId, role: 'assistant', content: this.buffer,
-          metadata: { error: { message: d.error.message } },
+          msgId: this.opts.msgId, role: 'assistant', content,
+          metadata: {
+            error: {
+              message: errMessage,
+              ...(codexInfo ? { codexErrorInfo: codexInfo } : {}),
+            },
+          },
           createdAt: now,
         })
         this.opts.conversations.updateStatus(this.opts.conversationId, 'error')
-        this.publish({ name: 'error', data: { message: d.error.message } })
+        this.publish({ name: 'error', data: { message: errMessage } })
         resolve()
       })
     })

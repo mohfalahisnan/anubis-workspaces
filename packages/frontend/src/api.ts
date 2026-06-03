@@ -41,6 +41,14 @@ export class NoCredentialsError extends Error {
   }
 }
 
+export class AgentNotInstalledError extends Error {
+  readonly code = 'agent_not_installed' as const
+  constructor(public readonly agent: 'claude' | 'codex', message?: string) {
+    super(message ?? `${agent} CLI is not installed (not on PATH).`)
+    this.name = 'AgentNotInstalledError'
+  }
+}
+
 /* ------------------------------------------------------------
    Base URL resolution
    ------------------------------------------------------------ */
@@ -69,18 +77,27 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const body = await response.clone().json() as { error?: unknown }
       if (response.status === 409 && body.error && typeof body.error === 'object') {
-        const err = body.error as { code?: string; profileId?: string; agent?: string }
+        const err = body.error as { code?: string; profileId?: string; agent?: string; message?: string }
         if (err.code === 'no_credentials' && err.profileId && err.agent) {
           throw new NoCredentialsError(err.profileId, err.agent as 'claude' | 'codex')
         }
+        if (err.code === 'agent_not_installed' && err.agent) {
+          throw new AgentNotInstalledError(err.agent as 'claude' | 'codex', err.message)
+        }
       }
       if (body.error) {
-        detail = typeof body.error === 'string'
-          ? body.error
-          : JSON.stringify(body.error)
+        if (typeof body.error === 'string') {
+          detail = body.error
+        } else if (typeof body.error === 'object') {
+          // Hono-style { error: { code, message } } → prefer the message
+          // so the user sees a readable string, not raw JSON.
+          const e = body.error as { code?: string; message?: string }
+          detail = e.message ?? JSON.stringify(body.error)
+        }
       }
     } catch (e) {
       if (e instanceof NoCredentialsError) throw e
+      if (e instanceof AgentNotInstalledError) throw e
       // swallow — keep the generic detail
     }
     throw new Error(`${path} failed: ${detail}`)
@@ -166,6 +183,15 @@ export async function resetProfileHome(
   return { existed: r.existed }
 }
 
+export async function openLoginTerminal(
+  id: string,
+): Promise<void> {
+  await api<{ ok: true }>(
+    `/profiles/${encodeURIComponent(id)}/login/terminal`,
+    { method: 'POST' },
+  )
+}
+
 export interface UpdateProfileInput {
   name?: string
   description?: string
@@ -242,6 +268,7 @@ export interface UpdateConversationInput {
   archived?: boolean
   override?: Record<string, unknown>
   profileId?: string | null
+  workspacePath?: string
 }
 
 export async function updateConversation(
@@ -277,6 +304,13 @@ export async function cancelConversation(conversationId: string): Promise<void> 
   await api<{ ok: true }>(
     `/conversations/${encodeURIComponent(conversationId)}/cancel`,
     { method: 'POST' },
+  )
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/conversations/${encodeURIComponent(conversationId)}`,
+    { method: 'DELETE' },
   )
 }
 

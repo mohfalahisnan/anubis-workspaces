@@ -27,6 +27,8 @@ export interface ProfileHomeInfo {
   path: string
   /** True if the directory has been created (i.e. the profile has been used at least once). */
   exists: boolean
+  /** True if the profile currently has active credentials. */
+  hasCredentials: boolean
 }
 
 export interface ProfileSummary {

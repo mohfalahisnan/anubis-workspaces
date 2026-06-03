@@ -61,11 +61,25 @@ export class AiAgentService {
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
+    // Detect first so we can use the resolved absolute path as a spawn fallback.
+    // On Windows in particular, a bare `spawn('codex', …)` doesn't follow
+    // PATHEXT, so npm-installed shims like `codex.cmd` fail with ENOENT even
+    // though `where.exe codex` finds them.
+    this.availability = detectAgents()
+    const codexCommand =
+      opts.codexCommand
+      ?? process.env.ANUBIS_CODEX_COMMAND
+      ?? this.availability.codex.path
+    const claudeCommand =
+      opts.claudeCommand
+      ?? process.env.ANUBIS_CLAUDE_COMMAND
+      ?? this.availability.claude.path
+
     const pool = new CodexPool({
       idleMs: opts.codexIdleMs ?? 10 * 60 * 1000,
       spawn: () =>
         CodexAgent.spawnCodex({
-          command: opts.codexCommand,
+          command: codexCommand,
           cwd: process.cwd(),
           env,
         }),
@@ -73,10 +87,9 @@ export class AiAgentService {
 
     this.codex = new CodexAgent(pool)
     this.claude = new ClaudeAgent({
-      command: opts.claudeCommand,
+      command: claudeCommand,
       env,
     })
-    this.availability = detectAgents()
   }
 
   catalog() {

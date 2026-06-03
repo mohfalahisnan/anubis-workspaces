@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TypedEmitter, type AgentEventMap } from '@anubis/ai-agent'
@@ -140,6 +140,29 @@ describe('ConversationService', () => {
 
     const call = ctx.aiAgent.streamAgent.mock.calls[0]?.[0] as { extraEnv?: Record<string, string> }
     expect(call?.extraEnv?.CLAUDE_CONFIG_DIR).toBe(expectedHome)
+
+    await ctx.tm.shutdown()
+  })
+
+  it('sendMessage writes profile instructions to CLAUDE.md and AGENTS.md (not per-turn)', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-research', 'claude')
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-research', workspacePath: '/tmp' })
+    await ctx.svc.sendMessage(c.id, { content: 'hi' })
+    await new Promise((rs) => setTimeout(rs, 20))
+
+    const home = join(ctx.agentHomeRoot, 'claude-research', 'claude')
+    const claude = readFileSync(join(home, 'CLAUDE.md'), 'utf8')
+    const agents = readFileSync(join(home, 'AGENTS.md'), 'utf8')
+
+    // CLAUDE.md is the single source of truth — must contain the profile's prompt.
+    expect(claude).toContain('research mode')
+    // AGENTS.md just points to CLAUDE.md (no redundant copy).
+    expect(agents).not.toContain('research mode')
+    expect(agents.toLowerCase()).toContain('claude.md')
+
+    // appendSystemPrompt MUST NOT be re-sent per turn now that it lives in CLAUDE.md.
+    const call = ctx.aiAgent.streamAgent.mock.calls[0]?.[0] as { appendSystemPrompt?: string }
+    expect(call?.appendSystemPrompt).toBeUndefined()
 
     await ctx.tm.shutdown()
   })

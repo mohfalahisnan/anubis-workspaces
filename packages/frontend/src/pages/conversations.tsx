@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRightIcon, PlusIcon } from 'lucide-react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { ArrowUpRightIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 
 import type { ConversationSummary } from '@anubis/shared'
 
-import { listConversations } from '@/api'
+import { deleteConversation, listConversations } from '@/api'
 import { cn } from '@/lib/utils'
 import { AnubisMark } from '@/components/brand/anubis-mark'
 import { useNavigation } from '@/lib/navigation'
@@ -65,6 +65,23 @@ export function ConversationsPage() {
   function openConversation(id: string) {
     setSelectedId(id)
     navigate({ page: 'active-conversation', conversationId: id.startsWith('mock-') ? undefined : id })
+  }
+
+  async function removeConversation(id: string, title: string) {
+    const ok = window.confirm(`Delete "${title}"? This cannot be undone.`)
+    if (!ok) return
+    // Optimistic: drop locally first so the row vanishes immediately.
+    setRows((prev) => (prev ?? FALLBACK_ROWS).filter((r) => r.id !== id))
+    if (selectedId === id) setSelectedId(null)
+    if (id.startsWith('mock-')) return
+    try {
+      await deleteConversation(id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      // Re-fetch on failure so the UI matches server state.
+      const items = await listConversations({ limit: 50 }).catch(() => [])
+      if (items.length > 0) setRows(items.map(rowFromSummary))
+    }
   }
 
   useEffect(() => {
@@ -129,6 +146,7 @@ export function ConversationsPage() {
                 selected={selected}
                 showTopBorder={i > 0}
                 onClick={() => openConversation(row.id)}
+                onDelete={() => void removeConversation(row.id, row.title)}
               />
             )
           })}
@@ -183,19 +201,33 @@ function ConvRow({
   selected,
   showTopBorder,
   onClick,
+  onDelete,
 }: {
   row: Row
   selected: boolean
   showTopBorder: boolean
   onClick: () => void
+  onDelete: () => void
 }) {
+  function handleDeleteClick(e: MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation()
+    onDelete()
+  }
+
   return (
-    <button
-      type='button'
+    <div
+      role='button'
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
       aria-selected={selected || undefined}
       className={cn(
-        'flex h-16 w-full items-center gap-2.5 border-l-2 px-3.5 text-left transition-colors',
+        'group/conv-row relative flex h-16 w-full cursor-pointer items-center gap-2.5 border-l-2 px-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--anubis-gold-hi)]',
         showTopBorder && 'shadow-[inset_0_1px_0_color-mix(in_oklab,var(--border)_60%,transparent)]',
         selected
           ? 'border-l-[var(--anubis-gold)] bg-muted'
@@ -214,8 +246,18 @@ function ConvRow({
         </span>
       </span>
 
+      <button
+        type='button'
+        onClick={handleDeleteClick}
+        aria-label={`Delete conversation ${row.title}`}
+        title='Delete conversation'
+        className='flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/15 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive group-hover/conv-row:opacity-100'
+      >
+        <Trash2Icon className='size-[14px]' strokeWidth={2} />
+      </button>
+
       <StatusDot status={row.status} />
-    </button>
+    </div>
   )
 }
 

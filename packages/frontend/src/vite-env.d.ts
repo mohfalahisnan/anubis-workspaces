@@ -14,6 +14,10 @@ interface Window {
     backend: {
       getBaseUrl(): Promise<string>
     }
+    shell: {
+      /** Resolves to '' on success or an error message string. */
+      openPath(target: string): Promise<string>
+    }
     updater: {
       check(): Promise<unknown>
       startDownload(): Promise<void>

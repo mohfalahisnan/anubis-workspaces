@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MessageSummary } from '@anubis/shared'
 import { getApiBaseUrl, listMessages } from '@/api'
 
@@ -18,31 +18,81 @@ export interface LiveAssistantMessage {
   startedAt: number
 }
 
+export interface OptimisticUserMessage {
+  id: string
+  role: 'user'
+  content: string
+  createdAt: number
+}
+
 export interface ConversationStreamState {
   messages: MessageSummary[]
+  optimistic: OptimisticUserMessage[]
   streaming: LiveAssistantMessage | null
   error: string | null
   chunks: number
   partialChars: number
+  pushOptimisticUser: (content: string) => void
+  /** Clear the last stream error so a retry doesn't keep showing it. */
+  clearError: () => void
 }
 
 export function useConversationMessages(
   conversationId: string | undefined,
 ): ConversationStreamState {
   const [messages, setMessages] = useState<MessageSummary[]>([])
+  const [optimistic, setOptimistic] = useState<OptimisticUserMessage[]>([])
   const [streaming, setStreaming] = useState<LiveAssistantMessage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [chunks, setChunks] = useState(0)
   const [partialChars, setPartialChars] = useState(0)
   const esRef = useRef<EventSource | null>(null)
 
+  const clearError = useCallback(() => setError(null), [])
+
+  const pushOptimisticUser = useCallback((content: string) => {
+    setOptimistic((prev) => [
+      ...prev,
+      {
+        id: `optimistic:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        role: 'user',
+        content,
+        createdAt: Date.now(),
+      },
+    ])
+  }, [])
+
   useEffect(() => {
-    if (!conversationId) return
+    if (!conversationId) {
+      setMessages([])
+      setOptimistic([])
+      setStreaming(null)
+      setChunks(0)
+      setPartialChars(0)
+      return
+    }
     let cancelled = false
+    setMessages([])
+    setStreaming(null)
+    setChunks(0)
+    setPartialChars(0)
+
+    const reconcileOptimistic = (items: MessageSummary[]) => {
+      setOptimistic((prev) =>
+        prev.filter(
+          (o) =>
+            !items.some(
+              (m) => m.role === 'user' && m.content === o.content && m.createdAt >= o.createdAt - 1000,
+            ),
+        ),
+      )
+    }
 
     listMessages(conversationId)
       .then((items) => {
-        if (!cancelled) setMessages(items)
+        if (cancelled) return
+        setMessages(items)
+        reconcileOptimistic(items)
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
@@ -141,12 +191,17 @@ export function useConversationMessages(
 
       es.addEventListener('done', () => {
         setStreaming(null)
+        setChunks(0)
+        setPartialChars(0)
         listMessages(conversationId)
           .then((items) => {
-            if (!cancelled) setMessages(items)
+            if (cancelled) return
+            setMessages(items)
+            reconcileOptimistic(items)
           })
           .catch(() => {})
-        es?.close()
+        // Do NOT close the EventSource — keep it open so subsequent
+        // messages in this conversation continue to stream.
       })
 
       es.addEventListener('error', (raw) => {
@@ -177,7 +232,7 @@ export function useConversationMessages(
     }
   }, [conversationId])
 
-  return { messages, streaming, error, chunks, partialChars }
+  return { messages, optimistic, streaming, error, chunks, partialChars, pushOptimisticUser, clearError }
 }
 
 function parseSse<T>(raw: MessageEvent): T | null {

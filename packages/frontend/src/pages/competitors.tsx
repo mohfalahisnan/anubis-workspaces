@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
+  CheckIcon,
+  CheckSquareIcon,
   DownloadCloudIcon,
   Edit3Icon,
   PlusIcon,
@@ -7,6 +9,7 @@ import {
   SearchIcon,
   Trash2Icon,
   UserRoundIcon,
+  XIcon,
 } from 'lucide-react'
 
 import type { CompetitorSummary } from '@anubis/shared'
@@ -50,6 +53,9 @@ export function CompetitorsPage() {
   const [editing, setEditing] = useState<CompetitorSummary | null>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [capturing, setCapturing] = useState<Set<string>>(() => new Set())
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
 
   async function refresh() {
     try {
@@ -112,6 +118,51 @@ export function CompetitorsPage() {
     }
   }
 
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected(new Set())
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkDelete() {
+    if (selected.size === 0) return
+    setBulkConfirm(false)
+    setBusy(true)
+    setBanner(null)
+    const ids = [...selected]
+    const errors: string[] = []
+    for (const id of ids) {
+      try {
+        await deleteCompetitor(id)
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e))
+      }
+    }
+    await refresh()
+    setBusy(false)
+    exitSelectMode()
+    if (errors.length === 0) {
+      setBanner({
+        kind: 'success',
+        message: `Removed ${ids.length} competitor${ids.length === 1 ? '' : 's'}.`,
+      })
+    } else if (errors.length === ids.length) {
+      setBanner({ kind: 'error', message: `All ${ids.length} deletes failed: ${errors[0]}` })
+    } else {
+      setBanner({
+        kind: 'error',
+        message: `Removed ${ids.length - errors.length} of ${ids.length}; ${errors.length} failed.`,
+      })
+    }
+  }
+
   async function handleUpdate(
     competitor: CompetitorSummary,
     patch: {
@@ -167,10 +218,31 @@ export function CompetitorsPage() {
               <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
               Refresh
             </button>
+            {selectMode ? (
+              <button
+                type='button'
+                onClick={exitSelectMode}
+                disabled={busy}
+                className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+              >
+                <XIcon className='size-[15px]' strokeWidth={2} />
+                Done
+              </button>
+            ) : (
+              <button
+                type='button'
+                onClick={() => setSelectMode(true)}
+                disabled={busy || !items || items.length === 0}
+                className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+              >
+                <CheckSquareIcon className='size-[15px]' strokeWidth={2} />
+                Select
+              </button>
+            )}
             <button
               type='button'
               onClick={() => setFindOpen(true)}
-              disabled={busy}
+              disabled={busy || selectMode}
               className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
             >
               <SearchIcon className='size-[15px]' strokeWidth={2} />
@@ -179,7 +251,7 @@ export function CompetitorsPage() {
             <button
               type='button'
               onClick={() => setAddOpen(true)}
-              disabled={busy}
+              disabled={busy || selectMode}
               className='inline-flex h-9 items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-3.5 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:cursor-not-allowed disabled:opacity-50'
             >
               <PlusIcon className='size-[15px]' strokeWidth={2.4} />
@@ -202,6 +274,18 @@ export function CompetitorsPage() {
           </div>
         )}
 
+        {selectMode && items && items.length > 0 && (
+          <BulkSelectBar
+            count={selected.size}
+            total={items.length}
+            onSelectAll={() => setSelected(new Set(items.map((c) => c.id)))}
+            onClear={() => setSelected(new Set())}
+            onDelete={() => setBulkConfirm(true)}
+            busy={busy}
+            label='competitor'
+          />
+        )}
+
         {items === null ? (
           <LoadingGrid />
         ) : items.length === 0 ? (
@@ -216,6 +300,9 @@ export function CompetitorsPage() {
                 onEdit={() => setEditing(c)}
                 onDelete={() => handleDelete(c)}
                 capturing={capturing.has(c.id)}
+                selectMode={selectMode}
+                selected={selected.has(c.id)}
+                onToggleSelect={() => toggleSelected(c.id)}
               />
             ))}
           </div>
@@ -263,7 +350,116 @@ export function CompetitorsPage() {
           })
         }}
       />
+
+      <BulkDeleteDialog
+        open={bulkConfirm}
+        count={selected.size}
+        label='competitor'
+        onCancel={() => setBulkConfirm(false)}
+        onConfirm={() => void handleBulkDelete()}
+      />
     </div>
+  )
+}
+
+/* ---------- Bulk-select shared bits ---------- */
+
+function BulkSelectBar({
+  count,
+  total,
+  onSelectAll,
+  onClear,
+  onDelete,
+  busy,
+  label,
+}: {
+  count: number
+  total: number
+  onSelectAll: () => void
+  onClear: () => void
+  onDelete: () => void
+  busy: boolean
+  label: string
+}) {
+  const allSelected = count > 0 && count === total
+  return (
+    <div className='mt-5 flex flex-wrap items-center gap-2 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_6%,transparent)] px-3.5 py-2.5'>
+      <span className='text-[13px] font-medium text-foreground'>
+        <span className='tabular-nums'>{count}</span> selected
+        <span className='ml-1 text-muted-foreground'>of {total}</span>
+      </span>
+      <div className='ml-auto flex flex-wrap items-center gap-2'>
+        <button
+          type='button'
+          onClick={allSelected ? onClear : onSelectAll}
+          disabled={busy}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+        >
+          {allSelected ? 'Clear all' : 'Select all'}
+        </button>
+        <button
+          type='button'
+          onClick={onClear}
+          disabled={busy || count === 0}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40'
+        >
+          Clear
+        </button>
+        <button
+          type='button'
+          onClick={onDelete}
+          disabled={busy || count === 0}
+          className='inline-flex h-8 items-center gap-1.5 rounded-md bg-destructive px-3 text-[12.5px] font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          <Trash2Icon className='size-[13px]' strokeWidth={2.2} />
+          Delete {count > 0 ? `${count} ${label}${count === 1 ? '' : 's'}` : ''}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function BulkDeleteDialog({
+  open,
+  count,
+  label,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  count: number
+  label: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className='max-w-md bg-card p-0'>
+        <DialogHeader className='border-b border-border px-6 py-4'>
+          <DialogTitle>Delete {count} {label}{count === 1 ? '' : 's'}?</DialogTitle>
+          <DialogDescription>
+            This removes the selected {label}{count === 1 ? '' : 's'} permanently. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className='border-t border-border px-6 py-3'>
+          <button
+            type='button'
+            onClick={onCancel}
+            className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+          >
+            Cancel
+          </button>
+          <button
+            type='button'
+            onClick={onConfirm}
+            className='inline-flex h-9 items-center gap-1.5 rounded-md bg-destructive px-4 text-[13.5px] font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90'
+          >
+            <Trash2Icon className='size-[14px]' strokeWidth={2.2} />
+            Delete {count}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -275,12 +471,18 @@ function CompetitorCard({
   onEdit,
   onDelete,
   capturing,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   competitor: CompetitorSummary
   onCapture: () => void
   onEdit: () => void
   onDelete: () => void
   capturing: boolean
+  selectMode: boolean
+  selected: boolean
+  onToggleSelect: () => void
 }) {
   const tint = competitor.tint ?? '#565B63'
   const followersLabel = formatBigNumber(competitor.followers)
@@ -288,11 +490,31 @@ function CompetitorCard({
 
   return (
     <article
+      role={selectMode ? 'button' : undefined}
+      aria-pressed={selectMode ? selected : undefined}
+      onClick={selectMode ? onToggleSelect : undefined}
       className={cn(
-        'group flex flex-col gap-3 overflow-hidden rounded-md border border-border bg-card transition-colors',
-        'hover:border-[color-mix(in_oklab,var(--anubis-gold)_28%,var(--border))]',
+        'group relative flex flex-col gap-3 overflow-hidden rounded-md border border-border bg-card transition-colors',
+        selectMode
+          ? selected
+            ? 'cursor-pointer border-[var(--anubis-gold)] ring-1 ring-[var(--anubis-gold)]'
+            : 'cursor-pointer hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))]'
+          : 'hover:border-[color-mix(in_oklab,var(--anubis-gold)_28%,var(--border))]',
       )}
     >
+      {selectMode && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-2 top-2 z-[1] flex size-5 items-center justify-center rounded border transition-colors',
+            selected
+              ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
+              : 'border-border bg-card text-transparent',
+          )}
+        >
+          <CheckIcon className='size-3.5' strokeWidth={3} />
+        </span>
+      )}
       <div className='flex items-start gap-3 p-4'>
         <span
           aria-hidden
@@ -344,8 +566,8 @@ function CompetitorCard({
         <div className='flex shrink-0 items-center gap-1'>
           <button
             type='button'
-            onClick={onCapture}
-            disabled={capturing}
+            onClick={(e) => { e.stopPropagation(); onCapture() }}
+            disabled={capturing || selectMode}
             aria-label={`Refresh ${competitor.handle}`}
             className={cn(
               'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors disabled:cursor-not-allowed',
@@ -365,8 +587,8 @@ function CompetitorCard({
           </button>
           <button
             type='button'
-            onClick={onEdit}
-            disabled={capturing}
+            onClick={(e) => { e.stopPropagation(); onEdit() }}
+            disabled={capturing || selectMode}
             aria-label={`Edit ${competitor.handle}`}
             className='inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
           >
@@ -375,8 +597,8 @@ function CompetitorCard({
           </button>
           <button
             type='button'
-            onClick={onDelete}
-            disabled={capturing}
+            onClick={(e) => { e.stopPropagation(); onDelete() }}
+            disabled={capturing || selectMode}
             aria-label={`Stop tracking ${competitor.handle}`}
             className='inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive disabled:opacity-50'
           >

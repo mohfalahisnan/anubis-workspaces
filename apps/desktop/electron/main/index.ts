@@ -35,6 +35,19 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 ipcMain.handle('anubis:get-backend-url', () => backendUrl)
 
+// Open a folder or file in the OS file manager. shell.openPath returns
+// '' on success and a string error message otherwise — we forward both
+// so the renderer can react. Reject anything that isn't an absolute path
+// or any path that resolves outside what already exists on disk; this is
+// only ever called with paths the backend already manages, but defence
+// in depth is cheap.
+ipcMain.handle('anubis:open-path', async (_event, target: string) => {
+  if (typeof target !== 'string' || target.trim() === '') {
+    return 'invalid path'
+  }
+  return await shell.openPath(target)
+})
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Anubis',

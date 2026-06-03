@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { platform } from 'node:os'
+import { extname } from 'node:path'
 
 export interface AgentAvailability {
   available: boolean
@@ -9,13 +10,42 @@ export interface AgentAvailability {
   source: 'detected' | 'env-override'
 }
 
-const lookupCmd = platform() === 'win32' ? 'where.exe' : 'which'
+const IS_WIN = platform() === 'win32'
+const lookupCmd = IS_WIN ? 'where.exe' : 'which'
+
+/**
+ * On Windows, `where.exe` returns every match for a binary across PATH —
+ * for an npm-installed CLI that means both the extension-less Unix-style
+ * shim (a sh script Node can't execute via `spawn`, → ENOENT) AND the
+ * `.cmd` shim that Windows actually runs. Pick the executable one.
+ *
+ * Order of preference: .cmd > .exe > .bat > .ps1 > anything with an
+ * extension > extension-less (worst on Windows). On non-Windows we just
+ * take the first match.
+ */
+function pickBestPath(stdout: string, isWin: boolean): string {
+  const paths = stdout.split(/\r?\n/).map((p) => p.trim()).filter(Boolean)
+  if (!isWin || paths.length <= 1) return paths[0]!
+  const rank = (p: string): number => {
+    const ext = extname(p).toLowerCase()
+    if (ext === '.cmd') return 0
+    if (ext === '.exe') return 1
+    if (ext === '.bat') return 2
+    if (ext === '.ps1') return 3
+    if (ext !== '') return 4
+    return 5 // extension-less Unix-style shim — last resort
+  }
+  return [...paths].sort((a, b) => rank(a) - rank(b))[0]!
+}
+
+/** Exposed for unit tests only. */
+export const __test__pickBestPath = pickBestPath
 
 function lookup(binary: string): AgentAvailability {
   try {
     const r = spawnSync(lookupCmd, [binary], { encoding: 'utf8', timeout: 2000 })
     if (r.status === 0 && r.stdout && r.stdout.trim()) {
-      const path = r.stdout.split(/\r?\n/)[0]!.trim()
+      const path = pickBestPath(r.stdout, IS_WIN)
       return { available: true, path, source: 'detected' }
     }
   } catch {

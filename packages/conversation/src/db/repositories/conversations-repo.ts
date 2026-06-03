@@ -67,18 +67,32 @@ export class ConversationsRepo {
       .run(status, Date.now(), id)
   }
 
-  updateFields(id: string, patch: { title?: string; extra?: Conversation['extra']; profileId?: string | null }): void {
+  updateFields(
+    id: string,
+    patch: {
+      title?: string
+      extra?: Conversation['extra']
+      profileId?: string | null
+      workspacePath?: string
+    },
+  ): void {
     const cur = this.findById(id)
     if (!cur) return
     const profileId = patch.profileId === undefined ? cur.profileId ?? null : patch.profileId
     this.db.prepare(`
-      UPDATE conversations SET title = @title, extra = @extra, profile_id = @profileId, updated_at = @updatedAt
+      UPDATE conversations SET
+        title = @title,
+        extra = @extra,
+        profile_id = @profileId,
+        workspace_path = @workspacePath,
+        updated_at = @updatedAt
       WHERE id = @id
     `).run({
       id,
       title: patch.title ?? cur.title,
       extra: JSON.stringify(patch.extra ?? cur.extra),
       profileId,
+      workspacePath: patch.workspacePath ?? cur.workspacePath,
       updatedAt: Date.now(),
     })
   }

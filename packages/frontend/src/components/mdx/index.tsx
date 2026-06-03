@@ -14,8 +14,28 @@ export interface MdxContentProps {
   conversationId: string
 }
 
+/**
+ * Strip the [CRON_*] protocol blocks the agent uses to signal scheduled-task
+ * intent. They're consumed by `cron-detect.ts` server-side; users shouldn't
+ * see the raw markers (and certainly not wrapped in a fenced code block).
+ * Also peels any surrounding ``` fence the model wraps them in.
+ */
+function stripCronProtocol(source: string): string {
+  return source
+    // Fenced versions: ```anything\n[CRON_CREATE]...[/CRON_CREATE]\n```
+    .replace(/```[\w-]*\s*\n?\[CRON_(?:CREATE|UPDATE(?::[^\]]+)?)\][\s\S]*?\[\/CRON_(?:CREATE|UPDATE)\]\s*\n?```/g, '')
+    // Bare versions
+    .replace(/\[CRON_CREATE\][\s\S]*?\[\/CRON_CREATE\]/g, '')
+    .replace(/\[CRON_UPDATE:\s*[^\]]+\][\s\S]*?\[\/CRON_UPDATE\]/g, '')
+    .replace(/\[CRON_DELETE:\s*[^\]]+\]/g, '')
+    .replace(/\[CRON_LIST\]/g, '')
+    // Collapse the blank lines those replacements leave behind
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export function MdxContent({ source, conversationId }: MdxContentProps) {
-  const segments = useMemo(() => splitMdxSource(source), [source])
+  const segments = useMemo(() => splitMdxSource(stripCronProtocol(source)), [source])
 
   return (
     <MdxConversationProvider value={{ conversationId }}>

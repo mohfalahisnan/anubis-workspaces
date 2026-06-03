@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import type { Profile } from '@anubis/conversation'
+import { type Profile, hasCredentials, ensureAgentHome, envFor } from '@anubis/conversation'
 import { getStack } from './services.js'
 
 const ProfileConfig = z.object({
@@ -37,6 +38,7 @@ function withHome(profile: Profile) {
     home: {
       path,
       exists: existsSync(path),
+      hasCredentials: hasCredentials(profile.id, profile.config.agent, getStack().agentHomeRoot),
     },
   }
 }
@@ -90,6 +92,73 @@ profileRoutes.post('/:id/resolve', async (c) => {
   const body = ResolveBody.parse(await c.req.json().catch(() => ({})))
   const r = getStack().profiles.resolve(c.req.param('id'), body.override as never)
   return c.json({ ok: true, resolved: r })
+})
+
+// Dedup: a recent /login/terminal request for the same profile is treated as
+// a no-op so React re-renders / accidental double-clicks don't pile up windows.
+const recentTerminalLaunches = new Map<string, number>()
+const TERMINAL_DEDUP_MS = 3000
+
+profileRoutes.post('/:id/login/terminal', async (c) => {
+  const profileId = c.req.param('id')
+  const stack = getStack()
+  const profile = stack.profiles.get(profileId)
+  if (!profile) return c.json({ ok: false, error: 'not_found' }, 404)
+
+  const now = Date.now()
+  const last = recentTerminalLaunches.get(profileId) ?? 0
+  if (now - last < TERMINAL_DEDUP_MS) {
+    return c.json({ ok: true, deduped: true })
+  }
+  recentTerminalLaunches.set(profileId, now)
+
+  const agent = profile.config.agent
+  const availability = stack.aiAgent.catalog().agentAvailability[agent]
+  if (!availability.available) {
+    return c.json(
+      {
+        ok: false,
+        error: { code: 'agent_not_installed', agent, message: `${agent} CLI is not on PATH. Install it first.` },
+      },
+      409,
+    )
+  }
+
+  const home = ensureAgentHome(stack.agentHomeRoot, profileId, agent).path
+  const env = { ...process.env, ...envFor(agent, home) } as Record<string, string>
+
+  // Prefer the absolute path resolved by detectAgents() (handles Windows
+  // .cmd shims) over a bare 'codex' / 'claude' name.
+  const command = (agent === 'claude'
+    ? process.env.ANUBIS_CLAUDE_COMMAND
+    : process.env.ANUBIS_CODEX_COMMAND)
+    ?? availability.path
+    ?? agent
+  const args = agent === 'codex' ? ['login'] : []
+
+  if (process.platform === 'win32') {
+    const cmdStr = `${command} ${args.join(' ')}`
+    spawn('cmd.exe', ['/c', 'start', 'cmd', '/k', cmdStr], {
+      cwd: home,
+      env,
+      detached: true,
+      stdio: 'ignore',
+    }).unref()
+  } else if (process.platform === 'darwin') {
+    const cmdStr = `cd ${JSON.stringify(home)} && ${envFor(agent, home)[agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME']}=${JSON.stringify(home)} ${command} ${args.join(' ')}`
+    spawn('osascript', ['-e', `tell application "Terminal" to do script ${JSON.stringify(cmdStr)}`], {
+      detached: true,
+      stdio: 'ignore',
+    }).unref()
+  } else {
+    const envVar = agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME'
+    spawn('x-terminal-emulator', ['-e', 'sh', '-c', `cd ${JSON.stringify(home)} && ${envVar}=${JSON.stringify(home)} ${command} ${args.join(' ')}`], {
+      detached: true,
+      stdio: 'ignore',
+    }).unref()
+  }
+
+  return c.json({ ok: true })
 })
 
 profileRoutes.post('/:id/reset-home', (c) => {

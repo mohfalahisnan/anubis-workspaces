@@ -16,7 +16,13 @@ interface MdxMarkdownProps {
 export const MdxMarkdown = memo(function MdxMarkdown({ source, className }: MdxMarkdownProps) {
   return (
     <div className={cn('mdx-markdown text-[15.5px] leading-[1.68] text-foreground', className)}>
-      <Streamdown mode='streaming' parseIncompleteMarkdown>
+      <Streamdown
+        mode='streaming'
+        parseIncompleteMarkdown
+        // Line numbers are noise in short chat code blocks and the gutter
+        // crops content inside the 720px conversation column. Turn them off.
+        lineNumbers={false}
+      >
         {source}
       </Streamdown>
     </div>

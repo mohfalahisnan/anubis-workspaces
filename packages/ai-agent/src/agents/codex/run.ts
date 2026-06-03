@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawnNpmShim } from '../spawn-shim.js'
 import { JsonRpcClient } from './jsonrpc.js'
 import { CodexPool } from './pool.js'
 import { TypedEmitter, type AgentEventMap } from '../../events/stream.js'
@@ -179,7 +179,27 @@ export class CodexAgent {
             break
           case 'codex/event/task_complete':
           case 'task_complete':
-          case 'turn/completed':
+          case 'turn/completed': {
+            // Codex returns 200 OK for usage-limit / quota / billing errors
+            // but signals them via `turn.status === 'failed'` + `turn.error`.
+            // Surface those as stream errors so the UI shows the message
+            // instead of an empty assistant bubble.
+            const turnErr = (msg.turn?.error ?? msg.error) as
+              | { message?: string; codexErrorInfo?: string }
+              | undefined
+            const turnFailed = msg.turn?.status === 'failed' || !!turnErr
+            if (turnFailed) {
+              const text = turnErr?.message ?? 'Codex turn failed without a message.'
+              const err = new Error(text) as Error & { codexErrorInfo?: string }
+              if (turnErr?.codexErrorInfo) err.codexErrorInfo = turnErr.codexErrorInfo
+              this.emit(k, 'error', { error: err })
+              this.activeEmitters.delete(k)
+              this.pool.release({
+                workspaceId: opts.workspaceId,
+                sessionId: opts.sessionId,
+              })
+              break
+            }
             if (msg.last_agent_message) {
               this.emit(k, 'partial', { deltaText: msg.last_agent_message })
             }
@@ -193,6 +213,7 @@ export class CodexAgent {
               sessionId: opts.sessionId,
             })
             break
+          }
           case 'error':
             this.emit(k, 'error', { error: new Error(msg.message ?? 'Codex stream error') })
             break
@@ -276,7 +297,8 @@ export class CodexAgent {
     }
     args.push('app-server')
 
-    return spawn(opts.command ?? process.env.ANUBIS_CODEX_COMMAND ?? 'codex', args, {
+    const command = opts.command ?? process.env.ANUBIS_CODEX_COMMAND ?? 'codex'
+    return spawnNpmShim(command, args, {
       env: opts.env ?? process.env,
       cwd: opts.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],

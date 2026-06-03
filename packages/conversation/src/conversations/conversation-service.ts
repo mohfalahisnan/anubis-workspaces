@@ -23,6 +23,7 @@ import {
   envFor,
   homePathFor,
   resetProfileHome,
+  writeProfileInstructions,
 } from '../profiles/agent-home.js'
 import type { ConversationsRepo } from '../db/repositories/conversations-repo.js'
 import type { MessagesRepo } from '../db/repositories/messages-repo.js'
@@ -52,6 +53,7 @@ export interface UpdateConversationInput {
   override?: ProfileOverride
   archived?: boolean
   profileId?: string | null
+  workspacePath?: string
 }
 
 export interface ConversationServiceDeps {
@@ -133,10 +135,20 @@ export class ConversationService {
       overrides: patch.override ?? cur.extra.overrides,
       archived: patch.archived ?? cur.extra.archived,
     }
+    let workspacePath: string | undefined
+    if (patch.workspacePath !== undefined) {
+      const trimmed = patch.workspacePath.trim()
+      if (!trimmed) throw new Error('workspacePath cannot be empty')
+      // Auto-create so the spawned CLI doesn't immediately ENOENT into cwd.
+      // If the user passed a junk path the underlying mkdir will surface.
+      mkdirSync(trimmed, { recursive: true })
+      workspacePath = trimmed
+    }
     this.deps.conversations.updateFields(id, {
       title: patch.title,
       extra,
       profileId: patch.profileId === undefined ? undefined : patch.profileId,
+      workspacePath,
     })
     return this.deps.conversations.findById(id)!
   }
@@ -186,7 +198,11 @@ export class ConversationService {
     const skillDefs = cur.extra.skills
       .map(name => this.deps.skills.byName(name))
       .filter((s): s is NonNullable<typeof s> => Boolean(s))
-    const appendSystemPrompt = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
+    // Build the instruction text from profile prompt + skills. This used
+    // to be sent every turn as `appendSystemPrompt` — paying tokens each
+    // time. We now write it to the profile home as CLAUDE.md instead, so
+    // the CLI loads it once on launch and reuses it across turns.
+    const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
 
     // Auto-isolate this profile's agent home. profile.env always wins
     // so power users can override (e.g. point two profiles at the same
@@ -204,12 +220,19 @@ export class ConversationService {
       // record of the prior resume id (it lived in the OLD shared home),
       // so we start fresh inside the new isolated home.
       if (isNew) prevSession = undefined
+      // Sync the profile-level instruction files. Idempotent — only
+      // touches disk when content has actually changed.
+      writeProfileInstructions(path, profileInstructions)
     }
-    const resolvedForTurn: ResolvedProfile = { ...resolved, env: envWithHome, appendSystemPrompt }
+    // Strip appendSystemPrompt: it lives in CLAUDE.md now, no longer a
+    // per-turn argument. Leaving it on the resolved profile would let
+    // TaskManager re-send it.
+    const { appendSystemPrompt: _, ...resolvedWithoutAppend } = resolved
+    const resolvedForTurn: ResolvedProfile = { ...resolvedWithoutAppend, env: envWithHome }
     const task = await this.deps.tm.getOrBuild(
       { id, agent: cur.agent, workspacePath: cur.workspacePath },
       resolvedForTurn,
-      { prompt: input.content, msgId, appendSystemPrompt, prevAgentSessionId: prevSession },
+      { prompt: input.content, msgId, prevAgentSessionId: prevSession },
     )
 
     const messageRowId = newId()

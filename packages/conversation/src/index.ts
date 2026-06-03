@@ -131,6 +131,7 @@ export {
   envFor,
   hasCredentials,
   homePathFor,
+  writeProfileInstructions,
   CREDENTIAL_FILE,
 } from './profiles/agent-home.js'
 export { ProfileService } from './profiles/profile-service.js'

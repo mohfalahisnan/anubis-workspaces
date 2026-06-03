@@ -1,10 +1,10 @@
 import type { Readable } from 'node:stream'
-import { spawn } from 'node:child_process'
 import split2 from 'split2'
 import { parseStreamLine } from './parser.js'
 import type { ContentBlock } from './types.js'
 import { TypedEmitter, type AgentEventMap } from '../../events/stream.js'
 import { buildClaudeArgs } from './build-args.js'
+import { spawnNpmShim } from '../spawn-shim.js'
 
 export interface RunClaudeStreamOpts {
   stdout: Readable
@@ -100,7 +100,12 @@ export class ClaudeAgent {
       ...(opts.extraEnv ?? {}),
     }
 
-    const child = spawn(this.opts.command ?? process.env.ANUBIS_CLAUDE_COMMAND ?? 'claude', args, {
+    const command = this.opts.command ?? process.env.ANUBIS_CLAUDE_COMMAND ?? 'claude'
+    // Use the shared shim helper so multi-word args (e.g. `-p` prompt with
+    // spaces) survive intact through Windows .cmd shims — `shell: true`
+    // would split them at the cmd.exe lexer because Node doesn't quote
+    // args under shell:true.
+    const child = spawnNpmShim(command, args, {
       env,
       cwd: opts.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],

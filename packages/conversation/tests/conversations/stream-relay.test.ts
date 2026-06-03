@@ -89,4 +89,38 @@ describe('StreamRelay', () => {
     const c = new ConversationsRepo(db).findById('c1')!
     expect(c.status).toBe('error')
   })
+
+  it('error event writes the error text into the assistant content when nothing streamed', async () => {
+    // Regression: Codex returns usageLimitExceeded as a "completed turn with
+    // turn.error" — codex/run.ts now relays that as an error event. If we
+    // only stored it in metadata, users would see an empty assistant bubble
+    // on revisit. Make sure the body has something visible.
+    const sse = new SseBroadcaster()
+    const relay = mkRelay(db, sse, async () => '')
+    const em = new TypedEmitter<AgentEventMap>()
+    const done = relay.attach(em)
+    em.emit('error', { error: new Error("You've hit your usage limit.") })
+    await done
+
+    const msgs = new MessagesRepo(db).listForConversation('c1')
+    const assistant = msgs.find((m) => m.role === 'assistant')!
+    expect(assistant.content).toContain("You've hit your usage limit.")
+    expect(assistant.metadata?.error).toBeDefined()
+  })
+
+  it('preserves streamed partial content even when the stream errors mid-way', async () => {
+    const sse = new SseBroadcaster()
+    const relay = mkRelay(db, sse, async () => '')
+    const em = new TypedEmitter<AgentEventMap>()
+    const done = relay.attach(em)
+    em.emit('partial', { deltaText: 'Hello, this is the start of a reply.' })
+    em.emit('error', { error: new Error('connection lost') })
+    await done
+
+    const msgs = new MessagesRepo(db).listForConversation('c1')
+    const assistant = msgs.find((m) => m.role === 'assistant')!
+    // Partial content is preserved verbatim; we do not append the error
+    // marker on top of real assistant text (that lives in metadata).
+    expect(assistant.content).toBe('Hello, this is the start of a reply.')
+  })
 })

@@ -136,14 +136,31 @@ async function probeExistingChrome(port: number): Promise<{ alive: boolean; prof
     const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(700) })
     if (!response.ok) return { alive: false }
     const payload = (await response.json()) as { 'User-Data-Dir'?: string; userDataDir?: string }
-    const profileDir = typeof payload['User-Data-Dir'] === 'string'
+    let profileDir = typeof payload['User-Data-Dir'] === 'string'
       ? payload['User-Data-Dir']
       : typeof payload.userDataDir === 'string'
         ? payload.userDataDir
         : undefined
+    profileDir ??= readChromeUserDataDirFromProcess(port)
     return { alive: true, profileDir }
   } catch {
     return { alive: false }
+  }
+}
+
+function readChromeUserDataDirFromProcess(port: number): string | undefined {
+  if (process.platform !== 'win32') return undefined
+  const pid = findListeningPid(port)
+  if (!pid) return undefined
+  try {
+    const commandLine = execSync(
+      `powershell.exe -NoProfile -Command "$p = Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'; if ($p) { $p.CommandLine }"`,
+      { timeout: 3000 },
+    ).toString()
+    const match = /--user-data-dir=(?:"([^"]+)"|([^\s]+))/i.exec(commandLine)
+    return match?.[1] ?? match?.[2]
+  } catch {
+    return undefined
   }
 }
 
@@ -192,11 +209,7 @@ export async function killChrome(port: number): Promise<void> {
   // Kill by port: find the pid that owns the TCP port, then kill it.
   try {
     if (process.platform === 'win32') {
-      // netstat output: "  TCP    0.0.0.0:9222   ...   <pid>"
-      const out = execSync(`netstat -ano -p TCP`, { timeout: 5000 }).toString()
-      const regex = new RegExp(`\\s+TCP\\s+[\\d.]+:${port}\\s+[\\d.]+:\\d+\\s+LISTENING\\s+(\\d+)`, 'i')
-      const match = regex.exec(out)
-      if (match) pid = Number(match[1])
+      pid = findListeningPid(port)
       if (pid) execSync(`taskkill /PID ${pid} /F /T`, { timeout: 5000 })
     } else {
       // lsof: find pids listening on the port
@@ -210,5 +223,18 @@ export async function killChrome(port: number): Promise<void> {
     }
   } catch {
     // Best-effort — ignore errors during kill
+  }
+}
+
+function findListeningPid(port: number): number | undefined {
+  try {
+    // netstat output: "  TCP    0.0.0.0:9222   ...   <pid>"
+    const out = execSync(`netstat -ano -p TCP`, { timeout: 5000 }).toString()
+    const regex = new RegExp(`\\s+TCP\\s+[\\d.]+:${port}\\s+[\\d.]+:\\d+\\s+LISTENING\\s+(\\d+)`, 'i')
+    const match = regex.exec(out)
+    const pid = match ? Number(match[1]) : 0
+    return pid > 0 ? pid : undefined
+  } catch {
+    return undefined
   }
 }

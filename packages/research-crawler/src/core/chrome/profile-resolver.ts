@@ -1,11 +1,20 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 // Resolve the package root so profile dirs (`data/chrome-profile-*`) land in
-// the right place regardless of `process.cwd()` when the backend imports the
-// crawler package.
-const PKG_ROOT = resolve(fileURLToPath(new URL('../../../', import.meta.url)))
+// the right place regardless of `process.cwd()` when the MCP server is spawned
+// by a host application.
+//
+// Two runtime contexts:
+//   - ESM (dev / pnpm build dist)  — import.meta.url is a valid file:// URL.
+//     The source/compiled file sits at <root>/src|dist/core/chrome/, so go 3 up.
+//   - CJS bundle (Node SEA via esbuild) — esbuild sets import.meta to {}, so
+//     import.meta.url is undefined (falsy). Anchor to process.execPath which
+//     points to the executable inside <root>/release/. One level up is the root.
+const PKG_ROOT = import.meta.url
+  ? resolve(fileURLToPath(new URL('../../../', import.meta.url)))
+  : resolve(dirname(process.execPath), '..')
 
 export type ProfileName = 'login' | 'public' | 'flow'
 

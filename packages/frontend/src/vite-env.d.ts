@@ -14,7 +14,6 @@ interface Window {
     backend: {
       getBaseUrl(): Promise<string>
     }
-    openExtensionFolder?(folderPath: string): Promise<string>
     updater: {
       check(): Promise<unknown>
       startDownload(): Promise<void>

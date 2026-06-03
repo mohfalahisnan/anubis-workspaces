@@ -12,7 +12,6 @@ import { competitorRoutes } from './competitors.js'
 import { captureRoutes, postRoutes } from './captures.js'
 import { configRoutes } from './config.js'
 import { systemRoutes } from './system.js'
-import { extensionRoutes } from './extension/routes.js'
 
 const app = new Hono()
 
@@ -49,7 +48,6 @@ app.route('/captures', captureRoutes)
 app.route('/posts', postRoutes)
 app.route('/config', configRoutes)
 app.route('/system', systemRoutes)
-app.route('/extension', extensionRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

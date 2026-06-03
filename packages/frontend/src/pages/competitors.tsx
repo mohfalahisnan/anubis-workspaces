@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   DownloadCloudIcon,
+  Edit3Icon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
@@ -15,6 +16,7 @@ import {
   createCompetitor,
   deleteCompetitor,
   listCompetitors,
+  updateCompetitor,
 } from '@/api'
 import { FindCompetitorsDialog } from './competitor-dialogs'
 import { cn } from '@/lib/utils'
@@ -45,6 +47,7 @@ export function CompetitorsPage() {
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [editing, setEditing] = useState<CompetitorSummary | null>(null)
   const [findOpen, setFindOpen] = useState(false)
   const [capturing, setCapturing] = useState<Set<string>>(() => new Set())
 
@@ -103,6 +106,34 @@ export function CompetitorsPage() {
       setBanner({
         kind: 'error',
         message: e instanceof Error ? e.message : 'Failed to remove.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleUpdate(
+    competitor: CompetitorSummary,
+    patch: {
+      displayName?: string
+      niche?: string
+      tint?: string
+      followers?: number
+      avgLikes?: number
+      notes?: string
+    },
+  ) {
+    setBusy(true)
+    setBanner(null)
+    try {
+      await updateCompetitor(competitor.id, patch)
+      setEditing(null)
+      await refresh()
+      setBanner({ kind: 'success', message: `Updated ${competitor.handle}.` })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Failed to update competitor.',
       })
     } finally {
       setBusy(false)
@@ -182,6 +213,7 @@ export function CompetitorsPage() {
                 key={c.id}
                 competitor={c}
                 onCapture={() => void handleCapture(c)}
+                onEdit={() => setEditing(c)}
                 onDelete={() => handleDelete(c)}
                 capturing={capturing.has(c.id)}
               />
@@ -210,6 +242,12 @@ export function CompetitorsPage() {
         }}
       />
 
+      <EditCompetitorDialog
+        competitor={editing}
+        onClose={() => setEditing(null)}
+        onSave={(competitor, patch) => void handleUpdate(competitor, patch)}
+      />
+
       <FindCompetitorsDialog
         open={findOpen}
         onClose={() => setFindOpen(false)}
@@ -234,11 +272,13 @@ export function CompetitorsPage() {
 function CompetitorCard({
   competitor,
   onCapture,
+  onEdit,
   onDelete,
   capturing,
 }: {
   competitor: CompetitorSummary
   onCapture: () => void
+  onEdit: () => void
   onDelete: () => void
   capturing: boolean
 }) {
@@ -322,6 +362,16 @@ function CompetitorCard({
               strokeWidth={2}
             />
             {capturing ? 'Capturing' : 'Refresh'}
+          </button>
+          <button
+            type='button'
+            onClick={onEdit}
+            disabled={capturing}
+            aria-label={`Edit ${competitor.handle}`}
+            className='inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+          >
+            <Edit3Icon className='size-3.5' strokeWidth={2} />
+            Edit
           </button>
           <button
             type='button'
@@ -482,6 +532,153 @@ function AddCompetitorDialog({
   )
 }
 
+function EditCompetitorDialog({
+  competitor,
+  onClose,
+  onSave,
+}: {
+  competitor: CompetitorSummary | null
+  onClose: () => void
+  onSave: (
+    competitor: CompetitorSummary,
+    patch: {
+      displayName?: string
+      niche?: string
+      tint?: string
+      followers?: number
+      avgLikes?: number
+      notes?: string
+    },
+  ) => void
+}) {
+  const [displayName, setDisplayName] = useState('')
+  const [niche, setNiche] = useState('')
+  const [tint, setTint] = useState('#565B63')
+  const [followers, setFollowers] = useState('')
+  const [avgLikes, setAvgLikes] = useState('')
+  const [notes, setNotes] = useState('')
+
+  useEffect(() => {
+    if (!competitor) return
+    setDisplayName(competitor.displayName ?? '')
+    setNiche(competitor.niche ?? '')
+    setTint(competitor.tint ?? '#565B63')
+    setFollowers(competitor.followers === undefined ? '' : String(competitor.followers))
+    setAvgLikes(competitor.avgLikes === undefined ? '' : String(competitor.avgLikes))
+    setNotes(competitor.notes ?? '')
+  }, [competitor])
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!competitor) return
+    onSave(competitor, {
+      displayName: displayName.trim() || undefined,
+      niche: niche.trim() || undefined,
+      tint,
+      followers: parseOptionalInt(followers),
+      avgLikes: parseOptionalInt(avgLikes),
+      notes: notes.trim() || undefined,
+    })
+  }
+
+  return (
+    <Dialog open={!!competitor} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className='max-w-md bg-card p-0'>
+        <form onSubmit={submit}>
+          <DialogHeader className='border-b border-border px-6 py-4'>
+            <DialogTitle>Edit competitor</DialogTitle>
+            <DialogDescription>
+              Tune the profile metadata shown across Competitors and Content.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='flex flex-col gap-4 px-6 py-5'>
+            <Field label='Display name' htmlFor='edit-c-name'>
+              <input
+                id='edit-c-name'
+                type='text'
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className={textInput}
+              />
+            </Field>
+
+            <div className='grid grid-cols-[1fr_auto] gap-3'>
+              <Field label='Niche' htmlFor='edit-c-niche'>
+                <input
+                  id='edit-c-niche'
+                  type='text'
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                  className={textInput}
+                />
+              </Field>
+              <Field label='Tint' htmlFor='edit-c-tint'>
+                <input
+                  id='edit-c-tint'
+                  type='color'
+                  value={tint}
+                  onChange={(e) => setTint(e.target.value)}
+                  className='h-10 w-12 rounded-md border border-border bg-background p-1'
+                />
+              </Field>
+            </div>
+
+            <div className='grid grid-cols-2 gap-3'>
+              <Field label='Followers' htmlFor='edit-c-followers'>
+                <input
+                  id='edit-c-followers'
+                  type='number'
+                  min={0}
+                  value={followers}
+                  onChange={(e) => setFollowers(e.target.value)}
+                  className={textInput}
+                />
+              </Field>
+              <Field label='Avg likes' htmlFor='edit-c-avg-likes'>
+                <input
+                  id='edit-c-avg-likes'
+                  type='number'
+                  min={0}
+                  value={avgLikes}
+                  onChange={(e) => setAvgLikes(e.target.value)}
+                  className={textInput}
+                />
+              </Field>
+            </div>
+
+            <Field label='Notes' htmlFor='edit-c-notes'>
+              <textarea
+                id='edit-c-notes'
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className={`${textInput} h-auto resize-none py-2 leading-relaxed`}
+              />
+            </Field>
+          </div>
+
+          <DialogFooter className='border-t border-border px-6 py-3'>
+            <button
+              type='button'
+              onClick={onClose}
+              className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+            >
+              Cancel
+            </button>
+            <button
+              type='submit'
+              className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
+            >
+              Save changes
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /* ---------- Helpers ---------- */
 
 const textInput =
@@ -528,6 +725,12 @@ function relativeTime(ms: number): string {
   if (hr < 24) return `${hr}h ago`
   const day = Math.round(hr / 24)
   return `${day}d ago`
+}
+
+function parseOptionalInt(value: string): number | undefined {
+  if (!value.trim()) return undefined
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : undefined
 }
 
 function LoadingGrid() {

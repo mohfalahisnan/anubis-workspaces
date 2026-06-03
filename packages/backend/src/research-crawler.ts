@@ -5,19 +5,15 @@ import {
   discoverInstagramCompetitors,
   launchChrome,
   silentReporter,
-  type PostData,
-  type ProfileData,
 } from '@anubis/research-crawler'
-import { getStack, ensureExtensionStarted, getJobQueue } from './services.js'
-import { mapExtensionError } from './extension/error-mapping.js'
+import { getDataDir, getStack } from './services.js'
+import { withCrawlerProfileDefaults, type CrawlerProfileName } from './chrome-defaults.js'
 
 /* -----------------------------------------------------------
    Research-crawler routes
    -----------------------------------------------------------
-   - profile=login   → dispatched to the Anubis extension; the
-                       chrome/open route returns NOT_APPLICABLE
-                       because there is no Chrome for us to
-                       launch on the login flow anymore.
+   - profile=login   → CDP crawler using the user's logged-in
+                       Chrome profile.
    - profile=public  → existing CDP scraper (anonymous mode).
    - profile=flow    → existing CDP scraper.
    ----------------------------------------------------------- */
@@ -28,6 +24,7 @@ const openChromeSchema = z.object({
   url: z.string().url().optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
   remoteDebuggingPort: z.number().int().positive().optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
@@ -47,6 +44,7 @@ const captureInstagramProfileSchema = z.object({
   initialDelayMs: z.number().int().nonnegative().max(10000).optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
@@ -67,6 +65,7 @@ const discoverInstagramSchema = z.object({
   includeRaw: z.boolean().optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
@@ -81,88 +80,51 @@ export const researchCrawlerRoutes = new Hono()
 
 researchCrawlerRoutes.post('/chrome/open', async (c) => {
   const input = openChromeSchema.parse(await c.req.json())
-  if (input.profile === 'login') {
-    return c.json({
-      ok: false,
-      error: {
-        code: 'NOT_APPLICABLE_FOR_LOGIN',
-        message: 'Login captures use the Anubis extension; there is no Chrome for the backend to launch.',
-      },
-    }, 400)
-  }
-  const chromePath = getStack().appConfig.get().chromePath
-  return c.json(await launchChrome({ ...input, chromePath: input.chromePath ?? chromePath }))
+  const cfg = getStack().appConfig.get()
+  return c.json(await launchChrome(withCrawlerProfileDefaults({
+    ...input,
+    chromePath: input.chromePath ?? cfg.chromePath,
+  }, input.profile ?? 'login', cfg, getDataDir())))
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
   const input = captureInstagramProfileSchema.parse(await c.req.json())
-  if (input.profile === 'login') {
-    await ensureExtensionStarted()
-    const queue = getJobQueue()
-    if (!queue) return c.json({ ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Extension queue not ready.' } }, 503)
-    const username = input.username?.replace(/^@/, '').trim()
-    if (!username) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'username required for login profile' } }, 400)
-    try {
-      const data = await queue.dispatch({
-        kind: 'capture-profile',
-        input: { username, maxResponses: input.maxResponses ?? 30 },
-        timeoutMs: input.timeoutMs ?? 90_000,
-      }) as { profiles: ProfileData[]; posts: PostData[] }
-      return c.json({
-        ok: true,
-        schemaVersion: '1.0',
-        outputTypes: ['Profile Data List', 'Post Data List'],
-        output: { profiles: data.profiles, posts: data.posts },
-        meta: { profileCount: data.profiles.length, postCount: data.posts.length, warnings: [] },
-      })
-    } catch (e) {
-      return mapExtensionError(c, e)
-    }
-  }
-  const chromePath = getStack().appConfig.get().chromePath
+  const cfg = getStack().appConfig.get()
+  const profile = inferCaptureProfile(input.profile, input.remoteDebuggingPort)
   return c.json(
-    await captureInstagramData({
+    await captureInstagramData(withCrawlerProfileDefaults({
       ...input,
-      chromePath: input.chromePath ?? chromePath,
+      chromePath: input.chromePath ?? cfg.chromePath,
       reporter: silentReporter(),
-    }),
+    }, profile, cfg, getDataDir())),
   )
 })
 
 researchCrawlerRoutes.post('/instagram/discover', async (c) => {
   const input = discoverInstagramSchema.parse(await c.req.json())
-  if (input.profile === 'login') {
-    await ensureExtensionStarted()
-    const queue = getJobQueue()
-    if (!queue) return c.json({ ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Extension queue not ready.' } }, 503)
-    try {
-      const data = await queue.dispatch({
-        kind: 'discover',
-        input: {
-          source: input.source ?? 'explore',
-          hashtag: input.hashtag,
-          keyword: input.keyword,
-          targetCompetitors: input.targetCompetitors ?? 10,
-        },
-        timeoutMs: input.timeoutMs ?? 60_000,
-      }) as { profiles: ProfileData[]; posts: PostData[] }
-      return c.json({
-        ok: true,
-        schemaVersion: '1.0',
-        outputTypes: ['Profile Data List', 'Post Data List'],
-        output: { profiles: data.profiles, posts: data.posts },
-        meta: { profileCount: data.profiles.length, postCount: data.posts.length, warnings: [] },
-      })
-    } catch (e) {
-      return mapExtensionError(c, e)
-    }
-  }
-  const chromePath = getStack().appConfig.get().chromePath
+  const cfg = getStack().appConfig.get()
+  const profile = inferDiscoverProfile(input.profile, input.remoteDebuggingPort)
   return c.json(
-    await discoverInstagramCompetitors({
+    await discoverInstagramCompetitors(withCrawlerProfileDefaults({
       ...input,
-      chromePath: input.chromePath ?? chromePath,
+      chromePath: input.chromePath ?? cfg.chromePath,
       reporter: silentReporter(),
-    }),
+    }, profile, cfg, getDataDir())),
   )
 })
+
+function inferCaptureProfile(
+  profile: CrawlerProfileName | undefined,
+  port: number | undefined,
+): CrawlerProfileName {
+  if (profile) return profile
+  return port === 9222 ? 'login' : 'public'
+}
+
+function inferDiscoverProfile(
+  profile: CrawlerProfileName | undefined,
+  port: number | undefined,
+): CrawlerProfileName {
+  if (profile) return profile
+  return port === 9223 ? 'public' : 'login'
+}

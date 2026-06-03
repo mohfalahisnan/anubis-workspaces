@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   CompassIcon,
   HashIcon,
+  LogInIcon,
   PlusIcon,
   SearchIcon,
   UserRoundIcon,
@@ -20,6 +21,7 @@ import {
   createCompetitor,
   discoverCompetitors,
   listCompetitors,
+  openInstagramLoginChrome,
 } from '@/api'
 import { cn } from '@/lib/utils'
 import {
@@ -691,6 +693,24 @@ function RunOptionsPanel({
   allowProfilePick?: boolean
   pinnedNote?: string
 }) {
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [loginMessage, setLoginMessage] = useState<string | null>(null)
+  const [loginError, setLoginError] = useState<string | null>(null)
+
+  async function handleOpenLoginChrome() {
+    setLoginBusy(true)
+    setLoginMessage(null)
+    setLoginError(null)
+    try {
+      const result = await openInstagramLoginChrome()
+      setLoginMessage(result.reused ? 'Login Chrome is already open.' : 'Login Chrome opened.')
+    } catch (e) {
+      setLoginError(e instanceof Error ? e.message : 'Could not open login Chrome.')
+    } finally {
+      setLoginBusy(false)
+    }
+  }
+
   return (
     <div className='flex flex-col gap-3 rounded-md border border-border bg-background/50 p-3.5'>
       <div className='flex items-center justify-between gap-3'>
@@ -727,6 +747,42 @@ function RunOptionsPanel({
           })}
         </div>
       )}
+
+      <div className='flex flex-col gap-2 rounded-md border border-border bg-card px-3 py-2.5'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <div className='min-w-0'>
+            <p className='text-[12.5px] font-medium text-foreground'>Instagram login</p>
+            <p className='mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground'>
+              Open the app profile, sign in, then run collection.
+            </p>
+          </div>
+          <button
+            type='button'
+            onClick={() => void handleOpenLoginChrome()}
+            disabled={loginBusy}
+            className={cn(
+              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] font-medium transition-colors',
+              loginBusy
+                ? 'cursor-wait bg-muted text-muted-foreground'
+                : 'bg-background text-foreground hover:bg-muted',
+            )}
+          >
+            <LogInIcon className='size-3.5' strokeWidth={2} />
+            {loginBusy ? 'Opening…' : 'Open login Chrome'}
+          </button>
+        </div>
+        {(loginMessage || loginError) && (
+          <p
+            role='status'
+            className={cn(
+              'text-[11.5px] leading-relaxed',
+              loginError ? 'text-destructive' : 'text-muted-foreground',
+            )}
+          >
+            {loginError ?? loginMessage}
+          </p>
+        )}
+      </div>
 
       <label className='flex cursor-pointer select-none items-center gap-2.5 text-[12.5px] text-foreground'>
         <input

@@ -9,14 +9,9 @@ import { join } from 'node:path'
 
      - chromePath:           optional path to chrome.exe (when
                              not on PATH)
-     - extensionSecret:      shared secret for the Anubis Chrome
-                             extension. Auto-generated on first
-                             construction.
-     - extensionPort:        WS port the backend bound to
-                             (47891–47900). Persisted so the
-                             extension can probe-and-find.
-     - extensionPairedAt:    epoch ms of the most recent
-                             successful extension `hello`.
+     - crawlerProfileRoot:   optional research-crawler project/data
+                             root to reuse Chrome profiles from a
+                             standalone crawler checkout.
 
    Persisted as a flat object; partial PATCHes merge. Empty
    strings collapse to "unset" for clean form-clear behaviour.
@@ -24,9 +19,7 @@ import { join } from 'node:path'
 
 export interface AppConfig {
   chromePath?: string
-  extensionSecret?: string
-  extensionPort?: number
-  extensionPairedAt?: number
+  crawlerProfileRoot?: string
 }
 
 const CONFIG_FILE = 'config.json'
@@ -37,13 +30,6 @@ export class AppConfigService {
 
   constructor(dataDir: string) {
     this.path = join(dataDir, CONFIG_FILE)
-    // Auto-generate the extension secret on first run so the user
-    // can paste it into the extension Options page without us ever
-    // having a code path where it's missing.
-    const current = this.get()
-    if (!current.extensionSecret) {
-      this.update({ extensionSecret: randomHex(32) })
-    }
   }
 
   get(): AppConfig {
@@ -73,19 +59,7 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   const out: AppConfig = {}
   const chromePath = typeof obj.chromePath === 'string' ? obj.chromePath.trim() : ''
   if (chromePath) out.chromePath = chromePath
-  const secret = typeof obj.extensionSecret === 'string' ? obj.extensionSecret.trim() : ''
-  if (/^[0-9a-f]{32,}$/i.test(secret)) out.extensionSecret = secret
-  if (typeof obj.extensionPort === 'number' && obj.extensionPort > 0 && obj.extensionPort < 65536) {
-    out.extensionPort = Math.floor(obj.extensionPort)
-  }
-  if (typeof obj.extensionPairedAt === 'number' && obj.extensionPairedAt > 0) {
-    out.extensionPairedAt = Math.floor(obj.extensionPairedAt)
-  }
+  const crawlerProfileRoot = typeof obj.crawlerProfileRoot === 'string' ? obj.crawlerProfileRoot.trim() : ''
+  if (crawlerProfileRoot) out.crawlerProfileRoot = crawlerProfileRoot
   return out
-}
-
-function randomHex(byteLen: number): string {
-  const buf = new Uint8Array(byteLen)
-  globalThis.crypto.getRandomValues(buf)
-  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('')
 }

@@ -17,13 +17,12 @@ afterAll(async () => {
 })
 
 describe('/config route', () => {
-  it('GET /config returns a config with an auto-generated extensionSecret', async () => {
+  it('GET /config returns the current config', async () => {
     const { default: app } = await import('../src/app.js')
     const res = await app.request('/config')
     expect(res.status).toBe(200)
     const body = (await res.json()) as { ok: boolean; config: Record<string, unknown> }
     expect(body.ok).toBe(true)
-    expect(body.config.extensionSecret).toMatch(/^[0-9a-f]{64}$/)
     expect(body.config.chromePath).toBeUndefined()
   })
 

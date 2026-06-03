@@ -56,6 +56,16 @@ export interface ListPostsOpts {
   orderBy?: 'recent' | 'engagement'
 }
 
+export interface UpdateCapturedPostPatch {
+  caption?: string
+  likes?: number
+  comments?: number
+  postedAt?: string
+  mediaKind?: CapturedPost['mediaKind']
+  mediaUrl?: string
+  carouselCount?: number
+}
+
 export class CapturedPostsRepo {
   constructor(private db: Db) {}
 
@@ -118,6 +128,51 @@ export class CapturedPostsRepo {
       ? (this.db.prepare(sql).all(opts.competitorId, limit) as Row[])
       : (this.db.prepare(sql).all(limit) as Row[])
     return rows.map(toPost)
+  }
+
+  findById(id: string): CapturedPost | null {
+    const row = this.db
+      .prepare('SELECT * FROM captured_posts WHERE id = ?')
+      .get(id) as Row | undefined
+    return row ? toPost(row) : null
+  }
+
+  update(id: string, patch: UpdateCapturedPostPatch): CapturedPost | null {
+    const current = this.findById(id)
+    if (!current) return null
+    const next: CapturedPost = { ...current, ...patch }
+    this.db
+      .prepare(`
+        UPDATE captured_posts SET
+          caption = ?,
+          likes = ?,
+          comments = ?,
+          posted_at = ?,
+          media_kind = ?,
+          media_url = ?,
+          carousel_count = ?,
+          raw = ?
+        WHERE id = ?
+      `)
+      .run(
+        next.caption ?? null,
+        next.likes ?? null,
+        next.comments ?? null,
+        next.postedAt ?? null,
+        next.mediaKind ?? null,
+        next.mediaUrl ?? null,
+        next.carouselCount ?? null,
+        next.raw ? JSON.stringify(next.raw) : null,
+        id,
+      )
+    return next
+  }
+
+  delete(id: string): CapturedPost | null {
+    const current = this.findById(id)
+    if (!current) return null
+    this.db.prepare('DELETE FROM captured_posts WHERE id = ?').run(id)
+    return current
   }
 
   countForCompetitor(competitorId: string): number {

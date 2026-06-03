@@ -2,26 +2,38 @@ import { useEffect, useState } from 'react'
 import {
   ArrowDownToLineIcon,
   ArrowUpRightIcon,
+  CalendarIcon,
   ChevronDownIcon,
+  Edit3Icon,
   GalleryHorizontalEndIcon,
   GalleryVerticalEndIcon,
   HeartIcon,
   ImageIcon,
-  ListIcon,
   MessageCircleIcon,
   PlayIcon,
   RefreshCwIcon,
   SearchIcon,
   Square as SquareIcon,
   StarIcon,
+  Table2Icon,
+  Trash2Icon,
+  XIcon,
 } from 'lucide-react'
 
 import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
 
-import { captureCompetitor, listPosts } from '@/api'
+import { captureCompetitor, deletePost, listPosts, updatePost } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type Format = 'carousel' | 'reel' | 'static'
 
@@ -39,6 +51,7 @@ interface CardModel {
   tint: string
   postUrl?: string
   mediaUrl?: string
+  post?: CapturedPostSummary
 }
 
 /* Brand-aligned mid-tone backdrops per handle, used for both real
@@ -185,18 +198,6 @@ function MediaPane({
   )
 }
 
-function FilterPill({ label, value }: { label: string; value: string }) {
-  return (
-    <button
-      type='button'
-      className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_32%,var(--border))]'
-    >
-      {label}: <span className='font-medium text-foreground'>{value}</span>
-      <ChevronDownIcon className='size-3' strokeWidth={2} />
-    </button>
-  )
-}
-
 type CaptureProgress = {
   done: number
   total: number
@@ -216,8 +217,13 @@ export function ContentPage() {
   const [capturing, setCapturing] = useState<CaptureProgress | null>(null)
   const [selectionOpen, setSelectionOpen] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
-  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [view, setView] = useState<'grid' | 'table'>('grid')
   const [stars, setStars] = useState<Record<string, boolean>>({})
+  const [query, setQuery] = useState('')
+  const [competitorFilter, setCompetitorFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [editingPost, setEditingPost] = useState<CapturedPostSummary | null>(null)
 
   async function refresh() {
     setBusy(true)
@@ -238,6 +244,46 @@ export function ContentPage() {
 
   function toggleStar(key: string) {
     setStars((s) => ({ ...s, [key]: !s[key] }))
+  }
+
+  async function handleDeletePost(post: CapturedPostSummary) {
+    const ok = window.confirm('Delete this captured post?')
+    if (!ok) return
+    setBanner(null)
+    try {
+      await deletePost(post.id)
+      await refresh()
+      setBanner({ kind: 'success', message: 'Deleted captured post.' })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not delete post.',
+      })
+    }
+  }
+
+  async function handleSavePost(patch: Partial<CapturedPostSummary>) {
+    if (!editingPost) return
+    setBanner(null)
+    try {
+      await updatePost(editingPost.id, {
+        caption: patch.caption,
+        likes: patch.likes,
+        comments: patch.comments,
+        postedAt: patch.postedAt,
+        mediaKind: patch.mediaKind,
+        mediaUrl: patch.mediaUrl,
+        carouselCount: patch.carouselCount,
+      })
+      setEditingPost(null)
+      await refresh()
+      setBanner({ kind: 'success', message: 'Updated captured post.' })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not update post.',
+      })
+    }
   }
 
   async function handleCaptureFor(
@@ -302,8 +348,16 @@ export function ContentPage() {
   }
 
   const usingMock = (posts ?? []).length === 0
-  const cards = usingMock ? MOCK_CARDS : posts!.map(realPostToCard)
+  const allCards = usingMock ? MOCK_CARDS : posts!.map(realPostToCard)
+  const cards = allCards.filter((card) => matchesFilters(card, {
+    query,
+    competitor: competitorFilter,
+    dateFrom,
+    dateTo,
+  }))
+  const competitors = [...new Set(allCards.map((card) => card.handle))].sort()
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
+  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -372,19 +426,65 @@ export function ContentPage() {
 
         {/* Sticky filter rail */}
         <div className='sticky top-0 z-[5] -mx-1 bg-background pb-3.5 pt-[18px]'>
-          <div className='flex h-14 items-center gap-2 rounded-md border border-border bg-card px-3'>
-            <label className='mr-1.5 flex min-w-0 flex-[0_1_280px] items-center gap-2 text-muted-foreground'>
+          <div className='flex min-h-14 flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2'>
+            <label className='mr-1.5 flex min-w-[220px] flex-[1_1_280px] items-center gap-2 text-muted-foreground'>
               <SearchIcon className='size-[15px]' strokeWidth={2} />
               <input
                 type='text'
-                placeholder='Search captions, handles, hooks…'
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder='Search captions, handles…'
                 className='min-w-0 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-muted-foreground'
               />
             </label>
-            <FilterPill label='Competitor' value='All' />
-            <FilterPill label='Format' value='All' />
-            <FilterPill label='Hook' value='All' />
-            <FilterPill label='In index' value='Any' />
+            <label className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground'>
+              Competitor
+              <select
+                value={competitorFilter}
+                onChange={(e) => setCompetitorFilter(e.target.value)}
+                className='bg-transparent font-medium text-foreground outline-none'
+              >
+                <option value='all'>All</option>
+                {competitors.map((handle) => (
+                  <option key={handle} value={handle}>{handle}</option>
+                ))}
+              </select>
+              <ChevronDownIcon className='size-3' strokeWidth={2} />
+            </label>
+            <label className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground'>
+              <CalendarIcon className='size-3.5' strokeWidth={2} />
+              From
+              <input
+                type='date'
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className='bg-transparent font-mono text-[12px] text-foreground outline-none'
+              />
+            </label>
+            <label className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground'>
+              To
+              <input
+                type='date'
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className='bg-transparent font-mono text-[12px] text-foreground outline-none'
+              />
+            </label>
+            {filtersActive && (
+              <button
+                type='button'
+                onClick={() => {
+                  setQuery('')
+                  setCompetitorFilter('all')
+                  setDateFrom('')
+                  setDateTo('')
+                }}
+                className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+              >
+                <XIcon className='size-3.5' strokeWidth={2} />
+                Clear
+              </button>
+            )}
 
             <div className='ml-auto inline-flex gap-0.5 rounded-md border border-border bg-background p-[3px]'>
               <button
@@ -403,85 +503,48 @@ export function ContentPage() {
               </button>
               <button
                 type='button'
-                onClick={() => setView('list')}
-                aria-pressed={view === 'list'}
+                onClick={() => setView('table')}
+                aria-pressed={view === 'table'}
                 className={cn(
                   'flex size-8 items-center justify-center rounded-[5px] transition-colors',
-                  view === 'list'
+                  view === 'table'
                     ? 'bg-card text-[var(--anubis-gold)] shadow-[inset_0_-2px_0_var(--anubis-gold)]'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
-                aria-label='List view'
+                aria-label='Table view'
               >
-                <ListIcon className='size-[15px]' strokeWidth={2} />
+                <Table2Icon className='size-[15px]' strokeWidth={2} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Card grid */}
-        <div className='grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4'>
-          {cards.map((card) => (
-            <article
-              key={card.key}
-              className={cn(
-                'group overflow-hidden rounded-[13px] border border-border bg-card transition-all',
-                'hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
-              )}
-            >
-              <MediaPane card={card} starred={!!stars[card.key]} onStar={() => toggleStar(card.key)} />
-
-              <div className='p-3'>
-                <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
-                  {card.postUrl ? (
-                    <a
-                      href={card.postUrl}
-                      target='_blank'
-                      rel='noreferrer'
-                      className='truncate hover:underline'
-                    >
-                      {card.handle}
-                    </a>
-                  ) : (
-                    <span className='truncate'>{card.handle}</span>
-                  )}
-                  <span className='text-muted-foreground'>·</span>
-                  <span className='shrink-0 text-muted-foreground'>{card.date}</span>
-                </div>
-                <p className='mt-2 line-clamp-2 min-h-[38px] text-[13px] leading-[1.45] text-foreground'>
-                  {card.caption}
-                </p>
-                <div className='mt-2.5 flex items-center gap-3.5 text-[11px] text-muted-foreground tabular-nums'>
-                  <span className='inline-flex items-center gap-1.5'>
-                    <HeartIcon className='size-[13px]' strokeWidth={2} />
-                    {card.likes}
-                  </span>
-                  <span className='inline-flex items-center gap-1.5'>
-                    <MessageCircleIcon className='size-[13px]' strokeWidth={2} />
-                    {card.comments}
-                  </span>
-                  {card.engagement && (
-                    <span className='inline-flex items-center gap-1.5'>
-                      <ArrowUpRightIcon className='size-[13px]' strokeWidth={2} />
-                      {card.engagement}
-                    </span>
-                  )}
-                </div>
-                {card.hook && (
-                  <span className='mt-2.5 inline-flex h-[21px] items-center rounded-md bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground'>
-                    Hook: {card.hook}
-                  </span>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-
-        {view === 'list' && (
-          <p className='mt-6 flex items-center justify-center gap-2 text-[12px] text-muted-foreground'>
-            <ImageIcon className='size-3.5' strokeWidth={2} />
-            List view coming soon — keep the grid for now.
-          </p>
+        {cards.length === 0 ? (
+          <div className='mt-8 flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center'>
+            <ImageIcon className='size-6 text-muted-foreground' strokeWidth={1.5} />
+            <p className='text-[13px] text-muted-foreground'>No content matches these filters.</p>
+          </div>
+        ) : view === 'grid' ? (
+          <div className='grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4'>
+            {cards.map((card) => (
+              <PostCard
+                key={card.key}
+                card={card}
+                starred={!!stars[card.key]}
+                onStar={() => toggleStar(card.key)}
+                onEdit={card.post ? () => setEditingPost(card.post!) : undefined}
+                onDelete={card.post ? () => void handleDeletePost(card.post!) : undefined}
+              />
+            ))}
+          </div>
+        ) : (
+          <PostTable
+            cards={cards}
+            stars={stars}
+            onStar={toggleStar}
+            onEdit={(post) => setEditingPost(post)}
+            onDelete={(post) => void handleDeletePost(post)}
+          />
         )}
       </div>
 
@@ -493,11 +556,321 @@ export function ContentPage() {
           void handleCaptureFor(picked, options)
         }}
       />
+
+      <EditPostDialog
+        post={editingPost}
+        onClose={() => setEditingPost(null)}
+        onSave={(patch) => void handleSavePost(patch)}
+      />
     </div>
   )
 }
 
 /* ---------- Converters ---------- */
+
+function PostCard({
+  card,
+  starred,
+  onStar,
+  onEdit,
+  onDelete,
+}: {
+  card: CardModel
+  starred: boolean
+  onStar: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+}) {
+  return (
+    <article
+      className={cn(
+        'group overflow-hidden rounded-[13px] border border-border bg-card transition-all',
+        'hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
+      )}
+    >
+      <MediaPane card={card} starred={starred} onStar={onStar} />
+
+      <div className='p-3'>
+        <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
+          {card.postUrl ? (
+            <a
+              href={card.postUrl}
+              target='_blank'
+              rel='noreferrer'
+              className='truncate hover:underline'
+            >
+              {card.handle}
+            </a>
+          ) : (
+            <span className='truncate'>{card.handle}</span>
+          )}
+          <span className='text-muted-foreground'>·</span>
+          <span className='shrink-0 text-muted-foreground'>{card.date}</span>
+        </div>
+        <p className='mt-2 line-clamp-2 min-h-[38px] text-[13px] leading-[1.45] text-foreground'>
+          {card.caption}
+        </p>
+        <div className='mt-2.5 flex items-center gap-3.5 text-[11px] text-muted-foreground tabular-nums'>
+          <span className='inline-flex items-center gap-1.5'>
+            <HeartIcon className='size-[13px]' strokeWidth={2} />
+            {card.likes}
+          </span>
+          <span className='inline-flex items-center gap-1.5'>
+            <MessageCircleIcon className='size-[13px]' strokeWidth={2} />
+            {card.comments}
+          </span>
+          {card.engagement && (
+            <span className='inline-flex items-center gap-1.5'>
+              <ArrowUpRightIcon className='size-[13px]' strokeWidth={2} />
+              {card.engagement}
+            </span>
+          )}
+        </div>
+        <div className='mt-2.5 flex min-h-[28px] items-center justify-between gap-2'>
+          {card.hook ? (
+            <span className='inline-flex h-[21px] items-center rounded-md bg-muted px-2 text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground'>
+              Hook: {card.hook}
+            </span>
+          ) : (
+            <span />
+          )}
+          {card.post && (
+            <div className='flex items-center gap-1'>
+              <IconButton label='Edit post' onClick={onEdit}>
+                <Edit3Icon className='size-3.5' strokeWidth={2} />
+              </IconButton>
+              <IconButton label='Delete post' onClick={onDelete} destructive>
+                <Trash2Icon className='size-3.5' strokeWidth={2} />
+              </IconButton>
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function PostTable({
+  cards,
+  stars,
+  onStar,
+  onEdit,
+  onDelete,
+}: {
+  cards: CardModel[]
+  stars: Record<string, boolean>
+  onStar: (key: string) => void
+  onEdit: (post: CapturedPostSummary) => void
+  onDelete: (post: CapturedPostSummary) => void
+}) {
+  return (
+    <div className='overflow-hidden rounded-md border border-border bg-card'>
+      <div className='overflow-x-auto'>
+        <table className='w-full min-w-[860px] border-collapse text-left text-[13px]'>
+          <thead className='border-b border-border bg-background/50 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground'>
+            <tr>
+              <th className='px-3 py-2.5 font-medium'>Content</th>
+              <th className='px-3 py-2.5 font-medium'>Competitor</th>
+              <th className='px-3 py-2.5 font-medium'>Date</th>
+              <th className='px-3 py-2.5 font-medium'>Format</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Likes</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Comments</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.key} className='border-b border-border/70 last:border-0'>
+                <td className='max-w-[360px] px-3 py-3'>
+                  <p className='line-clamp-2 leading-relaxed text-foreground'>{card.caption}</p>
+                </td>
+                <td className='px-3 py-3 font-mono text-[12px] text-foreground'>{card.handle}</td>
+                <td className='px-3 py-3 font-mono text-[12px] text-muted-foreground'>{card.date}</td>
+                <td className='px-3 py-3 text-muted-foreground'>{card.chip}</td>
+                <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.likes}</td>
+                <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.comments}</td>
+                <td className='px-3 py-3'>
+                  <div className='flex justify-end gap-1'>
+                    <IconButton label='Toggle similarity index' onClick={() => onStar(card.key)}>
+                      <StarIcon
+                        className='size-3.5'
+                        strokeWidth={2}
+                        fill={stars[card.key] ? 'currentColor' : 'none'}
+                      />
+                    </IconButton>
+                    {card.post && (
+                      <>
+                        <IconButton label='Edit post' onClick={() => onEdit(card.post!)}>
+                          <Edit3Icon className='size-3.5' strokeWidth={2} />
+                        </IconButton>
+                        <IconButton label='Delete post' onClick={() => onDelete(card.post!)} destructive>
+                          <Trash2Icon className='size-3.5' strokeWidth={2} />
+                        </IconButton>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function IconButton({
+  label,
+  onClick,
+  destructive,
+  children,
+}: {
+  label: string
+  onClick?: () => void
+  destructive?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type='button'
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={!onClick}
+      className={cn(
+        'inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors disabled:opacity-40',
+        destructive
+          ? 'hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive'
+          : 'hover:bg-muted hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function EditPostDialog({
+  post,
+  onClose,
+  onSave,
+}: {
+  post: CapturedPostSummary | null
+  onClose: () => void
+  onSave: (patch: Partial<CapturedPostSummary>) => void
+}) {
+  const [caption, setCaption] = useState('')
+  const [likes, setLikes] = useState('')
+  const [comments, setComments] = useState('')
+  const [postedAt, setPostedAt] = useState('')
+  const [mediaKind, setMediaKind] = useState<CapturedPostSummary['mediaKind']>('image')
+  const [mediaUrl, setMediaUrl] = useState('')
+  const [carouselCount, setCarouselCount] = useState('')
+
+  useEffect(() => {
+    if (!post) return
+    setCaption(post.caption ?? '')
+    setLikes(post.likes === undefined ? '' : String(post.likes))
+    setComments(post.comments === undefined ? '' : String(post.comments))
+    setPostedAt(toDateInputValue(post.postedAt))
+    setMediaKind(post.mediaKind ?? 'image')
+    setMediaUrl(post.mediaUrl ?? '')
+    setCarouselCount(post.carouselCount === undefined ? '' : String(post.carouselCount))
+  }, [post])
+
+  function submit() {
+    onSave({
+      caption: caption.trim() || undefined,
+      likes: parseOptionalInt(likes),
+      comments: parseOptionalInt(comments),
+      postedAt: postedAt ? new Date(`${postedAt}T00:00:00`).toISOString() : undefined,
+      mediaKind,
+      mediaUrl: mediaUrl.trim() || undefined,
+      carouselCount: mediaKind === 'carousel' ? parseOptionalInt(carouselCount) : undefined,
+    })
+  }
+
+  return (
+    <Dialog open={!!post} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className='max-w-lg bg-card p-0'>
+        <DialogHeader className='border-b border-border px-6 py-4'>
+          <DialogTitle>Edit captured post</DialogTitle>
+          <DialogDescription>
+            Update the saved caption, metrics, date, and thumbnail metadata for this captured post.
+          </DialogDescription>
+        </DialogHeader>
+        <div className='flex flex-col gap-4 px-6 py-5'>
+          <Field label='Caption' htmlFor='post-caption'>
+            <textarea
+              id='post-caption'
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={4}
+              className={`${textInput} h-auto resize-none py-2 leading-relaxed`}
+            />
+          </Field>
+          <div className='grid grid-cols-2 gap-3'>
+            <Field label='Likes' htmlFor='post-likes'>
+              <input id='post-likes' type='number' min={0} value={likes} onChange={(e) => setLikes(e.target.value)} className={textInput} />
+            </Field>
+            <Field label='Comments' htmlFor='post-comments'>
+              <input id='post-comments' type='number' min={0} value={comments} onChange={(e) => setComments(e.target.value)} className={textInput} />
+            </Field>
+          </div>
+          <div className='grid grid-cols-2 gap-3'>
+            <Field label='Posted date' htmlFor='post-date'>
+              <input id='post-date' type='date' value={postedAt} onChange={(e) => setPostedAt(e.target.value)} className={textInput} />
+            </Field>
+            <Field label='Format' htmlFor='post-kind'>
+              <select id='post-kind' value={mediaKind} onChange={(e) => setMediaKind(e.target.value as CapturedPostSummary['mediaKind'])} className={textInput}>
+                <option value='image'>Image</option>
+                <option value='video'>Video</option>
+                <option value='carousel'>Carousel</option>
+              </select>
+            </Field>
+          </div>
+          <Field label='Media URL' htmlFor='post-media'>
+            <input id='post-media' type='url' value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} className={textInput} />
+          </Field>
+          {mediaKind === 'carousel' && (
+            <Field label='Carousel count' htmlFor='post-carousel'>
+              <input id='post-carousel' type='number' min={0} value={carouselCount} onChange={(e) => setCarouselCount(e.target.value)} className={textInput} />
+            </Field>
+          )}
+        </div>
+        <DialogFooter className='border-t border-border px-6 py-3'>
+          <button type='button' onClick={onClose} className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'>
+            Cancel
+          </button>
+          <button type='button' onClick={submit} className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'>
+            Save changes
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string
+  htmlFor: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className='flex flex-col gap-1.5'>
+      <label htmlFor={htmlFor} className='text-[12.5px] font-medium text-foreground'>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+const textInput =
+  'h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))] focus:ring-1 focus:ring-[var(--anubis-gold-hi)]'
 
 /* ---------- Progress + banner panels ---------- */
 
@@ -617,7 +990,55 @@ function realPostToCard(p: CapturedPostSummary): CardModel {
     tint: p.competitorTint ?? HANDLE_TINTS[handle] ?? '#565B63',
     postUrl: p.postUrl,
     mediaUrl: p.mediaUrl,
+    post: p,
   }
+}
+
+function matchesFilters(
+  card: CardModel,
+  filters: {
+    query: string
+    competitor: string
+    dateFrom: string
+    dateTo: string
+  },
+): boolean {
+  const q = filters.query.trim().toLowerCase()
+  if (q) {
+    const haystack = `${card.caption} ${card.handle} ${card.hook ?? ''}`.toLowerCase()
+    if (!haystack.includes(q)) return false
+  }
+  if (filters.competitor !== 'all' && card.handle !== filters.competitor) return false
+
+  if (filters.dateFrom || filters.dateTo) {
+    const ms = card.post ? postTimeMs(card.post) : undefined
+    if (ms === undefined) return true
+    if (filters.dateFrom && ms < new Date(`${filters.dateFrom}T00:00:00`).getTime()) return false
+    if (filters.dateTo && ms > new Date(`${filters.dateTo}T23:59:59.999`).getTime()) return false
+  }
+
+  return true
+}
+
+function postTimeMs(post: CapturedPostSummary): number | undefined {
+  if (post.postedAt) {
+    const posted = Date.parse(post.postedAt)
+    if (!Number.isNaN(posted)) return posted
+  }
+  return post.capturedAt
+}
+
+function toDateInputValue(iso: string | undefined): string {
+  if (!iso) return ''
+  const ms = Date.parse(iso)
+  if (Number.isNaN(ms)) return ''
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
+function parseOptionalInt(value: string): number | undefined {
+  if (!value.trim()) return undefined
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : undefined
 }
 
 function formatBigNumber(n: number | undefined): string {

@@ -75,6 +75,29 @@ describe('CapturedPostsRepo', () => {
     expect(repo.countAll()).toBe(3)
   })
 
+  it('update patches editable fields without changing ownership', () => {
+    repo.upsert(post(competitorId, '/p/A', 1))
+    const id = repo.list({ competitorId })[0]!.id
+    const updated = repo.update(id, {
+      caption: 'Edited',
+      likes: 42,
+      mediaKind: 'video',
+    })
+    expect(updated?.competitorId).toBe(competitorId)
+    expect(updated?.caption).toBe('Edited')
+    expect(updated?.likes).toBe(42)
+    expect(updated?.mediaKind).toBe('video')
+  })
+
+  it('delete removes one captured post by id', () => {
+    repo.upsert(post(competitorId, '/p/A', 1))
+    repo.upsert(post(competitorId, '/p/B', 2))
+    const id = repo.list({ competitorId }).find((p) => p.postUrl === '/p/A')!.id
+    expect(repo.delete(id)?.postUrl).toBe('/p/A')
+    expect(repo.countForCompetitor(competitorId)).toBe(1)
+    expect(repo.delete(id)).toBeNull()
+  })
+
   it('markRefreshedAt updates lastRefreshedAt without touching other fields', () => {
     const svc = new CompetitorsService(new CompetitorsRepo(db))
     svc.update(competitorId, { followers: 1_000 })

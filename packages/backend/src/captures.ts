@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
-  applyAvgLikesToOutput,
   captureInstagramData,
   silentReporter,
   type PostData,
@@ -10,20 +9,15 @@ import {
   type StandardCrawlerOutput,
 } from '@anubis/research-crawler'
 import type { CapturedPost } from '@anubis/conversation'
-import { getStack, ensureExtensionStarted, getJobQueue } from './services.js'
-import { mapExtensionError } from './extension/error-mapping.js'
+import { getDataDir, getStack } from './services.js'
+import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 
 /* -----------------------------------------------------------
    Capture orchestration
    -----------------------------------------------------------
    POST /captures/competitors/:id
-     - profile=login  → dispatch to the Anubis extension. The
-                        extension scrapes IG inside the user's
-                        real session and posts back raw
-                        ProfileData + PostData. We synthesize a
-                        StandardCrawlerOutput and run avg-likes
-                        backend-side so persistence + competitor
-                        stats stay identical.
+     - profile=login  → CDP crawler using the user's logged-in
+                        Chrome profile.
      - profile=public → existing CDP scraper (anonymous mode).
      - profile=flow   → existing CDP scraper.
 
@@ -52,49 +46,28 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const cfg = stack.appConfig.get()
 
   let result: StandardCrawlerOutput
-  if (selectedProfile === 'login') {
-    await ensureExtensionStarted()
-    const queue = getJobQueue()
-    if (!queue) {
-      return c.json(
-        { ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Extension queue not ready.' } },
-        503,
-      )
-    }
-    try {
-      const data = await queue.dispatch({
-        kind: 'capture-profile',
-        input: { username: usernameNoAt, maxResponses: body.maxResponses ?? 30 },
-        timeoutMs: body.timeoutMs ?? 90_000,
-      }) as { profiles: ProfileData[]; posts: PostData[] }
-      result = synthStandardOutput(data, usernameNoAt, body.maxResponses ?? 30)
-    } catch (e) {
-      return mapExtensionError(c, e)
-    }
-  } else {
-    try {
-      result = await captureInstagramData({
-        username: usernameNoAt,
-        profile: selectedProfile,
-        chromePath: cfg.chromePath,
-        headless: body.headless,
-        forceHeadless: body.forceHeadless,
-        maxResponses: body.maxResponses ?? 30,
-        timeoutMs: body.timeoutMs ?? 90_000,
-        reporter: silentReporter(),
-      })
-    } catch (e) {
-      return c.json(
-        {
-          ok: false,
-          error: {
-            code: 'CAPTURE_FAILED',
-            message: e instanceof Error ? e.message : 'Capture threw.',
-          },
+  try {
+    result = await captureInstagramData(withCrawlerProfileDefaults({
+      username: usernameNoAt,
+      profile: selectedProfile,
+      chromePath: cfg.chromePath,
+      headless: body.headless,
+      forceHeadless: body.forceHeadless,
+      maxResponses: body.maxResponses ?? 30,
+      timeoutMs: body.timeoutMs ?? 90_000,
+      reporter: silentReporter(),
+    }, selectedProfile, cfg, getDataDir()))
+  } catch (e) {
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'CAPTURE_FAILED',
+          message: e instanceof Error ? e.message : 'Capture threw.',
         },
-        500,
-      )
-    }
+      },
+      500,
+    )
   }
 
   if (!result.ok) {
@@ -149,6 +122,16 @@ const ListQuery = z.object({
   orderBy: z.enum(['recent', 'engagement']).optional(),
 }).strict()
 
+const UpdatePostBody = z.object({
+  caption: z.string().optional(),
+  likes: z.number().int().nonnegative().optional(),
+  comments: z.number().int().nonnegative().optional(),
+  postedAt: z.string().optional(),
+  mediaKind: z.enum(['image', 'video', 'carousel']).optional(),
+  mediaUrl: z.string().optional(),
+  carouselCount: z.number().int().nonnegative().optional(),
+}).strict()
+
 export const postRoutes = new Hono()
 
 postRoutes.get('/', (c) => {
@@ -181,38 +164,24 @@ postRoutes.get('/', (c) => {
   return c.json({ ok: true, items })
 })
 
-/* ---------- helpers ---------- */
+postRoutes.patch('/:id', async (c) => {
+  const stack = getStack()
+  const body = UpdatePostBody.parse(await c.req.json())
+  const post = stack.capturedPosts.update(c.req.param('id'), body)
+  if (!post) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, post: enrichPost(post) })
+})
 
-/**
- * Wraps extension-returned raw posts in the StandardCrawlerOutput
- * shape the downstream persistence + avg-likes code expects, then
- * runs the modal-cluster-mean over the posts so the resulting
- * meta.avgLikes matches the CDP path exactly.
- */
-function synthStandardOutput(
-  data: { profiles: ProfileData[]; posts: PostData[] },
-  username: string,
-  maxResponses: number,
-): StandardCrawlerOutput {
-  const out: StandardCrawlerOutput = {
-    ok: true,
-    schemaVersion: '1.0',
-    outputTypes: ['Profile Data List', 'Post Data List'],
-    input: {
-      target: 'instagram',
-      mode: 'profile_capture',
-      username,
-      maxResponses,
-    },
-    output: { profiles: data.profiles, posts: data.posts },
-    meta: {
-      profileCount: data.profiles.length,
-      postCount: data.posts.length,
-      warnings: [],
-    },
-  }
-  return applyAvgLikesToOutput(out)
-}
+postRoutes.delete('/:id', (c) => {
+  const stack = getStack()
+  const post = stack.capturedPosts.delete(c.req.param('id'))
+  if (!post) return c.json({ ok: false, error: 'not_found' }, 404)
+  const count = stack.capturedPosts.countForCompetitor(post.competitorId)
+  stack.competitors.update(post.competitorId, { postCount: count })
+  return c.json({ ok: true })
+})
+
+/* ---------- helpers ---------- */
 
 function postDataToCapturedPost(
   competitorId: string,
@@ -244,4 +213,13 @@ function deriveDisplayName(
   profile: ProfileData | undefined,
 ): string | undefined {
   return profile?.fullName?.trim() || existing
+}
+
+function enrichPost(post: CapturedPost) {
+  const owner = getStack().competitors.get(post.competitorId)
+  return {
+    ...post,
+    competitorHandle: owner?.handle,
+    competitorTint: owner?.tint,
+  }
 }

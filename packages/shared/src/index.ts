@@ -146,6 +146,16 @@ export interface UpdateCompetitorInput {
   notes?: string
 }
 
+export interface UpdateCapturedPostInput {
+  caption?: string
+  likes?: number
+  comments?: number
+  postedAt?: string
+  mediaKind?: 'image' | 'video' | 'carousel'
+  mediaUrl?: string
+  carouselCount?: number
+}
+
 /* Discovery — surfaces adjacent IG profiles to add as competitors. */
 export type DiscoverySource = 'explore' | 'hashtag' | 'keyword'
 
@@ -164,20 +174,8 @@ export interface DiscoverCompetitorsInput {
 export interface AppConfig {
   /** Path to chrome.exe / Chrome binary, when not on PATH. */
   chromePath?: string
-  /** Shared secret with the Anubis Chrome extension. Auto-generated on first run. */
-  extensionSecret?: string
-  /** WS port the backend bound to (47891–47900). */
-  extensionPort?: number
-  /** Epoch ms of the most recent successful extension `hello`. */
-  extensionPairedAt?: number
-}
-
-export interface ExtensionStatus {
-  connected: boolean
-  extensionVersion?: string
-  pairedAt?: number
-  port: number
-  dataDirPath: string
+  /** Optional research-crawler project/data root whose Chrome profiles should be reused. */
+  crawlerProfileRoot?: string
 }
 
 export interface DiscoveredCandidate {

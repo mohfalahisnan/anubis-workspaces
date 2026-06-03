@@ -4,7 +4,6 @@ import type {
   AppConfig,
   CapturedPostListResponse,
   CapturedPostSummary,
-  ExtensionStatus,
   CaptureResultPayload,
   CompetitorListResponse,
   CompetitorSummary,
@@ -26,6 +25,7 @@ import type {
   SkillListResponse,
   SkillSummary,
   UpdateCompetitorInput,
+  UpdateCapturedPostInput,
   UpdateCronJobInput,
 } from '@anubis/shared'
 
@@ -110,23 +110,6 @@ export async function updateAppConfig(patch: AppConfig): Promise<AppConfig> {
     body: JSON.stringify(patch),
   })
   return r.config
-}
-
-/* ---------- Extension pairing ---------- */
-
-export async function getExtensionStatus(): Promise<ExtensionStatus> {
-  const r = await api<{ ok: true; status: ExtensionStatus }>('/extension/status')
-  return r.status
-}
-
-export async function revealExtensionSecret(): Promise<string> {
-  const r = await api<{ ok: true; secret: string }>('/extension/secret/reveal', { method: 'POST' })
-  return r.secret
-}
-
-export async function rotateExtensionSecret(): Promise<string> {
-  const r = await api<{ ok: true; secret: string }>('/extension/secret/rotate', { method: 'POST' })
-  return r.secret
 }
 
 /* ---------- Profiles ---------- */
@@ -382,6 +365,29 @@ export interface CaptureOptions {
   timeoutMs?: number
 }
 
+export interface OpenCrawlerChromeResult {
+  ok: true
+  pid: number | null
+  reused: boolean
+  remoteDebuggingPort: number
+  profile: 'login' | 'public' | 'flow'
+  profileDir: string
+  url: string
+  headless: boolean
+  warnings: string[]
+}
+
+export async function openInstagramLoginChrome(): Promise<OpenCrawlerChromeResult> {
+  return api<OpenCrawlerChromeResult>('/research-crawler/chrome/open', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile: 'login',
+      headless: false,
+      url: 'https://www.instagram.com/',
+    }),
+  })
+}
+
 export async function captureCompetitor(
   id: string,
   options: CaptureOptions = {},
@@ -463,4 +469,21 @@ export async function listPosts(
   const path = qs ? `/posts?${qs}` : '/posts'
   const r = await api<CapturedPostListResponse>(path)
   return r.items
+}
+
+export async function updatePost(
+  id: string,
+  patch: UpdateCapturedPostInput,
+): Promise<CapturedPostSummary> {
+  const r = await api<{ ok: true; post: CapturedPostSummary }>(
+    `/posts/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.post
+}
+
+export async function deletePost(id: string): Promise<void> {
+  await api<{ ok: true }>(`/posts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
 }

@@ -21,6 +21,8 @@ import { ScheduledPage } from '@/pages/scheduled'
 import { SettingsPage } from '@/pages/settings'
 import { SkillsPage } from '@/pages/skills'
 import { WorkflowDemoPage } from '@/components/workflow'
+import { WorkflowsPage } from '@/pages/workflows'
+import { WorkflowEditorPage } from '@/pages/workflow-editor'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -209,6 +211,10 @@ function CurrentPage() {
       return <SettingsPage />
     case 'workflow-demo':
       return <WorkflowDemoPage />
+    case 'workflows':
+      return <WorkflowsPage />
+    case 'workflow-editor':
+      return <WorkflowEditorPage workflowId={route.workflowId} />
     default:
       return <HomePage />
   }

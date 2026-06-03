@@ -35,7 +35,7 @@ export const navItems: NavItem[] = [
   { label: 'Profiles', icon: SlidersHorizontalIcon, page: 'profiles' },
   { label: 'Skills', icon: LibraryIcon, page: 'skills' },
   { label: 'Scheduled', icon: CalendarClockIcon, page: 'scheduled' },
-  { label: 'Workflow demo', icon: WorkflowIcon, page: 'workflow-demo' },
+  { label: 'Workflows', icon: WorkflowIcon, page: 'workflows' },
   { label: 'Settings', icon: Settings2Icon, page: 'settings' },
 ]
 

@@ -10,6 +10,7 @@ import {
 } from '@anubis/research-crawler'
 import type { CapturedPost } from '@anubis/conversation'
 import { getStack } from './services.js'
+import { ensureFreshLoginChrome } from './chrome-guard.js'
 
 /* -----------------------------------------------------------
    Capture orchestration
@@ -61,13 +62,22 @@ captureRoutes.post('/competitors/:id', async (c) => {
   // to any profile if set.
   const cfg = stack.appConfig.get()
   const selectedProfile = body.profile ?? 'public'
+  const effectiveProfileDir =
+    selectedProfile === 'login' ? cfg.loginProfileDir : undefined
+
+  // Kill any stale Chrome on the login port whose profile dir doesn't
+  // match what we want — otherwise launchChrome would silently reuse
+  // the wrong one. No-op when the running Chrome is already correct.
+  if (selectedProfile === 'login') {
+    await ensureFreshLoginChrome(effectiveProfileDir)
+  }
 
   let result: StandardCrawlerOutput
   try {
     result = await captureInstagramData({
       username: usernameNoAt,
       profile: selectedProfile,
-      profileDir: selectedProfile === 'login' ? cfg.loginProfileDir : undefined,
+      profileDir: effectiveProfileDir,
       chromePath: cfg.chromePath,
       headless: body.headless,
       forceHeadless: body.forceHeadless,

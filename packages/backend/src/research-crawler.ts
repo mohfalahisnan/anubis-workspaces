@@ -7,6 +7,7 @@ import {
   silentReporter,
 } from '@anubis/research-crawler'
 import { getStack } from './services.js'
+import { ensureFreshLoginChrome } from './chrome-guard.js'
 
 const profileSchema = z.enum(['login', 'public', 'flow'])
 
@@ -102,16 +103,22 @@ function withOverrides<T extends { profileDir?: string; chromePath?: string }>(
 
 researchCrawlerRoutes.post('/chrome/open', async (c) => {
   const input = openChromeSchema.parse(await c.req.json())
-  const overrides = configOverrides(input.profile)
-  return c.json(await launchChrome(withOverrides(input, overrides)))
+  const merged = withOverrides(input, configOverrides(input.profile))
+  if (input.profile === 'login') {
+    await ensureFreshLoginChrome(merged.profileDir)
+  }
+  return c.json(await launchChrome(merged))
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
   const input = captureInstagramProfileSchema.parse(await c.req.json())
-  const overrides = configOverrides(input.profile)
+  const merged = withOverrides(input, configOverrides(input.profile))
+  if (input.profile === 'login') {
+    await ensureFreshLoginChrome(merged.profileDir)
+  }
   return c.json(
     await captureInstagramData({
-      ...withOverrides(input, overrides),
+      ...merged,
       reporter: silentReporter(),
     }),
   )
@@ -119,10 +126,13 @@ researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
 
 researchCrawlerRoutes.post('/instagram/discover', async (c) => {
   const input = discoverInstagramSchema.parse(await c.req.json())
-  const overrides = configOverrides(input.profile)
+  const merged = withOverrides(input, configOverrides(input.profile))
+  if (input.profile === 'login') {
+    await ensureFreshLoginChrome(merged.profileDir)
+  }
   return c.json(
     await discoverInstagramCompetitors({
-      ...withOverrides(input, overrides),
+      ...merged,
       reporter: silentReporter(),
     }),
   )

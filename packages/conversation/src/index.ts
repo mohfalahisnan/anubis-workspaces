@@ -126,6 +126,13 @@ export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 export type { AppConfig } from './config/app-config.js'
 export { AppConfigService } from './config/app-config.js'
 export { ConversationService, NoCredentialsError } from './conversations/conversation-service.js'
+export {
+  ensureAgentHome,
+  envFor,
+  hasCredentials,
+  homePathFor,
+  CREDENTIAL_FILE,
+} from './profiles/agent-home.js'
 export { ProfileService } from './profiles/profile-service.js'
 export { CompetitorsService } from './competitors/competitors-service.js'
 export { SkillLoader } from './skills/loader.js'

@@ -1,5 +1,10 @@
 import { serve } from '@hono/node-server'
+import { createNodeWebSocket } from '@hono/node-ws'
 import app from './app.js'
+import { registerLoginPty } from './login-pty.js'
+
+const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app })
+registerLoginPty(app, upgradeWebSocket)
 
 const hostname = process.env.ANUBIS_BACKEND_HOST ?? '127.0.0.1'
 const requestedPort = Number(process.env.ANUBIS_BACKEND_PORT ?? process.env.PORT ?? 0)
@@ -17,6 +22,8 @@ const server = serve(
     console.log(JSON.stringify(readyMessage))
   },
 )
+
+injectWebSocket(server)
 
 function shutdown() {
   server.close(() => {

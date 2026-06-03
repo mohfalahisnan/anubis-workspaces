@@ -282,6 +282,9 @@ export async function deleteCompetitor(id: string): Promise<void> {
 
 export interface CaptureOptions {
   profile?: 'login' | 'public' | 'flow'
+  headless?: boolean
+  /** Required when running the 'login' profile headless. */
+  forceHeadless?: boolean
   maxResponses?: number
   timeoutMs?: number
 }
@@ -339,6 +342,8 @@ export async function discoverCompetitors(
       targetCompetitors: input.targetCompetitors,
       timeoutMs: input.timeoutMs,
       profile: input.profile,
+      headless: input.headless,
+      forceHeadless: input.forceHeadless,
     }),
   })
   if (!r.ok) {

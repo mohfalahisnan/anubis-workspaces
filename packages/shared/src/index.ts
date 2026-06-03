@@ -150,6 +150,9 @@ export interface DiscoverCompetitorsInput {
   targetCompetitors?: number
   timeoutMs?: number
   profile?: 'login' | 'public' | 'flow'
+  headless?: boolean
+  /** Required when running the 'login' profile headless. */
+  forceHeadless?: boolean
 }
 
 export interface DiscoveredCandidate {

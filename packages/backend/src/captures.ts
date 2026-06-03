@@ -28,8 +28,16 @@ import { getStack } from './services.js'
    ----------------------------------------------------------- */
 
 const CaptureBody = z.object({
-  /** Defaults to 'public' (headless) per the crawler conventions. */
+  /** Which Chrome profile dir/port to use. Defaults to 'public'. */
   profile: z.enum(['login', 'public', 'flow']).optional(),
+  /** When true, launch Chrome headless. */
+  headless: z.boolean().optional(),
+  /**
+   * Required when running the login profile headless — the crawler
+   * normally refuses (it expects the user to be interacting). With
+   * this flag set the saved cookies are reused without a UI.
+   */
+  forceHeadless: z.boolean().optional(),
   /** Hard cap on posts returned — keeps a refresh from running away. */
   maxResponses: z.number().int().positive().max(120).optional(),
   /** Default 90s; capture can be slow especially on the first scroll. */
@@ -51,6 +59,8 @@ captureRoutes.post('/competitors/:id', async (c) => {
     result = await captureInstagramData({
       username: usernameNoAt,
       profile: body.profile ?? 'public',
+      headless: body.headless,
+      forceHeadless: body.forceHeadless,
       maxResponses: body.maxResponses ?? 30,
       timeoutMs: body.timeoutMs ?? 90_000,
       reporter: silentReporter(),

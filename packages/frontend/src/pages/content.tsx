@@ -21,7 +21,7 @@ import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
 import { captureCompetitor, listPosts } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
-import { CaptureSelectionDialog } from './competitor-dialogs'
+import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
 
 type Format = 'carousel' | 'reel' | 'static'
 
@@ -240,7 +240,10 @@ export function ContentPage() {
     setStars((s) => ({ ...s, [key]: !s[key] }))
   }
 
-  async function handleCaptureFor(competitors: CompetitorSummary[]) {
+  async function handleCaptureFor(
+    competitors: CompetitorSummary[],
+    options: CaptureRunOptions,
+  ) {
     setBanner(null)
     if (competitors.length === 0) return
 
@@ -261,7 +264,11 @@ export function ContentPage() {
         errors,
       })
       try {
-        const result = await captureCompetitor(competitor.id)
+        const result = await captureCompetitor(competitor.id, {
+          profile: options.profile,
+          headless: options.headless,
+          forceHeadless: options.forceHeadless,
+        })
         capturedSoFar += result.capturedCount
       } catch (e) {
         errors.push({
@@ -481,9 +488,9 @@ export function ContentPage() {
       <CaptureSelectionDialog
         open={selectionOpen}
         onClose={() => setSelectionOpen(false)}
-        onConfirm={(picked) => {
+        onConfirm={(picked, options) => {
           setSelectionOpen(false)
-          void handleCaptureFor(picked)
+          void handleCaptureFor(picked, options)
         }}
       />
     </div>

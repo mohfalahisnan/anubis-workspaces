@@ -40,6 +40,17 @@ import {
    shortcuts cover the common cases.
    =========================================================== */
 
+export type RunMode = 'login' | 'public'
+
+export interface CaptureRunOptions {
+  /** Which Chrome profile dir/port to use. */
+  profile: RunMode
+  /** Whether to launch Chrome headless. */
+  headless: boolean
+  /** Required only when profile=login and headless=true. */
+  forceHeadless: boolean
+}
+
 export function CaptureSelectionDialog({
   open,
   onClose,
@@ -47,11 +58,15 @@ export function CaptureSelectionDialog({
 }: {
   open: boolean
   onClose: () => void
-  onConfirm: (selected: CompetitorSummary[]) => void
+  onConfirm: (selected: CompetitorSummary[], options: CaptureRunOptions) => void
 }) {
   const [items, setItems] = useState<CompetitorSummary[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
+  // Default: anonymous + headless (current fast-default behaviour).
+  // Toggle to 'login' if you want authenticated captures.
+  const [runMode, setRunMode] = useState<RunMode>('public')
+  const [headless, setHeadless] = useState(true)
 
   useEffect(() => {
     if (!open) return
@@ -59,6 +74,8 @@ export function CaptureSelectionDialog({
     setItems(null)
     setSelected(new Set())
     setError(null)
+    setRunMode('public')
+    setHeadless(true)
     listCompetitors()
       .then((rows) => {
         if (!active) return
@@ -190,6 +207,20 @@ export function CaptureSelectionDialog({
           )}
         </div>
 
+        <div className='border-t border-border px-6 py-4'>
+          <RunOptionsPanel
+            profile={runMode}
+            headless={headless}
+            onProfileChange={(p) => {
+              setRunMode(p)
+              // Sensible default: login → window opens; public → headless.
+              setHeadless(p === 'public')
+            }}
+            onHeadlessChange={setHeadless}
+            allowProfilePick
+          />
+        </div>
+
         <DialogFooter className='border-t border-border px-6 py-3'>
           <button
             type='button'
@@ -204,7 +235,11 @@ export function CaptureSelectionDialog({
             onClick={() => {
               if (!items) return
               const picked = items.filter((c) => selected.has(c.id))
-              onConfirm(picked)
+              onConfirm(picked, {
+                profile: runMode,
+                headless,
+                forceHeadless: runMode === 'login' && headless,
+              })
             }}
             className={cn(
               'inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13.5px] font-semibold transition-colors',
@@ -238,6 +273,13 @@ interface DiscoveryFormState {
   hashtag: string
   keyword: string
   target: number
+  /**
+   * When true the crawler launches Chrome headless. Discovery is
+   * pinned to the 'login' profile (because IG's explore / hashtag /
+   * keyword pages need an authenticated session to be useful), so
+   * a headless run requires forceHeadless behind the scenes.
+   */
+  headless: boolean
 }
 
 const DEFAULT_FORM: DiscoveryFormState = {
@@ -245,6 +287,10 @@ const DEFAULT_FORM: DiscoveryFormState = {
   hashtag: '',
   keyword: '',
   target: 10,
+  // Default: open a Chrome window. The window doubles as a "the
+  // crawler is doing something" affordance and lets the user spot
+  // CAPTCHAs / rate limits if they hit.
+  headless: false,
 }
 
 export function FindCompetitorsDialog({
@@ -290,6 +336,12 @@ export function FindCompetitorsDialog({
         source: form.source,
         targetCompetitors: form.target,
         timeoutMs: 120_000,
+        // Discovery is always run against the 'login' profile —
+        // IG's explore / hashtag / keyword pages don't return
+        // useful candidates without an authenticated session.
+        profile: 'login',
+        headless: form.headless,
+        forceHeadless: form.headless,
       }
       if (form.source === 'hashtag') input.hashtag = form.hashtag.trim().replace(/^#/, '')
       if (form.source === 'keyword') input.keyword = form.keyword.trim()
@@ -434,6 +486,14 @@ export function FindCompetitorsDialog({
                   className={textInput}
                 />
               </Field>
+
+              <RunOptionsPanel
+                profile='login'
+                headless={form.headless}
+                onProfileChange={() => undefined}
+                onHeadlessChange={(headless) => setForm((f) => ({ ...f, headless }))}
+                pinnedNote='Discovery always uses your logged-in Chrome profile so explore / hashtag / keyword pages return real candidates.'
+              />
 
               {error && (
                 <p className='rounded-md border border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] px-3 py-2 text-[12.5px] text-destructive'>
@@ -605,6 +665,91 @@ export function FindCompetitorsDialog({
 }
 
 /* ---------- shared bits ---------- */
+
+/**
+ * Run options block — exposes the two knobs the user actually
+ * cares about for any crawler call:
+ *  - Profile (which Chrome dir to use, i.e. signed in vs anonymous)
+ *  - Headless (window vs background)
+ *
+ * Used by both dialogs. The discovery dialog passes
+ * `allowProfilePick={false}` (defaulted) + a `pinnedNote` so the
+ * fixed-login choice is honest rather than hidden.
+ */
+function RunOptionsPanel({
+  profile,
+  headless,
+  onProfileChange,
+  onHeadlessChange,
+  allowProfilePick = false,
+  pinnedNote,
+}: {
+  profile: RunMode
+  headless: boolean
+  onProfileChange: (p: RunMode) => void
+  onHeadlessChange: (h: boolean) => void
+  allowProfilePick?: boolean
+  pinnedNote?: string
+}) {
+  return (
+    <div className='flex flex-col gap-3 rounded-md border border-border bg-background/50 p-3.5'>
+      <div className='flex items-center justify-between gap-3'>
+        <span className='font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground'>
+          Run with
+        </span>
+        {!allowProfilePick && (
+          <span className='font-mono text-[10.5px] uppercase tracking-[0.08em] text-[var(--anubis-gold)]'>
+            Login profile
+          </span>
+        )}
+      </div>
+
+      {allowProfilePick && (
+        <div className='inline-flex w-fit gap-1 rounded-md border border-border bg-background p-1'>
+          {(['login', 'public'] as const).map((opt) => {
+            const active = opt === profile
+            return (
+              <button
+                key={opt}
+                type='button'
+                onClick={() => onProfileChange(opt)}
+                aria-pressed={active}
+                className={cn(
+                  'inline-flex h-8 items-center gap-1.5 rounded-[5px] px-3 text-[12.5px] font-medium transition-colors',
+                  active
+                    ? 'bg-card text-foreground shadow-[inset_0_-2px_0_var(--anubis-gold)]'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {opt === 'login' ? 'Logged in' : 'Anonymous'}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <label className='flex cursor-pointer select-none items-center gap-2.5 text-[12.5px] text-foreground'>
+        <input
+          type='checkbox'
+          checked={headless}
+          onChange={(e) => onHeadlessChange(e.target.checked)}
+          className='sr-only'
+        />
+        <Checkbox checked={headless} />
+        <span>Run headless</span>
+        <span className='text-[11.5px] text-muted-foreground'>
+          (no Chrome window)
+        </span>
+      </label>
+
+      {pinnedNote && (
+        <p className='text-[11.5px] leading-relaxed text-muted-foreground'>
+          {pinnedNote}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function SourceSegmented({
   value,

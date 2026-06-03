@@ -53,6 +53,15 @@ export async function ensureExtensionStarted(): Promise<void> {
     })
     if (installResult.installed) {
       console.log(`[extension] installed bundle v${installResult.installedVersion} to ${installResult.destDir}`)
+    } else if (installResult.installedVersion === null) {
+      // bundleDir was missing — nothing landed in dataDir/extension. Make
+      // this visible so a freshly-cloned checkout that never ran
+      // `pnpm --filter @anubis/extension build` doesn't silently leave
+      // the user pointing Chrome at a non-existent path.
+      console.warn(
+        `[extension] bundle not found at ${bundleDir}. ` +
+        `Run \`pnpm --filter @anubis/extension build\` (or \`pnpm dev\` after a fresh git pull).`,
+      )
     }
 
     const ws = new WSServer({

@@ -110,6 +110,8 @@ function buildBackendPackages() {
       '@anubis/ai-agent',
       '--filter',
       '@anubis/conversation',
+      '--filter',
+      '@anubis/extension',
       'build',
     ])
 

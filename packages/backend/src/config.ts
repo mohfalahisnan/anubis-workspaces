@@ -18,9 +18,17 @@ import { getStack } from './services.js'
                                form can clear values.
    ----------------------------------------------------------- */
 
+const CompetitorLevelsSchema = z.object({
+  minActive: z.number().int().positive(),
+  greenMax: z.number().int().positive(),
+  yellowMax: z.number().int().positive(),
+  maxActive: z.number().int().positive(),
+}).strict()
+
 const PatchBody = z.object({
   chromePath: z.string().optional(),
   crawlerProfileRoot: z.string().optional(),
+  competitorLevels: CompetitorLevelsSchema.optional(),
 }).strict()
 
 export const configRoutes = new Hono()

@@ -159,6 +159,7 @@ postRoutes.get('/', (c) => {
       ...row,
       competitorHandle: owner?.handle,
       competitorTint: owner?.tint,
+      competitorFollowers: owner?.followers,
     }
   })
   return c.json({ ok: true, items })
@@ -221,5 +222,6 @@ function enrichPost(post: CapturedPost) {
     ...post,
     competitorHandle: owner?.handle,
     competitorTint: owner?.tint,
+    competitorFollowers: owner?.followers,
   }
 }

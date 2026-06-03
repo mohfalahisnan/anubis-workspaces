@@ -62,6 +62,13 @@ export class CodexAgent {
       sessionId: opts.sessionId,
     })
 
+    // If the spawned child errors during init (e.g. ENOENT because the
+    // `codex` CLI is not on PATH), surface that as a rejection of streamAgent
+    // rather than letting the bare 'error' event crash the backend.
+    const childErrored = new Promise<never>((_, reject) => {
+      child.once('error', (err) => reject(err))
+    })
+
     let client = this.clients.get(k)
     if (!client) {
       client = new JsonRpcClient(child.stdout, child.stdin)
@@ -208,42 +215,53 @@ export class CodexAgent {
       })
     }
 
-    await this.initialize(k, client)
+    try {
+      await Promise.race([this.initialize(k, client), childErrored])
 
-    let threadId = this.threadIds.get(k) ?? opts.codexThreadId
-    if (!threadId) {
-      const res = await client.request<any>('thread/start', {
-        model: opts.model ?? 'gpt-5.5',
-        modelReasoningEffort: opts.reasoningEffort,
-        cwd: opts.cwd,
-        approvalPolicy: opts.approvalPolicy ?? 'never',
-        sandbox: opts.sandboxMode ?? 'workspace-write',
-      })
-      threadId = res?.thread?.id ?? res?.threadId ?? res?.conversationId ?? res?.id
+      let threadId = this.threadIds.get(k) ?? opts.codexThreadId
       if (!threadId) {
-        throw new Error(`thread/start returned no id: ${JSON.stringify(res)}`)
+        const res = await Promise.race([
+          client.request<any>('thread/start', {
+            model: opts.model ?? 'gpt-5.5',
+            modelReasoningEffort: opts.reasoningEffort,
+            cwd: opts.cwd,
+            approvalPolicy: opts.approvalPolicy ?? 'never',
+            sandbox: opts.sandboxMode ?? 'workspace-write',
+          }),
+          childErrored,
+        ])
+        threadId = res?.thread?.id ?? res?.threadId ?? res?.conversationId ?? res?.id
+        if (!threadId) {
+          throw new Error(`thread/start returned no id: ${JSON.stringify(res)}`)
+        }
+        this.threadIds.set(k, threadId)
+        opts.onSession?.(threadId)
+        this.emit(k, 'session', { sessionId: threadId })
+      } else if (!this.threadIds.has(k)) {
+        this.threadIds.set(k, threadId)
+        opts.onSession?.(threadId)
+        this.emit(k, 'session', { sessionId: threadId })
+      } else {
+        opts.onSession?.(threadId)
+        this.emit(k, 'session', { sessionId: threadId })
       }
-      this.threadIds.set(k, threadId)
-      opts.onSession?.(threadId)
-      this.emit(k, 'session', { sessionId: threadId })
-    } else if (!this.threadIds.has(k)) {
-      this.threadIds.set(k, threadId)
-      opts.onSession?.(threadId)
-      this.emit(k, 'session', { sessionId: threadId })
-    } else {
-      opts.onSession?.(threadId)
-      this.emit(k, 'session', { sessionId: threadId })
-    }
 
-    await client.request('turn/start', {
-      threadId,
-      input: [
-        {
-          type: 'text',
-          text: wrapPromptWithSystem(opts.prompt, opts.appendSystemPrompt),
-        },
-      ],
-    })
+      await Promise.race([
+        client.request('turn/start', {
+          threadId,
+          input: [
+            {
+              type: 'text',
+              text: wrapPromptWithSystem(opts.prompt, opts.appendSystemPrompt),
+            },
+          ],
+        }),
+        childErrored,
+      ])
+    } catch (e) {
+      this.activeEmitters.delete(k)
+      throw e
+    }
     return emitter
   }
 

@@ -30,6 +30,18 @@ import type {
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
+   Errors
+   ------------------------------------------------------------ */
+
+export class NoCredentialsError extends Error {
+  readonly code = 'no_credentials' as const
+  constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex') {
+    super(`no credentials for profile ${profileId} (${agent})`)
+    this.name = 'NoCredentialsError'
+  }
+}
+
+/* ------------------------------------------------------------
    Base URL resolution
    ------------------------------------------------------------ */
 
@@ -55,13 +67,20 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let detail = `HTTP ${response.status}`
     try {
-      const body = await response.json() as { error?: unknown }
+      const body = await response.clone().json() as { error?: unknown }
+      if (response.status === 409 && body.error && typeof body.error === 'object') {
+        const err = body.error as { code?: string; profileId?: string; agent?: string }
+        if (err.code === 'no_credentials' && err.profileId && err.agent) {
+          throw new NoCredentialsError(err.profileId, err.agent as 'claude' | 'codex')
+        }
+      }
       if (body.error) {
         detail = typeof body.error === 'string'
           ? body.error
           : JSON.stringify(body.error)
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof NoCredentialsError) throw e
       // swallow — keep the generic detail
     }
     throw new Error(`${path} failed: ${detail}`)

@@ -86,4 +86,21 @@ describe('<ProfilePicker>', () => {
     await userEvent.click(trigger)
     expect(screen.queryByText('My profiles')).not.toBeInTheDocument()
   })
+
+  it('shows "not installed" and dims profiles whose agent is unavailable', async () => {
+    render(
+      <ProfilePicker
+        profiles={PROFILES}
+        value={PROFILES[0]!}
+        onChange={() => {}}
+        availability={{
+          claude: { available: false, source: 'detected' },
+          codex: { available: true, source: 'detected' },
+        }}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button'))
+    const labels = await screen.findAllByText('not installed')
+    expect(labels.length).toBeGreaterThanOrEqual(1)
+  })
 })

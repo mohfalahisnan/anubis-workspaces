@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { Popover } from 'radix-ui'
-import type { ProfileSummary } from '@anubis/shared'
+import type { AgentAvailability, ProfileSummary } from '@anubis/shared'
 import { cn } from '@/lib/utils'
 
 interface ProfilePickerProps {
@@ -9,9 +9,12 @@ interface ProfilePickerProps {
   value: ProfileSummary | null
   onChange: (next: ProfileSummary) => void
   disabled?: boolean
+  /** Per-agent availability. When the selected profile's agent is
+   *  unavailable the picker dims the corresponding rows. */
+  availability?: Record<'claude' | 'codex', AgentAvailability>
 }
 
-export function ProfilePicker({ profiles, value, onChange, disabled }: ProfilePickerProps) {
+export function ProfilePicker({ profiles, value, onChange, disabled, availability }: ProfilePickerProps) {
   const [open, setOpen] = useState(false)
   const empty = profiles.length === 0
   const isDisabled = disabled || empty
@@ -58,6 +61,7 @@ export function ProfilePicker({ profiles, value, onChange, disabled }: ProfilePi
               profiles={grouped.user}
               valueId={value?.id}
               onPick={(p) => { onChange(p); setOpen(false) }}
+              availability={availability}
             />
           )}
           {grouped.builtin.length > 0 && (
@@ -66,6 +70,7 @@ export function ProfilePicker({ profiles, value, onChange, disabled }: ProfilePi
               profiles={grouped.builtin}
               valueId={value?.id}
               onPick={(p) => { onChange(p); setOpen(false) }}
+              availability={availability}
             />
           )}
         </Popover.Content>
@@ -79,11 +84,13 @@ function Group({
   profiles,
   valueId,
   onPick,
+  availability,
 }: {
   title: string
   profiles: ProfileSummary[]
   valueId: string | undefined
   onPick: (p: ProfileSummary) => void
+  availability?: Record<'claude' | 'codex', AgentAvailability>
 }) {
   return (
     <div className='py-1'>
@@ -93,6 +100,8 @@ function Group({
       {profiles.map((p) => {
         const model = typeof p.config.model === 'string' ? p.config.model : ''
         const selected = p.id === valueId
+        const agent = p.config.agent as 'claude' | 'codex'
+        const unavailable = availability ? !availability[agent].available : false
         return (
           <button
             key={p.id}
@@ -101,12 +110,15 @@ function Group({
             className={cn(
               'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
               selected ? 'bg-muted text-foreground' : 'text-foreground hover:bg-muted/70',
+              unavailable && 'opacity-60',
             )}
           >
             <span className='inline-block size-1.5 rounded-full bg-[var(--anubis-gold)]' />
             <span className='min-w-0 flex-1 truncate'>{p.name}</span>
-            {model && (
-              <span className='font-mono text-[10.5px] text-muted-foreground'>{model}</span>
+            {unavailable ? (
+              <span className='font-mono text-[10.5px] text-muted-foreground'>not installed</span>
+            ) : (
+              model && <span className='font-mono text-[10.5px] text-muted-foreground'>{model}</span>
             )}
           </button>
         )

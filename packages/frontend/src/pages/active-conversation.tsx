@@ -3,7 +3,7 @@ import {
   GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon,
 } from 'lucide-react'
 
-import type { ConversationSummary, MessageSummary, ProfileSummary } from '@anubis/shared'
+import type { AgentAvailability, ConversationSummary, MessageSummary, ProfileSummary } from '@anubis/shared'
 
 import {
   cancelConversation,
@@ -205,6 +205,7 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
         effortIsOverride={effortIsOverride}
         efforts={catalog?.reasoningEfforts ?? (['minimal', 'low', 'medium', 'high'] as const)}
         onEffortChange={(e) => void onEffortChange(e)}
+        availability={catalog?.agentAvailability}
       />
 
       <div className='flex flex-shrink-0 items-center justify-center gap-2 px-7 pb-3 pt-[7px] font-mono text-[11px] text-muted-foreground'>
@@ -347,6 +348,7 @@ function Composer({
   effortIsOverride,
   efforts,
   onEffortChange,
+  availability,
 }: {
   onSend: (content: string) => void
   onStop: () => void
@@ -359,6 +361,7 @@ function Composer({
   effortIsOverride: boolean
   efforts: readonly ReasoningEffort[]
   onEffortChange: (next: ReasoningEffort) => void
+  availability?: Record<'claude' | 'codex', AgentAvailability>
 }) {
   const [value, setValue] = useState('')
   const ref = useRef<HTMLTextAreaElement | null>(null)
@@ -379,9 +382,23 @@ function Composer({
     if (ref.current) ref.current.style.height = 'auto'
   }
 
-  const sendDisabled = !streaming && !value.trim()
+  const agent = profile?.config.agent as 'claude' | 'codex' | undefined
+  const agentUnavailable =
+    availability && agent ? !availability[agent].available : false
+  const installHint =
+    agentUnavailable && agent
+      ? `\`${agent}\` not found on PATH. Install ${agent === 'claude' ? 'Claude Code' : 'Codex CLI'} first.`
+      : null
+
+  const sendDisabled = !streaming && (!value.trim() || agentUnavailable)
 
   return (
+    <>
+      {installHint && (
+        <div className='mx-7 mt-2 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_28%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3.5 py-2 font-mono text-[12px] text-foreground'>
+          {installHint}
+        </div>
+      )}
     <form
       onSubmit={submit}
       className='flex-shrink-0 border-t border-border px-7 pb-2.5 pt-3.5'
@@ -411,6 +428,7 @@ function Composer({
           value={profile}
           onChange={onProfileChange}
           disabled={streaming}
+          availability={availability}
         />
         <ReasoningPicker
           efforts={efforts}
@@ -437,6 +455,7 @@ function Composer({
           <button
             type='submit'
             disabled={sendDisabled}
+            title={agentUnavailable && agent ? `${agent} not found on PATH` : undefined}
             className={cn(
               'inline-flex h-[34px] items-center gap-1.5 rounded-md px-4 text-[14px] font-semibold tracking-[-0.01em] transition-colors',
               sendDisabled
@@ -450,5 +469,6 @@ function Composer({
         )}
       </div>
     </form>
+    </>
   )
 }

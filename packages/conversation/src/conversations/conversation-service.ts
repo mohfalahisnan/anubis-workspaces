@@ -3,6 +3,15 @@ import { mkdirSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
 import type { Db } from '../db/client.js'
 import { newId } from '../util/ids.js'
+import { hasCredentials } from '../profiles/agent-home.js'
+
+export class NoCredentialsError extends Error {
+  readonly code = 'no_credentials' as const
+  constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex') {
+    super(`no credentials for profile ${profileId} (${agent})`)
+    this.name = 'NoCredentialsError'
+  }
+}
 import { nowMs } from '../util/time.js'
 import { computeInitialSkills } from '../skills/snapshot.js'
 import { composeAppendSystemPrompt } from '../skills/inject.js'
@@ -155,6 +164,11 @@ export class ConversationService {
     if (!cur) throw new Error(`Conversation not found: ${id}`)
     if (input.override?.agent && input.override.agent !== cur.agent) {
       throw new Error('Cannot change conversation agent via per-turn override')
+    }
+    if (cur.profileId) {
+      if (!hasCredentials(cur.profileId, cur.agent, this.deps.agentHomeRoot)) {
+        throw new NoCredentialsError(cur.profileId, cur.agent)
+      }
     }
     if (this.deps.tm.isBusy(id)) {
       throw new Error(`Conversation ${id} already has a running agent task`)

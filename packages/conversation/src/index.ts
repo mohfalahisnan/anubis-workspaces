@@ -111,7 +111,7 @@ export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-pos
 export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 export type { AppConfig } from './config/app-config.js'
 export { AppConfigService } from './config/app-config.js'
-export { ConversationService } from './conversations/conversation-service.js'
+export { ConversationService, NoCredentialsError } from './conversations/conversation-service.js'
 export { ProfileService } from './profiles/profile-service.js'
 export { CompetitorsService } from './competitors/competitors-service.js'
 export { SkillLoader } from './skills/loader.js'

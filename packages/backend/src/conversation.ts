@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
+import { NoCredentialsError } from '@anubis/conversation'
 import { getStack } from './services.js'
 
 const CreateBody = z.object({
@@ -62,8 +63,18 @@ conversationRoutes.post('/:id/reset-skills', (c) => {
 
 conversationRoutes.post('/:id/messages', async (c) => {
   const body = SendBody.parse(await c.req.json())
-  const r = await getStack().conversation.sendMessage(c.req.param('id'), body as never)
-  return c.json({ ok: true, msgId: r.msgId, messageId: r.messageId }, 202)
+  try {
+    const r = await getStack().conversation.sendMessage(c.req.param('id'), body as never)
+    return c.json({ ok: true, msgId: r.msgId, messageId: r.messageId }, 202)
+  } catch (e) {
+    if (e instanceof NoCredentialsError) {
+      return c.json(
+        { ok: false, error: { code: 'no_credentials', profileId: e.profileId, agent: e.agent } },
+        409,
+      )
+    }
+    throw e
+  }
 })
 
 conversationRoutes.get('/:id/messages', (c) => {

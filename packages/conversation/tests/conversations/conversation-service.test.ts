@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { TypedEmitter, type AgentEventMap } from '@anubis/ai-agent'
@@ -17,7 +17,14 @@ import { SkillLoader } from '../../src/skills/loader.js'
 import { SseBroadcaster } from '../../src/sse/broadcaster.js'
 import { CronService } from '../../src/cron/cron-service.js'
 import { TaskManager } from '../../src/conversations/task-manager.js'
-import { ConversationService } from '../../src/conversations/conversation-service.js'
+import { ConversationService, NoCredentialsError } from '../../src/conversations/conversation-service.js'
+import { CREDENTIAL_FILE } from '../../src/profiles/agent-home.js'
+
+function plantCreds(agentHomeRoot: string, profileId: string, agent: 'claude' | 'codex'): void {
+  const home = join(agentHomeRoot, profileId, agent)
+  mkdirSync(home, { recursive: true })
+  writeFileSync(join(home, CREDENTIAL_FILE[agent]), '{"token":"test"}')
+}
 
 function setup() {
   const db = openDatabase(':memory:')
@@ -88,7 +95,14 @@ describe('ConversationService', () => {
     expect(() => ctx.svc.create({ title: 'T', workspacePath: '/tmp' })).toThrow(/agent/i)
   })
 
+  it('sendMessage throws NoCredentialsError when the profile home lacks credentials', async () => {
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
+    await expect(ctx.svc.sendMessage(c.id, { content: 'hi' }))
+      .rejects.toBeInstanceOf(NoCredentialsError)
+  })
+
   it('sendMessage inserts user row and starts a turn', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
     const r = await ctx.svc.sendMessage(c.id, { content: 'hello' })
     expect(r.msgId).toBeTruthy()
@@ -116,6 +130,7 @@ describe('ConversationService', () => {
   })
 
   it('sendMessage auto-creates the profile agent home and injects CLAUDE_CONFIG_DIR', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
     await ctx.svc.sendMessage(c.id, { content: 'hi' })
     await new Promise((rs) => setTimeout(rs, 20))
@@ -130,6 +145,7 @@ describe('ConversationService', () => {
   })
 
   it('sendMessage injects CODEX_HOME for codex profiles', async () => {
+    plantCreds(ctx.agentHomeRoot, 'codex-coding', 'codex')
     const c = ctx.svc.create({ title: 'T', profileId: 'codex-coding', workspacePath: '/tmp' })
     await ctx.svc.sendMessage(c.id, { content: 'hi' })
     await new Promise((rs) => setTimeout(rs, 20))
@@ -145,6 +161,7 @@ describe('ConversationService', () => {
   })
 
   it('resetProfileHome removes the directory', () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
     ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
     // ensure on first send
     return ctx.svc

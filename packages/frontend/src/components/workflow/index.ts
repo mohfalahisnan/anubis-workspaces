@@ -12,3 +12,12 @@ export {
 
 export { NodeShell } from './node-shell'
 export type { NodeShellProps } from './node-shell'
+
+export {
+  applyVisualEdgeRouting,
+  SeparatedEdge,
+  workflowEdgeDefaults,
+  workflowEdgeLabelDefaults,
+} from './separated-edge'
+export type { RoutedEdgeData } from './separated-edge'
+export { workflowEdgeTypes } from './edge-types'

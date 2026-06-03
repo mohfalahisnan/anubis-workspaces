@@ -45,3 +45,5 @@ export type { FinalContentNodeData } from './nodes/final-content-node'
 
 export { workflowNodeTypes } from './node-types'
 export type { WorkflowNodeType } from './node-types'
+
+export { WorkflowDemoPage } from './demo/workflow-demo-page'

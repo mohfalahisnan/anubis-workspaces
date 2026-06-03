@@ -1,9 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ChevronDownIcon, GlobeIcon, PaperclipIcon, SendIcon, BrainIcon } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon,
+} from 'lucide-react'
 
-import type { MessageSummary } from '@anubis/shared'
+import type { ConversationSummary, MessageSummary, ProfileSummary } from '@anubis/shared'
 
-import { sendMessage as apiSendMessage } from '@/api'
+import {
+  cancelConversation,
+  getConversation,
+  listProfiles,
+  sendMessage as apiSendMessage,
+  updateConversation,
+  type ReasoningEffort,
+} from '@/api'
 import { cn } from '@/lib/utils'
 import { AnubisMark } from '@/components/brand/anubis-mark'
 import { useNavigation } from '@/lib/navigation'
@@ -13,59 +22,159 @@ import {
   type Fragment as LiveFragment,
   type ToolEvent,
 } from '@/lib/conversation-stream'
+import { useCatalog } from '@/lib/use-catalog'
+import { useDefaultProfile } from '@/lib/use-default-profile'
+import { useEnsureConversation } from '@/lib/use-ensure-conversation'
+import { ProfilePicker } from '@/components/composer/profile-picker'
+import { ReasoningPicker } from '@/components/composer/reasoning-picker'
+
+function useProfiles(): ProfileSummary[] {
+  const [profiles, setProfiles] = useState<ProfileSummary[]>([])
+  useEffect(() => {
+    let cancelled = false
+    listProfiles()
+      .then((items) => { if (!cancelled) setProfiles(items) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  return profiles
+}
 
 export function ActiveConversationPage({ conversationId }: { conversationId?: string }) {
   const { navigate } = useNavigation()
-  const { messages, streaming, error, chunks, partialChars } =
+  const profiles = useProfiles()
+  const { catalog } = useCatalog()
+  const { messages, streaming, error: streamError, chunks, partialChars } =
     useConversationMessages(conversationId)
+
+  const [conv, setConv] = useState<ConversationSummary | null>(null)
+  const [defaultProfile, setDefaultProfile] = useDefaultProfile(profiles)
+  const [pickedProfile, setPickedProfile] = useState<ProfileSummary | null>(null)
+  const [pickedEffort, setPickedEffort] = useState<ReasoningEffort | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [stopping, setStopping] = useState(false)
+  const [forceStopped, setForceStopped] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [cancelled, setCancelled] = useState(false)
 
   useEffect(() => {
-    if (!streaming || cancelled) return
-    setElapsed(0)
+    if (!conversationId) { setConv(null); return }
+    let cancelled = false
+    getConversation(conversationId)
+      .then((c) => { if (!cancelled) setConv(c) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [conversationId])
+
+  const convProfile = useMemo(
+    () => profiles.find((p) => p.id === conv?.profileId) ?? null,
+    [profiles, conv?.profileId],
+  )
+  const selectedProfile: ProfileSummary | null =
+    pickedProfile ?? convProfile ?? defaultProfile
+
+  const profileDefaultEffort: ReasoningEffort =
+    (selectedProfile?.config.reasoningEffort as ReasoningEffort | undefined)
+    ?? catalog?.defaultReasoningEffort ?? 'medium'
+
+  const convOverrideEffort =
+    conv?.extra.overrides?.reasoningEffort as ReasoningEffort | undefined
+
+  const effectiveEffort: ReasoningEffort =
+    pickedEffort ?? convOverrideEffort ?? profileDefaultEffort
+  const effortIsOverride = effectiveEffort !== profileDefaultEffort
+
+  useEffect(() => {
+    if (!streaming) { setElapsed(0); return }
     const start = streaming.startedAt
     const tick = setInterval(() => {
       setElapsed(Math.floor((Date.now() - start) / 1000))
     }, 250)
     return () => clearInterval(tick)
-  }, [streaming, cancelled])
+  }, [streaming])
+
+  // Reset forceStopped whenever the SSE flag flips back to false on its own.
+  useEffect(() => {
+    if (!streaming) setForceStopped(false)
+  }, [streaming])
 
   const tokens = Math.round(partialChars / 4)
-  const isLive = !!streaming && !cancelled
+  const isLive = !!streaming && !forceStopped
+
+  const { ensure } = useEnsureConversation(
+    conversationId, selectedProfile, effectiveEffort, profileDefaultEffort,
+  )
+
+  const onProfileChange = useCallback(async (next: ProfileSummary) => {
+    setPickedProfile(next)
+    setDefaultProfile(next)
+    setSendError(null)
+    if (!conversationId) return
+    try {
+      const updated = await updateConversation(conversationId, { profileId: next.id })
+      setConv(updated)
+    } catch (e) {
+      setPickedProfile(null)
+      setSendError(e instanceof Error ? e.message : String(e))
+    }
+  }, [conversationId, setDefaultProfile])
+
+  const onEffortChange = useCallback(async (next: ReasoningEffort) => {
+    setPickedEffort(next)
+    setSendError(null)
+    if (!conversationId) return
+    const patch = next === profileDefaultEffort ? {} : { reasoningEffort: next }
+    try {
+      const updated = await updateConversation(conversationId, { override: patch })
+      setConv(updated)
+    } catch (e) {
+      setPickedEffort(null)
+      setSendError(e instanceof Error ? e.message : String(e))
+    }
+  }, [conversationId, profileDefaultEffort])
+
+  const onStop = useCallback(async () => {
+    if (!conversationId || stopping) return
+    setStopping(true)
+    setSendError(null)
+    try {
+      await cancelConversation(conversationId)
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setStopping(false)
+    }
+    // Safety fallback: if the SSE `done` event doesn't arrive within 3s, treat
+    // the run as stopped locally so the user isn't stuck staring at "Stop".
+    // The SSE hook keeps running, so transcripts remain correct.
+    setTimeout(() => setForceStopped(true), 3000)
+  }, [conversationId, stopping])
+
+  const onSend = useCallback(async (content: string) => {
+    setSendError(null)
+    try {
+      const id = await ensure(content)
+      await apiSendMessage(id, content)
+      if (id !== conversationId) navigate({ page: 'active-conversation', conversationId: id })
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : String(e))
+    }
+  }, [ensure, conversationId, navigate])
 
   return (
     <div className='flex flex-1 flex-col overflow-hidden bg-background'>
       <div className='flex flex-shrink-0 items-start justify-between gap-5 border-b border-border px-7 pb-4 pt-[18px]'>
         <div>
           <h1 className='m-0 text-[25px] font-semibold leading-[1.15] tracking-[-0.022em]'>
-            {conversationId ? 'Active conversation' : 'New conversation'}
+            {conv?.title ?? (conversationId ? 'Active conversation' : 'New conversation')}
           </h1>
-          <div className='mt-2.5 flex flex-wrap items-center gap-3'>
-            <span className='inline-flex h-[26px] items-center gap-1.5 rounded-full border border-border bg-card px-2.5 pl-2.5 font-mono text-[12px] text-foreground'>
-              <span className='inline-block size-1.5 rounded-full bg-[var(--anubis-gold)]' />
-              Claude · Coding (plan)
-            </span>
-            {conversationId && (
+          {conversationId && (
+            <div className='mt-2.5 flex flex-wrap items-center gap-3'>
               <span className='font-mono text-[12px] text-muted-foreground/65'>
                 session: {conversationId.slice(0, 13)}
               </span>
-            )}
-          </div>
-        </div>
-        <button
-          type='button'
-          onClick={() => setCancelled(true)}
-          disabled={cancelled || !isLive}
-          className={cn(
-            'inline-flex h-[34px] items-center gap-[7px] rounded-md px-3.5 text-[14px] font-medium transition-colors',
-            cancelled || !isLive
-              ? 'text-muted-foreground opacity-50'
-              : 'text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive',
+            </div>
           )}
-        >
-          {cancelled ? 'Cancelled' : 'Cancel'}
-        </button>
+        </div>
       </div>
 
       <div className='flex-1 overflow-y-auto px-7 pb-[30px] pt-[34px]'>
@@ -74,40 +183,36 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
             <RenderedMessage key={m.id} message={m} conversationId={conversationId ?? ''} />
           ))}
           {streaming && (
-            <StreamingMessage
-              live={streaming}
-              conversationId={conversationId ?? ''}
-              cancelled={cancelled}
-            />
+            <StreamingMessage live={streaming} conversationId={conversationId ?? ''} />
           )}
-          {error && (
+          {(streamError ?? sendError) && (
             <div className='rounded-md border border-destructive/40 bg-destructive/10 px-3.5 py-2.5 font-mono text-[12px] text-destructive'>
-              {error}
+              {streamError ?? sendError}
             </div>
           )}
         </div>
       </div>
 
       <Composer
-        onSend={(content) => {
-          if (!conversationId) {
-            navigate({ page: 'conversations' })
-            return
-          }
-          void apiSendMessage(conversationId, content)
-        }}
-        disabled={isLive}
+        onSend={onSend}
+        onStop={onStop}
+        streaming={isLive}
+        stopping={stopping}
+        profile={selectedProfile}
+        profiles={profiles}
+        onProfileChange={(p) => void onProfileChange(p)}
+        effort={effectiveEffort}
+        effortIsOverride={effortIsOverride}
+        efforts={catalog?.reasoningEfforts ?? (['minimal', 'low', 'medium', 'high'] as const)}
+        onEffortChange={(e) => void onEffortChange(e)}
       />
 
       <div className='flex flex-shrink-0 items-center justify-center gap-2 px-7 pb-3 pt-[7px] font-mono text-[11px] text-muted-foreground'>
-        {cancelled ? (
-          <span>Cancelled · {elapsed}s elapsed</span>
-        ) : isLive ? (
+        {isLive ? (
           <>
             <span className='inline-block size-[7px] rounded-full bg-[var(--anubis-gold-hi)] animate-[anubisPulse_1.7s_ease-out_infinite]' />
             <span>
-              Streaming · <span>{chunks}</span> chunks · <span>{(tokens / 1000).toFixed(1)}k</span>{' '}
-              tokens · <span>{elapsed}</span>s elapsed
+              Streaming · <span>{chunks}</span> chunks · <span>{(tokens / 1000).toFixed(1)}k</span> tokens · <span>{elapsed}</span>s elapsed
             </span>
           </>
         ) : (
@@ -157,11 +262,9 @@ function RenderedMessage({
 function StreamingMessage({
   live,
   conversationId,
-  cancelled,
 }: {
   live: { fragments: LiveFragment[]; toolEvents: Record<string, ToolEvent> }
   conversationId: string
-  cancelled: boolean
 }) {
   return (
     <div className='flex flex-col gap-3'>
@@ -178,7 +281,7 @@ function StreamingMessage({
         const ev = live.toolEvents[frag.callId]
         if (!ev) return null
         return ev.kind === 'call' ? (
-          <ToolCardRunning key={i} ev={ev} cancelled={cancelled} />
+          <ToolCardRunning key={i} ev={ev} />
         ) : (
           <ToolCardSuccess key={i} ev={ev} />
         )
@@ -208,13 +311,7 @@ function ToolCardSuccess({ ev }: { ev: ToolEvent & { kind: 'result' } }) {
   )
 }
 
-function ToolCardRunning({
-  ev,
-  cancelled,
-}: {
-  ev: ToolEvent & { kind: 'call' }
-  cancelled: boolean
-}) {
+function ToolCardRunning({ ev }: { ev: ToolEvent & { kind: 'call' } }) {
   return (
     <div className='relative max-w-[480px] overflow-hidden rounded-[10px] border border-border bg-card p-3'>
       <div className='flex items-center gap-2.5'>
@@ -226,28 +323,43 @@ function ToolCardRunning({
             {ev.name}
           </span>
           <span className='mt-1 truncate font-mono text-[11.5px] text-muted-foreground'>
-            {cancelled ? 'cancelled' : 'running…'}
+            running…
           </span>
         </div>
-        <span
-          className={cn(
-            'size-[7px] rounded-full',
-            cancelled
-              ? 'bg-muted-foreground'
-              : 'bg-[var(--anubis-gold-hi)] animate-[anubisPulse_1.7s_ease-out_infinite]',
-          )}
-        />
+        <span className='size-[7px] rounded-full bg-[var(--anubis-gold-hi)] animate-[anubisPulse_1.7s_ease-out_infinite]' />
       </div>
-      {!cancelled && (
-        <div className='absolute inset-x-0 bottom-0 h-[2px] bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)]'>
-          <div className='h-full w-[32%] animate-[anubisIndeterminate_1.7s_cubic-bezier(0.5,0.1,0.5,0.9)_infinite] rounded-sm bg-[var(--anubis-gold)]' />
-        </div>
-      )}
+      <div className='absolute inset-x-0 bottom-0 h-[2px] bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)]'>
+        <div className='h-full w-[32%] animate-[anubisIndeterminate_1.7s_cubic-bezier(0.5,0.1,0.5,0.9)_infinite] rounded-sm bg-[var(--anubis-gold)]' />
+      </div>
     </div>
   )
 }
 
-function Composer({ onSend, disabled }: { onSend: (content: string) => void; disabled: boolean }) {
+function Composer({
+  onSend,
+  onStop,
+  streaming,
+  stopping,
+  profile,
+  profiles,
+  onProfileChange,
+  effort,
+  effortIsOverride,
+  efforts,
+  onEffortChange,
+}: {
+  onSend: (content: string) => void
+  onStop: () => void
+  streaming: boolean
+  stopping: boolean
+  profile: ProfileSummary | null
+  profiles: ProfileSummary[]
+  onProfileChange: (next: ProfileSummary) => void
+  effort: ReasoningEffort
+  effortIsOverride: boolean
+  efforts: readonly ReasoningEffort[]
+  onEffortChange: (next: ReasoningEffort) => void
+}) {
   const [value, setValue] = useState('')
   const ref = useRef<HTMLTextAreaElement | null>(null)
 
@@ -260,11 +372,14 @@ function Composer({ onSend, disabled }: { onSend: (content: string) => void; dis
 
   function submit(e: FormEvent) {
     e.preventDefault()
+    if (streaming) { onStop(); return }
     if (!value.trim()) return
     onSend(value)
     setValue('')
     if (ref.current) ref.current.style.height = 'auto'
   }
+
+  const sendDisabled = !streaming && !value.trim()
 
   return (
     <form
@@ -275,7 +390,8 @@ function Composer({ onSend, disabled }: { onSend: (content: string) => void; dis
         <button
           type='button'
           aria-label='Attach'
-          className='flex size-[30px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+          disabled={streaming}
+          className='flex size-[30px] items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
         >
           <PaperclipIcon className='size-[17px]' strokeWidth={2} />
         </button>
@@ -283,39 +399,55 @@ function Composer({ onSend, disabled }: { onSend: (content: string) => void; dis
         <textarea
           ref={ref}
           value={value}
-          onChange={(e) => {
-            setValue(e.target.value)
-            autoGrow()
-          }}
+          onChange={(e) => { setValue(e.target.value); autoGrow() }}
           rows={1}
           placeholder='Reply to Anubis…'
-          className='max-h-[120px] min-h-[24px] flex-1 resize-none bg-transparent px-1 py-2 text-[14.5px] leading-[1.5] text-foreground outline-none placeholder:text-muted-foreground'
+          disabled={streaming}
+          className='max-h-[120px] min-h-[24px] flex-1 resize-none bg-transparent px-1 py-2 text-[14.5px] leading-[1.5] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60'
         />
 
-        <button
-          type='button'
-          aria-label='Switch profile'
-          className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 pl-2.5 font-mono text-[12px] text-foreground'
-        >
-          <span className='inline-block size-1.5 rounded-full bg-[var(--anubis-gold)]' />
-          Claude · Coding
-          <ChevronDownIcon className='size-3 text-muted-foreground' strokeWidth={2} />
-        </button>
+        <ProfilePicker
+          profiles={profiles}
+          value={profile}
+          onChange={onProfileChange}
+          disabled={streaming}
+        />
+        <ReasoningPicker
+          efforts={efforts}
+          value={effort}
+          isOverride={effortIsOverride}
+          onChange={onEffortChange}
+          disabled={streaming}
+        />
 
-        <button
-          type='submit'
-          disabled={disabled || !value.trim()}
-          className={cn(
-            'inline-flex h-[34px] items-center gap-1.5 rounded-md px-4 text-[14px] font-semibold tracking-[-0.01em] transition-colors',
-            disabled || !value.trim()
-              ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-[0.42]'
-              : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
-          )}
-          title={disabled ? 'Send is disabled while a run is in progress' : undefined}
-        >
-          <SendIcon className='size-[14px]' strokeWidth={2} />
-          Send
-        </button>
+        {streaming ? (
+          <button
+            type='submit'
+            disabled={stopping}
+            className='inline-flex h-[34px] items-center gap-1.5 rounded-md bg-destructive/15 px-4 text-[14px] font-semibold tracking-[-0.01em] text-destructive transition-colors hover:bg-destructive/25 disabled:opacity-50'
+          >
+            {stopping ? (
+              <Loader2Icon className='size-[14px] animate-spin' strokeWidth={2} />
+            ) : (
+              <SquareIcon className='size-[14px]' strokeWidth={2.4} fill='currentColor' />
+            )}
+            Stop
+          </button>
+        ) : (
+          <button
+            type='submit'
+            disabled={sendDisabled}
+            className={cn(
+              'inline-flex h-[34px] items-center gap-1.5 rounded-md px-4 text-[14px] font-semibold tracking-[-0.01em] transition-colors',
+              sendDisabled
+                ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-[0.42]'
+                : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+            )}
+          >
+            <SendIcon className='size-[14px]' strokeWidth={2} />
+            Send
+          </button>
+        )}
       </div>
     </form>
   )

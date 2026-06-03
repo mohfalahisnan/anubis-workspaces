@@ -12,7 +12,7 @@ import {
   XIcon,
 } from 'lucide-react'
 
-import type { CompetitorSummary } from '@anubis/shared'
+import type { CompetitorLevelsConfig, CompetitorSummary } from '@anubis/shared'
 
 import {
   captureCompetitor,
@@ -22,6 +22,9 @@ import {
   updateCompetitor,
 } from '@/api'
 import { FindCompetitorsDialog } from './competitor-dialogs'
+import { CompetitorLevelDot } from '@/components/competitor-level-dot'
+import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
+import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -56,6 +59,10 @@ export function CompetitorsPage() {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const { config: levelsCfg, levelFor } = useCompetitorLevels()
+
+  const visibleItems = items?.filter((c) => matchesLevelFilter(levelFor(c.followers), levelFilter))
 
   async function refresh() {
     try {
@@ -274,6 +281,12 @@ export function CompetitorsPage() {
           </div>
         )}
 
+        {items && items.length > 0 && (
+          <div className='mt-5'>
+            <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+          </div>
+        )}
+
         {selectMode && items && items.length > 0 && (
           <BulkSelectBar
             count={selected.size}
@@ -290,12 +303,17 @@ export function CompetitorsPage() {
           <LoadingGrid />
         ) : items.length === 0 ? (
           <EmptyState onAdd={() => setAddOpen(true)} />
+        ) : visibleItems && visibleItems.length === 0 ? (
+          <div className='mt-10 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center text-[13px] text-muted-foreground'>
+            No competitors match this level filter.
+          </div>
         ) : (
           <div className='mt-7 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
-            {items.map((c) => (
+            {visibleItems!.map((c) => (
               <CompetitorCard
                 key={c.id}
                 competitor={c}
+                levelsCfg={levelsCfg}
                 onCapture={() => void handleCapture(c)}
                 onEdit={() => setEditing(c)}
                 onDelete={() => handleDelete(c)}
@@ -467,6 +485,7 @@ function BulkDeleteDialog({
 
 function CompetitorCard({
   competitor,
+  levelsCfg,
   onCapture,
   onEdit,
   onDelete,
@@ -476,6 +495,7 @@ function CompetitorCard({
   onToggleSelect,
 }: {
   competitor: CompetitorSummary
+  levelsCfg: CompetitorLevelsConfig
   onCapture: () => void
   onEdit: () => void
   onDelete: () => void
@@ -524,7 +544,8 @@ function CompetitorCard({
           <UserRoundIcon className='size-5 text-white/80' strokeWidth={1.5} />
         </span>
         <div className='min-w-0 flex-1'>
-          <h3 className='truncate font-mono text-[13.5px] font-semibold text-foreground'>
+          <h3 className='flex items-center gap-1.5 truncate font-mono text-[13.5px] font-semibold text-foreground'>
+            <CompetitorLevelDot followers={competitor.followers} config={levelsCfg} />
             {competitor.handle}
           </h3>
           {competitor.displayName && (

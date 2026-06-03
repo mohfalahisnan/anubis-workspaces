@@ -30,6 +30,9 @@ reasoning-effort override work end-to-end against the existing backend.
 4. **Auto workspacePath**: backend defaults to
    `<dataDir>/workspaces/<conversation-id>` when the frontend omits it.
 5. **Default profile persistence** via `localStorage` (`anubis:last-profile`).
+6. A **composer Stop button** that morphs out of the Send button while a run
+   is streaming, calls the existing `POST /conversations/:id/cancel` endpoint,
+   and optimistically ends the stream UX.
 
 ## Non-goals
 
@@ -201,6 +204,60 @@ Optimistic UX: while `ensure` + `sendMessage` are in flight, render a
 locally-constructed `MessageSummary` for the user's message at the bottom of
 the transcript. After navigation, the SSE hook seeds from `listMessages` and
 overwrites local state with the canonical row.
+
+## Stop button — Send ↔ Stop morph
+
+The composer's submit control is a single button that morphs between two
+states:
+
+| State | Visual | Action on click |
+|---|---|---|
+| Streaming idle | Gold "Send" with paper-plane icon | Submit message (existing path) |
+| Streaming active | Destructive red "Stop" with square icon | Call `cancelConversation(id)`, optimistically end stream |
+
+State is driven entirely by the `streaming` flag from
+`useConversationMessages` (already exists). No new local state on the page —
+the SSE hook is the single source of truth for "a run is in flight."
+
+`packages/frontend/src/api.ts` already exports `cancelConversation(id)`;
+the wiring lives in the composer's button.
+
+**Stop click handler:**
+
+```ts
+async function onStop() {
+  if (!conversationId) return
+  setStopping(true)
+  try {
+    await cancelConversation(conversationId)
+  } catch (e) {
+    setSendError(e instanceof Error ? e.message : String(e))
+  } finally {
+    setStopping(false)
+  }
+}
+```
+
+The button shows a small spinner while `stopping` is true so a slow
+cancellation roundtrip doesn't look like a no-op. The SSE hook flips
+`streaming` to `false` when it receives the `done` event the backend emits
+after a successful cancel; that re-renders the button back to "Send".
+
+If the backend's `done` event doesn't arrive within ~3s, the optimistic UI
+nonetheless flips to Send (the user's intent was clearly "stop") and a small
+inline notice reads "Cancel may still be in progress." Implementation: a
+3-second timeout after `cancelConversation` resolves; if `streaming` is
+still true, the page locally treats it as cancelled. The SSE hook keeps
+running until `done` arrives so transcripts stay correct.
+
+The existing header "Cancel" button is **removed** in this work — the
+composer is the single entry point. The status bar's "Cancelled · Ns elapsed"
+strip is preserved and triggered by the same logic.
+
+The Stop button is the only composer control still active while streaming —
+the profile picker, reasoning picker, attach button, and textarea are all
+disabled (existing behavior for the textarea via the `disabled` prop;
+pickers per "Profile switching mid-conversation" below).
 
 ## Profile switching mid-conversation
 
@@ -402,7 +459,12 @@ manually in `pnpm dev`.
    updates; picking it back to the profile's default clears `extra.overrides`.
 6. Both pickers are disabled while a stream is active.
 7. Default profile persists across reloads via `localStorage`.
-8. `pnpm typecheck` + `pnpm test` green.
+8. The composer Send button morphs into a Stop button while a run is
+   streaming. Click Stop → `cancelConversation` fires → button returns to
+   Send within ~3s (either via SSE `done` or local timeout fallback).
+9. The status bar shows "Cancelled · Ns elapsed" after a successful cancel,
+   identical to the pre-cancel "Streaming" strip.
+10. `pnpm typecheck` + `pnpm test` green.
 
 ## File-by-file summary
 
@@ -417,7 +479,7 @@ manually in `pnpm dev`.
 | `packages/frontend/src/lib/use-catalog.ts` | NEW. |
 | `packages/frontend/src/lib/use-default-profile.ts` | NEW. |
 | `packages/frontend/src/lib/use-ensure-conversation.ts` | NEW. |
-| `packages/frontend/src/pages/active-conversation.tsx` | Wire both pickers, new-conv flow, switch via PATCH. |
+| `packages/frontend/src/pages/active-conversation.tsx` | Wire both pickers, new-conv flow, switch via PATCH, Send↔Stop morph. Remove header Cancel button. |
 | `packages/frontend/tests/components/profile-picker.test.tsx` | NEW. |
 | `packages/frontend/tests/components/reasoning-picker.test.tsx` | NEW. |
 | `packages/frontend/tests/lib/use-default-profile.test.tsx` | NEW. |

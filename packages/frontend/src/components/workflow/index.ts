@@ -28,3 +28,8 @@ export { TableNode }  from './nodes/table-node'
 export type { TableNodeData, TableNodeRow } from './nodes/table-node'
 export { SearchNode } from './nodes/search-node'
 export type { SearchNodeData, SearchNodeContext } from './nodes/search-node'
+
+export { InstagramPostNode } from './nodes/instagram-post-node'
+export type { InstagramPostNodeData } from './nodes/instagram-post-node'
+export { TransformerNode } from './nodes/transformer-node'
+export type { TransformerNodeData, TransformerBriefItem } from './nodes/transformer-node'

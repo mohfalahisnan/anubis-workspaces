@@ -104,14 +104,9 @@ function configOverrides(profile: string | undefined): {
   chromePath?: string
 } {
   const cfg = getStack().appConfig.get()
-  if (profile === 'login') {
-    const split = splitProfilePath(cfg.loginProfileDir)
-    return {
-      profileDir: split.userDataDir,
-      profileDirectory: split.profileDirectory,
-      chromePath: cfg.chromePath,
-    }
-  }
+  // Login flow moves to the Anubis extension in a later task; for now
+  // the CDP login path is a no-op carrying only chromePath.
+  void profile
   return { chromePath: cfg.chromePath }
 }
 

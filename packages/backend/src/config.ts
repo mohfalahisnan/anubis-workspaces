@@ -20,7 +20,6 @@ import { getStack } from './services.js'
 
 const PatchBody = z.object({
   chromePath: z.string().optional(),
-  loginProfileDir: z.string().optional(),
 }).strict()
 
 export const configRoutes = new Hono()

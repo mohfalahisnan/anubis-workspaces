@@ -83,7 +83,9 @@ captureRoutes.post('/competitors/:id', async (c) => {
   // to any profile if set.
   const cfg = stack.appConfig.get()
   const selectedProfile = body.profile ?? 'public'
-  const split = selectedProfile === 'login' ? splitProfilePath(cfg.loginProfileDir) : {}
+  // Login flow is being rewired to the Anubis extension in a later task;
+  // for now drop the removed loginProfileDir read so the file compiles.
+  const split: { userDataDir?: string; profileDirectory?: string } = {}
 
   // Kill any stale Chrome on the login port whose user-data root
   // doesn't match what we want — otherwise launchChrome would silently

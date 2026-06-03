@@ -2,7 +2,6 @@ import type {
   ApiHealthResponse,
   AppConfig,
   CapturedPostListResponse,
-  ChromeProfilesPayload,
   CapturedPostSummary,
   CaptureResultPayload,
   CompetitorListResponse,
@@ -94,43 +93,9 @@ export async function updateAppConfig(patch: AppConfig): Promise<AppConfig> {
 
 /* ---------- System introspection ---------- */
 
-export async function listLocalChromeProfiles(): Promise<ChromeProfilesPayload> {
-  return api<ChromeProfilesPayload>('/system/chrome-profiles')
-}
-
-export interface CloneChromeProfileResult {
-  syncedAt: number
-  bytesCopied: number
-  filesCopied: number
-  destRoot: string
-  config: AppConfig
-}
-
-/**
- * Triggers POST /system/chrome-profiles/clone — copies the given Chrome
- * profile into Anubis's own user-data root and updates AppConfig with
- * loginProfileDir + loginProfileSyncedAt atomically. Throws on the
- * 409 (Chrome running) and 400 (invalid source) responses with a
- * clean error message the UI can render.
- */
-export async function cloneChromeProfile(
-  source: string,
-): Promise<CloneChromeProfileResult> {
-  const r = await api<{ ok: true } & CloneChromeProfileResult>(
-    '/system/chrome-profiles/clone',
-    {
-      method: 'POST',
-      body: JSON.stringify({ source }),
-    },
-  )
-  return {
-    syncedAt: r.syncedAt,
-    bytesCopied: r.bytesCopied,
-    filesCopied: r.filesCopied,
-    destRoot: r.destRoot,
-    config: r.config,
-  }
-}
+// Chrome profile picker / clone helpers were removed alongside the
+// failed cookie-clone approach. The extension pairing helpers land
+// later in Task 19; this section stays slim in the interim.
 
 export async function listProfiles(): Promise<ProfileSummary[]> {
   const r = await api<ProfileListResponse>('/profiles')

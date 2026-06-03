@@ -98,6 +98,40 @@ export async function listLocalChromeProfiles(): Promise<ChromeProfilesPayload> 
   return api<ChromeProfilesPayload>('/system/chrome-profiles')
 }
 
+export interface CloneChromeProfileResult {
+  syncedAt: number
+  bytesCopied: number
+  filesCopied: number
+  destRoot: string
+  config: AppConfig
+}
+
+/**
+ * Triggers POST /system/chrome-profiles/clone — copies the given Chrome
+ * profile into Anubis's own user-data root and updates AppConfig with
+ * loginProfileDir + loginProfileSyncedAt atomically. Throws on the
+ * 409 (Chrome running) and 400 (invalid source) responses with a
+ * clean error message the UI can render.
+ */
+export async function cloneChromeProfile(
+  source: string,
+): Promise<CloneChromeProfileResult> {
+  const r = await api<{ ok: true } & CloneChromeProfileResult>(
+    '/system/chrome-profiles/clone',
+    {
+      method: 'POST',
+      body: JSON.stringify({ source }),
+    },
+  )
+  return {
+    syncedAt: r.syncedAt,
+    bytesCopied: r.bytesCopied,
+    filesCopied: r.filesCopied,
+    destRoot: r.destRoot,
+    config: r.config,
+  }
+}
+
 export async function listProfiles(): Promise<ProfileSummary[]> {
   const r = await api<ProfileListResponse>('/profiles')
   return r.items
@@ -160,12 +194,14 @@ export interface ModelInfo {
   description: string
 }
 
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
+
 export interface AgentCatalog {
   agents: readonly ('claude' | 'codex')[]
   models: Record<'claude' | 'codex', ModelInfo[]>
   defaultModel: Record<'claude' | 'codex', string>
-  reasoningEfforts: readonly ('minimal' | 'low' | 'medium' | 'high')[]
-  defaultReasoningEffort: 'minimal' | 'low' | 'medium' | 'high'
+  reasoningEfforts: readonly ReasoningEffort[]
+  defaultReasoningEffort: ReasoningEffort
 }
 
 export async function getCatalog(): Promise<AgentCatalog> {
@@ -199,6 +235,24 @@ export async function createConversation(
     method: 'POST',
     body: JSON.stringify(input),
   })
+  return r.conversation
+}
+
+export interface UpdateConversationInput {
+  title?: string
+  archived?: boolean
+  override?: Record<string, unknown>
+  profileId?: string | null
+}
+
+export async function updateConversation(
+  id: string,
+  patch: UpdateConversationInput,
+): Promise<ConversationSummary> {
+  const r = await api<{ ok: true; conversation: ConversationSummary }>(
+    `/conversations/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
   return r.conversation
 }
 

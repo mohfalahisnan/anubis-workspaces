@@ -14,6 +14,7 @@ import {
   SlidersHorizontalIcon,
   SparklesIcon,
   UsersRoundIcon,
+  WorkflowIcon,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -34,6 +35,7 @@ export const navItems: NavItem[] = [
   { label: 'Profiles', icon: SlidersHorizontalIcon, page: 'profiles' },
   { label: 'Skills', icon: LibraryIcon, page: 'skills' },
   { label: 'Scheduled', icon: CalendarClockIcon, page: 'scheduled' },
+  { label: 'Workflow demo', icon: WorkflowIcon, page: 'workflow-demo' },
   { label: 'Settings', icon: Settings2Icon, page: 'settings' },
 ]
 

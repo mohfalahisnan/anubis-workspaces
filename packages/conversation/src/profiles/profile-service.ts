@@ -3,6 +3,7 @@ import { nowMs } from '../util/time.js'
 import type { ProfilesRepo } from '../db/repositories/profiles-repo.js'
 import { BUILTIN_PROFILES } from './builtin.js'
 import { resolveLayers } from './resolve.js'
+import { copyHomeFromSystem, copyProfileHome } from './agent-home.js'
 import {
   ProfileConfigSchema, ProfileOverrideSchema, ProfileSchema,
   type Profile, type ProfileConfig, type ProfileOverride, type ResolvedProfile,
@@ -31,6 +32,56 @@ export class ProfileService {
       if (existing.has(p.id)) continue
       this.repo.upsert({ ...p, createdAt: now, updatedAt: now })
     }
+  }
+
+  /**
+   * One-shot: if the default Claude profile's home is empty *and* the user
+   * already has system-wide Claude credentials at `systemSource`, copy them
+   * into the profile's home so the default profile is usable without a fresh
+   * login. Idempotent — re-running after credentials exist is a no-op.
+   */
+  bootstrapDefaultClaudeProfile(opts: {
+    systemSource: string
+    agentHomeRoot: string
+    profileId?: string
+  }): { copied: boolean } {
+    const profileId = opts.profileId ?? 'claude-coding'
+    const profile = this.repo.findById(profileId)
+    if (!profile || profile.config.agent !== 'claude') return { copied: false }
+    return copyHomeFromSystem({
+      systemSource: opts.systemSource,
+      profileId,
+      agent: 'claude',
+      agentHomeRoot: opts.agentHomeRoot,
+    })
+  }
+
+  copyProfile(
+    sourceId: string,
+    input: { name: string; description?: string; agentHomeRoot: string },
+  ): Profile {
+    const src = this.repo.findById(sourceId)
+    if (!src) throw new Error(`profile ${sourceId} not found`)
+
+    const created = this.create({
+      name: input.name,
+      description: input.description ?? src.description,
+      config: { ...src.config },
+    })
+
+    try {
+      copyProfileHome({
+        srcProfileId: sourceId,
+        destProfileId: created.id,
+        agent: src.config.agent,
+        agentHomeRoot: input.agentHomeRoot,
+      })
+    } catch (e) {
+      // Roll back the profile so we don't leave a half-copied row.
+      this.repo.delete(created.id)
+      throw e
+    }
+    return created
   }
 
   list(): Profile[] {

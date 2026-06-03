@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { openDatabase, type Db } from '../../src/db/client.js'
 import { runMigrations } from '../../src/db/migrate.js'
 import { MIGRATIONS } from '../../src/db/migrations/index.js'
 import { ProfilesRepo } from '../../src/db/repositories/profiles-repo.js'
 import { ProfileService } from '../../src/profiles/profile-service.js'
+import { CREDENTIAL_FILE } from '../../src/profiles/agent-home.js'
 
 describe('ProfileService', () => {
   let db: Db
@@ -64,5 +68,83 @@ describe('ProfileService', () => {
     const p = svc.get('claude-coding')!
     expect(p).not.toBeNull()
     expect(p.config.model).toBe('claude-sonnet-4-6')
+  })
+
+  describe('bootstrapDefaultClaudeProfile', () => {
+    it('copies system creds into the default profile home when empty', () => {
+      const root = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-'))
+      const sys = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-sys-'))
+      writeFileSync(join(sys, CREDENTIAL_FILE.claude), '{"t":"yes"}')
+      const r = svc.bootstrapDefaultClaudeProfile({
+        systemSource: sys,
+        agentHomeRoot: root,
+      })
+      expect(r.copied).toBe(true)
+      expect(existsSync(join(root, 'claude-coding', 'claude', CREDENTIAL_FILE.claude))).toBe(true)
+    })
+
+    it('no-ops when system creds are missing', () => {
+      const root = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-'))
+      const r = svc.bootstrapDefaultClaudeProfile({
+        systemSource: join(root, 'no-such-dir'),
+        agentHomeRoot: root,
+      })
+      expect(r.copied).toBe(false)
+    })
+
+    it('no-ops when the profile home already has credentials', () => {
+      const root = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-'))
+      const sys = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-sys-'))
+      writeFileSync(join(sys, CREDENTIAL_FILE.claude), '{"t":"new"}')
+      const dest = join(root, 'claude-coding', 'claude')
+      mkdirSync(dest, { recursive: true })
+      writeFileSync(join(dest, CREDENTIAL_FILE.claude), '{"t":"old"}')
+      const r = svc.bootstrapDefaultClaudeProfile({
+        systemSource: sys,
+        agentHomeRoot: root,
+      })
+      expect(r.copied).toBe(false)
+    })
+  })
+
+  describe('copyProfile', () => {
+    it('creates a new profile with the same config', () => {
+      const root = mkdtempSync(join(tmpdir(), 'anubis-copy-'))
+      const src = svc.create({
+        name: 'Source',
+        config: { agent: 'claude', model: 'claude-sonnet-4-6' },
+      })
+      const copied = svc.copyProfile(src.id, {
+        name: 'Source (copy)',
+        agentHomeRoot: root,
+      })
+      expect(copied.id).not.toBe(src.id)
+      expect(copied.name).toBe('Source (copy)')
+      expect(copied.config.agent).toBe('claude')
+      expect(copied.config.model).toBe('claude-sonnet-4-6')
+    })
+
+    it('copies the source profile home (auth files)', () => {
+      const root = mkdtempSync(join(tmpdir(), 'anubis-copy-'))
+      const src = svc.create({
+        name: 'Source',
+        config: { agent: 'claude' },
+      })
+      const srcHome = join(root, src.id, 'claude')
+      mkdirSync(srcHome, { recursive: true })
+      writeFileSync(join(srcHome, CREDENTIAL_FILE.claude), '{"t":"yes"}')
+
+      const copied = svc.copyProfile(src.id, {
+        name: 'Source (copy)',
+        agentHomeRoot: root,
+      })
+      expect(existsSync(join(root, copied.id, 'claude', CREDENTIAL_FILE.claude))).toBe(true)
+    })
+
+    it('throws when the source profile does not exist', () => {
+      const root = mkdtempSync(join(tmpdir(), 'anubis-copy-'))
+      expect(() => svc.copyProfile('nonexistent', { name: 'X', agentHomeRoot: root }))
+        .toThrow(/not found/)
+    })
   })
 })

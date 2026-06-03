@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
 import { openDatabase } from './db/client.js'
 import { runMigrations } from './db/migrate.js'
@@ -40,6 +41,8 @@ export interface ConversationStack {
   cron: CronService
   taskManager: TaskManager
   aiAgent: AiAgentService
+  /** Root path under which each profile's per-agent home dir lives. */
+  agentHomeRoot: string
   shutdown(): Promise<void>
 }
 
@@ -61,6 +64,16 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
+  try {
+    profiles.bootstrapDefaultClaudeProfile({
+      systemSource: join(homedir(), '.claude'),
+      agentHomeRoot,
+    })
+  } catch (e) {
+    // Boot must not fail because of a bootstrap glitch — log + continue.
+    // eslint-disable-next-line no-console
+    console.warn('[anubis] bootstrap default profile failed:', e)
+  }
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
   const capturedPosts = new CapturedPostsRepo(db)
   const appConfig = new AppConfigService(opts.dataDir)
@@ -93,6 +106,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   return {
     conversation, profiles, competitors, capturedPosts, appConfig, skills, sse, cron, taskManager: tm, aiAgent,
+    agentHomeRoot,
     async shutdown() {
       cron.shutdown()
       await tm.shutdown()

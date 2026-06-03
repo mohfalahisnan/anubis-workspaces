@@ -12,14 +12,27 @@ import { join } from 'node:path'
      - crawlerProfileRoot:   optional research-crawler project/data
                              root to reuse Chrome profiles from a
                              standalone crawler checkout.
+     - competitorLevels:     follower-count bands for the Black/
+                             Green/Yellow/Red badge. Dropped
+                             silently if the invariant
+                             0 < minActive < greenMax < yellowMax
+                             < maxActive is not satisfied.
 
    Persisted as a flat object; partial PATCHes merge. Empty
    strings collapse to "unset" for clean form-clear behaviour.
    ============================================================ */
 
+export interface CompetitorLevelsConfig {
+  minActive: number
+  greenMax: number
+  yellowMax: number
+  maxActive: number
+}
+
 export interface AppConfig {
   chromePath?: string
   crawlerProfileRoot?: string
+  competitorLevels?: CompetitorLevelsConfig
 }
 
 const CONFIG_FILE = 'config.json'
@@ -61,5 +74,35 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   if (chromePath) out.chromePath = chromePath
   const crawlerProfileRoot = typeof obj.crawlerProfileRoot === 'string' ? obj.crawlerProfileRoot.trim() : ''
   if (crawlerProfileRoot) out.crawlerProfileRoot = crawlerProfileRoot
+  const levels = sanitizeLevels(obj.competitorLevels)
+  if (levels) out.competitorLevels = levels
   return out
+}
+
+function sanitizeLevels(raw: unknown): CompetitorLevelsConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const minActive = toPositiveInt(r.minActive)
+  const greenMax = toPositiveInt(r.greenMax)
+  const yellowMax = toPositiveInt(r.yellowMax)
+  const maxActive = toPositiveInt(r.maxActive)
+  if (
+    minActive === undefined ||
+    greenMax === undefined ||
+    yellowMax === undefined ||
+    maxActive === undefined
+  ) {
+    return undefined
+  }
+  if (!(minActive < greenMax && greenMax < yellowMax && yellowMax < maxActive)) {
+    return undefined
+  }
+  return { minActive, greenMax, yellowMax, maxActive }
+}
+
+function toPositiveInt(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return undefined
+  const i = Math.floor(n)
+  return i > 0 ? i : undefined
 }

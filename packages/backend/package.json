@@ -15,6 +15,10 @@
     "@anubis/shared": "workspace:*",
     "@hono/node-server": "^1.19.6",
     "hono": "^4.10.7",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }

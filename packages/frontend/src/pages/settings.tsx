@@ -165,6 +165,15 @@ export function SettingsPage() {
                 </button>
               </div>
             )}
+            {window.anubis?.openExtensionFolder && (
+              <button
+                type='button'
+                onClick={() => void window.anubis?.openExtensionFolder?.(status.dataDirPath)}
+                className='inline-flex h-8 self-start items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] hover:bg-muted'
+              >
+                Open extension folder
+              </button>
+            )}
             <ol className='mt-2 ml-5 list-decimal text-[12.5px] leading-relaxed text-muted-foreground'>
               <li>Open <code className='font-mono'>chrome://extensions</code> in Chrome.</li>
               <li>Toggle <strong>Developer mode</strong> (top-right).</li>

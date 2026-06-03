@@ -33,6 +33,14 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string) 
     }
     if (dataDir) backendEnv.ANUBIS_DATA_DIR = dataDir
 
+    // Where the bundled Chrome extension lives. In dev we point at the
+    // monorepo build output; when packaged the extension/ directory is
+    // bundled as an extraResource (see electron-builder config) so we
+    // read from process.resourcesPath.
+    backendEnv.ANUBIS_EXTENSION_BUNDLE_DIR = isDev
+      ? path.join(appRoot, 'packages/extension/dist')
+      : path.join(process.resourcesPath ?? appRoot, 'extension')
+
     if (!isDev) {
       backendEnv.ELECTRON_RUN_AS_NODE = '1'
     }

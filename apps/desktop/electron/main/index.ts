@@ -35,6 +35,10 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 ipcMain.handle('anubis:get-backend-url', () => backendUrl)
 
+ipcMain.handle('anubis:open-extension-folder', (_e, folderPath: string) => {
+  return shell.openPath(folderPath)
+})
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Anubis',

@@ -58,5 +58,8 @@
     "provider": "github",
     "owner": "mohfalahisnan",
     "repo": "anubis-workspaces"
-  }
+  },
+  "extraResources": [
+    { "from": "packages/extension/dist", "to": "extension" }
+  ]
 }

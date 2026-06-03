@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('anubis', {
   backend: {
     getBaseUrl: () => ipcRenderer.invoke('anubis:get-backend-url') as Promise<string>,
   },
+  openExtensionFolder: (folderPath: string) =>
+    ipcRenderer.invoke('anubis:open-extension-folder', folderPath) as Promise<string>,
   updater: {
     check: () => ipcRenderer.invoke('check-update'),
     startDownload: () => ipcRenderer.invoke('start-download'),

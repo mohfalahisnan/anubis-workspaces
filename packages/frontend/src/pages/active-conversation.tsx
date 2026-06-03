@@ -6,6 +6,7 @@ import {
 import type { AgentAvailability, ConversationSummary, MessageSummary, ProfileSummary } from '@anubis/shared'
 
 import {
+  NoCredentialsError,
   cancelConversation,
   getConversation,
   listProfiles,
@@ -13,6 +14,7 @@ import {
   updateConversation,
   type ReasoningEffort,
 } from '@/api'
+import { LoginModal } from '@/components/login-modal'
 import { cn } from '@/lib/utils'
 import { AnubisMark } from '@/components/brand/anubis-mark'
 import { useNavigation } from '@/lib/navigation'
@@ -55,6 +57,7 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const [stopping, setStopping] = useState(false)
   const [forceStopped, setForceStopped] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [loginFor, setLoginFor] = useState<{ profileId: string; pendingContent: string } | null>(null)
 
   useEffect(() => {
     if (!conversationId) { setConv(null); return }
@@ -156,6 +159,10 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       await apiSendMessage(id, content)
       if (id !== conversationId) navigate({ page: 'active-conversation', conversationId: id })
     } catch (e) {
+      if (e instanceof NoCredentialsError) {
+        setLoginFor({ profileId: e.profileId, pendingContent: content })
+        return
+      }
       setSendError(e instanceof Error ? e.message : String(e))
     }
   }, [ensure, conversationId, navigate])
@@ -220,6 +227,19 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
           <span>Idle</span>
         )}
       </div>
+
+      {loginFor && (
+        <LoginModal
+          profileId={loginFor.profileId}
+          open
+          onClose={() => setLoginFor(null)}
+          onSuccess={() => {
+            const pending = loginFor.pendingContent
+            setLoginFor(null)
+            void onSend(pending)
+          }}
+        />
+      )}
     </div>
   )
 }

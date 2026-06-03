@@ -155,6 +155,17 @@ export interface DiscoverCompetitorsInput {
   forceHeadless?: boolean
 }
 
+export interface AppConfig {
+  /** Path to chrome.exe / Chrome binary, when not on PATH. */
+  chromePath?: string
+  /**
+   * Full path to the Chrome user-data profile directory used when a
+   * crawler flow asks for the 'login' profile — e.g. the user's
+   * 'Profile 3' on this PC where they're already signed into IG.
+   */
+  loginProfileDir?: string
+}
+
 export interface DiscoveredCandidate {
   username: string
   fullName?: string

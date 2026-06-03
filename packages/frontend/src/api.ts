@@ -1,5 +1,6 @@
 import type {
   ApiHealthResponse,
+  AppConfig,
   CapturedPostListResponse,
   CapturedPostSummary,
   CaptureResultPayload,
@@ -73,6 +74,21 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getHealth(): Promise<ApiHealthResponse> {
   return api<ApiHealthResponse>('/health')
+}
+
+/* ---------- App config ---------- */
+
+export async function getAppConfig(): Promise<AppConfig> {
+  const r = await api<{ ok: true; config: AppConfig }>('/config')
+  return r.config
+}
+
+export async function updateAppConfig(patch: AppConfig): Promise<AppConfig> {
+  const r = await api<{ ok: true; config: AppConfig }>('/config', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+  return r.config
 }
 
 export async function listProfiles(): Promise<ProfileSummary[]> {

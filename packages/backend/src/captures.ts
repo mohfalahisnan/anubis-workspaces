@@ -54,11 +54,21 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const body = CaptureBody.parse(await c.req.json().catch(() => ({})))
   const usernameNoAt = competitor.handle.replace(/^@/, '')
 
+  // When the user picked the 'login' profile, lift their configured
+  // Chrome user-data dir + chrome executable path from app config so
+  // captures hit the same Chrome profile they actually signed in on
+  // (e.g. 'Profile 3' in the user's main Chrome). chromePath applies
+  // to any profile if set.
+  const cfg = stack.appConfig.get()
+  const selectedProfile = body.profile ?? 'public'
+
   let result: StandardCrawlerOutput
   try {
     result = await captureInstagramData({
       username: usernameNoAt,
-      profile: body.profile ?? 'public',
+      profile: selectedProfile,
+      profileDir: selectedProfile === 'login' ? cfg.loginProfileDir : undefined,
+      chromePath: cfg.chromePath,
       headless: body.headless,
       forceHeadless: body.forceHeadless,
       maxResponses: body.maxResponses ?? 30,

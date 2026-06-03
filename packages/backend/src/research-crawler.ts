@@ -6,6 +6,7 @@ import {
   launchChrome,
   silentReporter,
 } from '@anubis/research-crawler'
+import { getStack } from './services.js'
 
 const profileSchema = z.enum(['login', 'public', 'flow'])
 
@@ -64,14 +65,40 @@ const discoverInstagramSchema = z.object({
 
 export const researchCrawlerRoutes = new Hono()
 
+/**
+ * Returns a partial input that wires up the user's configured Chrome
+ * profile dir + executable path. Applies the profile dir only when the
+ * caller asked for the 'login' profile (the other profiles are the
+ * crawler's own isolated dirs); chrome path always wins when set.
+ *
+ * An explicit profileDir on the request body still beats whatever the
+ * config says, so power users can override per call.
+ */
+function configOverrides(profile: string | undefined): {
+  profileDir?: string
+  chromePath?: string
+} {
+  const cfg = getStack().appConfig.get()
+  return {
+    profileDir: profile === 'login' ? cfg.loginProfileDir : undefined,
+    chromePath: cfg.chromePath,
+  }
+}
+
 researchCrawlerRoutes.post('/chrome/open', async (c) => {
   const input = openChromeSchema.parse(await c.req.json())
-  return c.json(await launchChrome(input))
+  const overrides = configOverrides(input.profile)
+  return c.json(await launchChrome({
+    ...overrides,
+    ...input, // explicit body fields win over config
+  }))
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
   const input = captureInstagramProfileSchema.parse(await c.req.json())
+  const overrides = configOverrides(input.profile)
   return c.json(await captureInstagramData({
+    ...overrides,
     ...input,
     reporter: silentReporter(),
   }))
@@ -79,7 +106,9 @@ researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
 
 researchCrawlerRoutes.post('/instagram/discover', async (c) => {
   const input = discoverInstagramSchema.parse(await c.req.json())
+  const overrides = configOverrides(input.profile)
   return c.json(await discoverInstagramCompetitors({
+    ...overrides,
     ...input,
     reporter: silentReporter(),
   }))

@@ -18,6 +18,7 @@ import { CompetitorsPage } from '@/pages/competitors'
 import { ProfileEditorPage } from '@/pages/profile-editor'
 import { ProfilesPage } from '@/pages/profiles'
 import { ScheduledPage } from '@/pages/scheduled'
+import { SettingsPage } from '@/pages/settings'
 import { SkillsPage } from '@/pages/skills'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
@@ -201,12 +202,7 @@ function CurrentPage() {
     case 'scheduled':
       return <ScheduledPage />
     case 'settings':
-      return (
-        <PlaceholderPage
-          title='Settings'
-          hint='Workspace and theme settings — coming soon.'
-        />
-      )
+      return <SettingsPage />
     default:
       return <HomePage />
   }

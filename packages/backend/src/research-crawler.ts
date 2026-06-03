@@ -1,3 +1,4 @@
+import { basename, dirname } from 'node:path'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
@@ -9,12 +10,34 @@ import {
 import { getStack } from './services.js'
 import { ensureFreshLoginChrome } from './chrome-guard.js'
 
+/**
+ * AppConfig stores the full path to a named Chrome profile
+ * (e.g. ".../User Data/Profile 3"). Chrome wants that split into:
+ *   - --user-data-dir = the parent (the User Data folder)
+ *   - --profile-directory = the subdir name (Profile 3)
+ * Without --profile-directory Chrome treats the whole path as a fresh
+ * user-data root and creates a blank Default profile inside it.
+ */
+function splitProfilePath(full: string | undefined): {
+  userDataDir?: string
+  profileDirectory?: string
+} {
+  if (!full) return {}
+  const trimmed = full.trim()
+  if (!trimmed) return {}
+  return {
+    userDataDir: dirname(trimmed),
+    profileDirectory: basename(trimmed),
+  }
+}
+
 const profileSchema = z.enum(['login', 'public', 'flow'])
 
 const openChromeSchema = z.object({
   url: z.string().url().optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
   remoteDebuggingPort: z.number().int().positive().optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
@@ -34,6 +57,7 @@ const captureInstagramProfileSchema = z.object({
   initialDelayMs: z.number().int().nonnegative().max(10000).optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
@@ -54,6 +78,7 @@ const discoverInstagramSchema = z.object({
   includeRaw: z.boolean().optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
@@ -68,19 +93,26 @@ export const researchCrawlerRoutes = new Hono()
 
 /**
  * Returns a partial input that wires up the user's configured Chrome
- * profile dir + executable path. Applies the profile dir only when the
- * caller asked for the 'login' profile (the other profiles are the
- * crawler's own isolated dirs); chrome path always wins when set.
+ * profile + executable path. For the 'login' profile the path is split
+ * into (userDataDir, profileDirectory) so Chrome loads the named
+ * profile inside the existing user-data root instead of treating the
+ * full path as a fresh root.
  */
 function configOverrides(profile: string | undefined): {
   profileDir?: string
+  profileDirectory?: string
   chromePath?: string
 } {
   const cfg = getStack().appConfig.get()
-  return {
-    profileDir: profile === 'login' ? cfg.loginProfileDir : undefined,
-    chromePath: cfg.chromePath,
+  if (profile === 'login') {
+    const split = splitProfilePath(cfg.loginProfileDir)
+    return {
+      profileDir: split.userDataDir,
+      profileDirectory: split.profileDirectory,
+      chromePath: cfg.chromePath,
+    }
   }
+  return { chromePath: cfg.chromePath }
 }
 
 /**
@@ -90,13 +122,16 @@ function configOverrides(profile: string | undefined): {
  * the request body has the keys present-but-undefined when the caller
  * didn't set them, which would wipe the configured value.
  */
-function withOverrides<T extends { profileDir?: string; chromePath?: string }>(
+function withOverrides<
+  T extends { profileDir?: string; profileDirectory?: string; chromePath?: string },
+>(
   input: T,
-  overrides: { profileDir?: string; chromePath?: string },
+  overrides: { profileDir?: string; profileDirectory?: string; chromePath?: string },
 ): T {
   return {
     ...input,
     profileDir: input.profileDir ?? overrides.profileDir,
+    profileDirectory: input.profileDirectory ?? overrides.profileDirectory,
     chromePath: input.chromePath ?? overrides.chromePath,
   }
 }

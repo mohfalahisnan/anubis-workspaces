@@ -26,6 +26,14 @@ export type CaptureInstagramInput = {
   initialDelayMs?: number
   profile?: ProfileName
   profileDir?: string
+  /**
+   * The --profile-directory subdir name to pass to Chrome. Use this
+   * with profileDir set to the user-data root (the parent) so Chrome
+   * loads the existing named profile (e.g. profileDir="C:/.../User Data",
+   * profileDirectory="Profile 3") instead of treating profileDir as a
+   * fresh user-data root.
+   */
+  profileDirectory?: string
   chromePath?: string
   headless?: boolean
   forceHeadless?: boolean
@@ -46,6 +54,8 @@ export type DiscoverInstagramInput = {
   onCandidate?: (candidate: InstagramCompetitorCandidate) => void
   profile?: ProfileName
   profileDir?: string
+  /** See CaptureInstagramInput.profileDirectory. */
+  profileDirectory?: string
   chromePath?: string
   headless?: boolean
   forceHeadless?: boolean
@@ -74,6 +84,7 @@ export async function captureInstagramData(input: CaptureInstagramInput): Promis
     remoteDebuggingPort: port,
     profile,
     ...(input.profileDir ? { profileDir: input.profileDir } : {}),
+    ...(input.profileDirectory ? { profileDirectory: input.profileDirectory } : {}),
     ...(input.chromePath ? { chromePath: input.chromePath } : {}),
     ...(typeof input.headless === 'boolean' ? { headless: input.headless } : {}),
     ...(input.forceHeadless ? { forceHeadless: true } : {})
@@ -163,6 +174,7 @@ export async function discoverInstagramCompetitors(input: DiscoverInstagramInput
     remoteDebuggingPort: port,
     profile,
     ...(input.profileDir ? { profileDir: input.profileDir } : {}),
+    ...(input.profileDirectory ? { profileDirectory: input.profileDirectory } : {}),
     ...(input.chromePath ? { chromePath: input.chromePath } : {}),
     ...(typeof input.headless === 'boolean' ? { headless: input.headless } : {}),
     ...(input.forceHeadless ? { forceHeadless: true } : {})

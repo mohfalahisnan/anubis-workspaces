@@ -14,6 +14,15 @@ export type LaunchChromeInput = {
   url?: string
   profile?: ProfileName
   profileDir?: string
+  /**
+   * The --profile-directory subdir to pass Chrome alongside
+   * --user-data-dir. Required when targeting a named profile inside an
+   * existing user-data root (e.g. profileDir="C:/.../User Data" +
+   * profileDirectory="Profile 3"). Without it Chrome treats profileDir
+   * itself as the user-data root and creates a fresh "Default" profile
+   * inside it.
+   */
+  profileDirectory?: string
   remoteDebuggingPort?: number
   chromePath?: string
   headless?: boolean
@@ -74,6 +83,9 @@ export async function launchChrome(input: LaunchChromeInput = {}): Promise<Launc
 
   await mkdir(profile.dir, { recursive: true })
   const args = [`--remote-debugging-port=${profile.port}`, `--user-data-dir=${profile.dir}`]
+  if (input.profileDirectory?.trim()) {
+    args.push(`--profile-directory=${input.profileDirectory.trim()}`)
+  }
   if (headless) args.push('--headless=new', '--disable-gpu')
   args.push(url)
   const child = spawn(chrome, args, {

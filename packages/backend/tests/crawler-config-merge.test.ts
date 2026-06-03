@@ -74,7 +74,7 @@ afterAll(async () => {
 })
 
 describe('crawler route config merge', () => {
-  it('chrome/open with profile=login uses configured profileDir + chromePath', async () => {
+  it('chrome/open with profile=login splits the saved path into user-data + profile-directory', async () => {
     const { default: app } = await import('../src/app.js')
     launchSpy.mockClear()
     await app.request('/research-crawler/chrome/open', {
@@ -83,8 +83,17 @@ describe('crawler route config merge', () => {
       body: JSON.stringify({ profile: 'login' }),
     })
     expect(launchSpy).toHaveBeenCalledTimes(1)
-    const arg = launchSpy.mock.calls[0]?.[0] as { profileDir?: string; chromePath?: string }
-    expect(arg.profileDir).toBe('/fake/User Data/Profile 3')
+    const arg = launchSpy.mock.calls[0]?.[0] as {
+      profileDir?: string
+      profileDirectory?: string
+      chromePath?: string
+    }
+    // user-data-dir is the parent of the saved profile path…
+    expect(arg.profileDir).toBe('/fake/User Data')
+    // …and --profile-directory carries the subdir name so Chrome
+    // actually loads Profile 3 instead of creating a blank Default
+    // inside it.
+    expect(arg.profileDirectory).toBe('Profile 3')
     expect(arg.chromePath).toBe('/fake/chrome')
   })
 
@@ -114,7 +123,7 @@ describe('crawler route config merge', () => {
     expect(arg.chromePath).toBe('/fake/chrome')
   })
 
-  it('discover with profile=login carries the configured profileDir into the crawler', async () => {
+  it('discover with profile=login passes the split user-data + profile-directory pair', async () => {
     const { default: app } = await import('../src/app.js')
     discoverSpy.mockClear()
     await app.request('/research-crawler/instagram/discover', {
@@ -122,11 +131,15 @@ describe('crawler route config merge', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ source: 'explore', profile: 'login', targetCompetitors: 5 }),
     })
-    const arg = discoverSpy.mock.calls[0]?.[0] as { profileDir?: string }
-    expect(arg.profileDir).toBe('/fake/User Data/Profile 3')
+    const arg = discoverSpy.mock.calls[0]?.[0] as {
+      profileDir?: string
+      profileDirectory?: string
+    }
+    expect(arg.profileDir).toBe('/fake/User Data')
+    expect(arg.profileDirectory).toBe('Profile 3')
   })
 
-  it('instagram/capture-profile with profile=login uses the configured profileDir', async () => {
+  it('instagram/capture-profile with profile=login passes the split pair', async () => {
     const { default: app } = await import('../src/app.js')
     captureSpy.mockClear()
     await app.request('/research-crawler/instagram/capture-profile', {
@@ -134,7 +147,11 @@ describe('crawler route config merge', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ username: 'falah.isnan', profile: 'login' }),
     })
-    const arg = captureSpy.mock.calls[0]?.[0] as { profileDir?: string }
-    expect(arg.profileDir).toBe('/fake/User Data/Profile 3')
+    const arg = captureSpy.mock.calls[0]?.[0] as {
+      profileDir?: string
+      profileDirectory?: string
+    }
+    expect(arg.profileDir).toBe('/fake/User Data')
+    expect(arg.profileDirectory).toBe('Profile 3')
   })
 })

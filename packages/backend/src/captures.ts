@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { basename, dirname } from 'node:path'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
@@ -11,6 +12,26 @@ import {
 import type { CapturedPost } from '@anubis/conversation'
 import { getStack } from './services.js'
 import { ensureFreshLoginChrome } from './chrome-guard.js'
+
+/**
+ * The configured loginProfileDir is the full path to a named profile
+ * (e.g. ".../User Data/Profile 3"). Chrome needs that split into the
+ * user-data root and the profile subdir, otherwise it treats the whole
+ * path as a fresh user-data root and creates a blank Default profile
+ * inside it — which is the "wrong profile" symptom.
+ */
+function splitProfilePath(full: string | undefined): {
+  userDataDir?: string
+  profileDirectory?: string
+} {
+  if (!full) return {}
+  const trimmed = full.trim()
+  if (!trimmed) return {}
+  return {
+    userDataDir: dirname(trimmed),
+    profileDirectory: basename(trimmed),
+  }
+}
 
 /* -----------------------------------------------------------
    Capture orchestration
@@ -62,14 +83,14 @@ captureRoutes.post('/competitors/:id', async (c) => {
   // to any profile if set.
   const cfg = stack.appConfig.get()
   const selectedProfile = body.profile ?? 'public'
-  const effectiveProfileDir =
-    selectedProfile === 'login' ? cfg.loginProfileDir : undefined
+  const split = selectedProfile === 'login' ? splitProfilePath(cfg.loginProfileDir) : {}
 
-  // Kill any stale Chrome on the login port whose profile dir doesn't
-  // match what we want — otherwise launchChrome would silently reuse
-  // the wrong one. No-op when the running Chrome is already correct.
+  // Kill any stale Chrome on the login port whose user-data root
+  // doesn't match what we want — otherwise launchChrome would silently
+  // reuse it. Compared against the user-data root (parent), since
+  // that's what Chrome's /json/version reports.
   if (selectedProfile === 'login') {
-    await ensureFreshLoginChrome(effectiveProfileDir)
+    await ensureFreshLoginChrome(split.userDataDir)
   }
 
   let result: StandardCrawlerOutput
@@ -77,7 +98,8 @@ captureRoutes.post('/competitors/:id', async (c) => {
     result = await captureInstagramData({
       username: usernameNoAt,
       profile: selectedProfile,
-      profileDir: effectiveProfileDir,
+      profileDir: split.userDataDir,
+      profileDirectory: split.profileDirectory,
       chromePath: cfg.chromePath,
       headless: body.headless,
       forceHeadless: body.forceHeadless,

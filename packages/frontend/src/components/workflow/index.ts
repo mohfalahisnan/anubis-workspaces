@@ -42,3 +42,6 @@ export { AgentReviewNode }   from './nodes/agent-review-node'
 export type { AgentReviewNodeData, AgentReviewCheck } from './nodes/agent-review-node'
 export { FinalContentNode }  from './nodes/final-content-node'
 export type { FinalContentNodeData } from './nodes/final-content-node'
+
+export { workflowNodeTypes } from './node-types'
+export type { WorkflowNodeType } from './node-types'

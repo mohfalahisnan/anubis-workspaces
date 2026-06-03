@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { basename, dirname } from 'node:path'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
+  applyAvgLikesToOutput,
   captureInstagramData,
   silentReporter,
   type PostData,
@@ -10,59 +10,32 @@ import {
   type StandardCrawlerOutput,
 } from '@anubis/research-crawler'
 import type { CapturedPost } from '@anubis/conversation'
-import { getStack } from './services.js'
-import { ensureFreshLoginChrome } from './chrome-guard.js'
-
-/**
- * The configured loginProfileDir is the full path to a named profile
- * (e.g. ".../User Data/Profile 3"). Chrome needs that split into the
- * user-data root and the profile subdir, otherwise it treats the whole
- * path as a fresh user-data root and creates a blank Default profile
- * inside it — which is the "wrong profile" symptom.
- */
-function splitProfilePath(full: string | undefined): {
-  userDataDir?: string
-  profileDirectory?: string
-} {
-  if (!full) return {}
-  const trimmed = full.trim()
-  if (!trimmed) return {}
-  return {
-    userDataDir: dirname(trimmed),
-    profileDirectory: basename(trimmed),
-  }
-}
+import { getStack, ensureExtensionStarted, getJobQueue } from './services.js'
+import { mapExtensionError } from './extension/error-mapping.js'
 
 /* -----------------------------------------------------------
    Capture orchestration
    -----------------------------------------------------------
-   Bridges @anubis/research-crawler (CDP-driven Instagram
-   capture) with @anubis/conversation persistence (competitor
-   stats + captured posts).
+   POST /captures/competitors/:id
+     - profile=login  → dispatch to the Anubis extension. The
+                        extension scrapes IG inside the user's
+                        real session and posts back raw
+                        ProfileData + PostData. We synthesize a
+                        StandardCrawlerOutput and run avg-likes
+                        backend-side so persistence + competitor
+                        stats stay identical.
+     - profile=public → existing CDP scraper (anonymous mode).
+     - profile=flow   → existing CDP scraper.
 
-   POST /captures/competitors/:id   — runs a capture for one
-                                      tracked handle and
-                                      upserts posts.
-   GET  /posts                      — flat feed of captured
-                                      posts joined with the
-                                      owning competitor, used
-                                      by the Content page.
+   GET /posts                 — flat feed of captured posts joined
+                                with the owning competitor.
    ----------------------------------------------------------- */
 
 const CaptureBody = z.object({
-  /** Which Chrome profile dir/port to use. Defaults to 'public'. */
   profile: z.enum(['login', 'public', 'flow']).optional(),
-  /** When true, launch Chrome headless. */
   headless: z.boolean().optional(),
-  /**
-   * Required when running the login profile headless — the crawler
-   * normally refuses (it expects the user to be interacting). With
-   * this flag set the saved cookies are reused without a UI.
-   */
   forceHeadless: z.boolean().optional(),
-  /** Hard cap on posts returned — keeps a refresh from running away. */
   maxResponses: z.number().int().positive().max(120).optional(),
-  /** Default 90s; capture can be slow especially on the first scroll. */
   timeoutMs: z.number().int().positive().max(180_000).optional(),
 }).strict()
 
@@ -75,52 +48,53 @@ captureRoutes.post('/competitors/:id', async (c) => {
 
   const body = CaptureBody.parse(await c.req.json().catch(() => ({})))
   const usernameNoAt = competitor.handle.replace(/^@/, '')
-
-  // When the user picked the 'login' profile, lift their configured
-  // Chrome user-data dir + chrome executable path from app config so
-  // captures hit the same Chrome profile they actually signed in on
-  // (e.g. 'Profile 3' in the user's main Chrome). chromePath applies
-  // to any profile if set.
-  const cfg = stack.appConfig.get()
   const selectedProfile = body.profile ?? 'public'
-  // Login flow is being rewired to the Anubis extension in a later task;
-  // for now drop the removed loginProfileDir read so the file compiles.
-  const split: { userDataDir?: string; profileDirectory?: string } = {}
-
-  // Kill any stale Chrome on the login port whose user-data root
-  // doesn't match what we want — otherwise launchChrome would silently
-  // reuse it. Compared against the user-data root (parent), since
-  // that's what Chrome's /json/version reports.
-  if (selectedProfile === 'login') {
-    await ensureFreshLoginChrome(split.userDataDir)
-  }
+  const cfg = stack.appConfig.get()
 
   let result: StandardCrawlerOutput
-  try {
-    result = await captureInstagramData({
-      username: usernameNoAt,
-      profile: selectedProfile,
-      profileDir: split.userDataDir,
-      profileDirectory: split.profileDirectory,
-      chromePath: cfg.chromePath,
-      headless: body.headless,
-      forceHeadless: body.forceHeadless,
-      maxResponses: body.maxResponses ?? 30,
-      timeoutMs: body.timeoutMs ?? 90_000,
-      reporter: silentReporter(),
-    })
-  } catch (e) {
-    return c.json(
-      {
-        ok: false,
-        error: {
-          code: 'CAPTURE_FAILED',
-          message: e instanceof Error ? e.message : 'Capture threw an unexpected error.',
-          hint: 'If this is the first capture, run /research-crawler/chrome/open with profile=login, sign into Instagram once, then retry.',
+  if (selectedProfile === 'login') {
+    await ensureExtensionStarted()
+    const queue = getJobQueue()
+    if (!queue) {
+      return c.json(
+        { ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Extension queue not ready.' } },
+        503,
+      )
+    }
+    try {
+      const data = await queue.dispatch({
+        kind: 'capture-profile',
+        input: { username: usernameNoAt, maxResponses: body.maxResponses ?? 30 },
+        timeoutMs: body.timeoutMs ?? 90_000,
+      }) as { profiles: ProfileData[]; posts: PostData[] }
+      result = synthStandardOutput(data, usernameNoAt, body.maxResponses ?? 30)
+    } catch (e) {
+      return mapExtensionError(c, e)
+    }
+  } else {
+    try {
+      result = await captureInstagramData({
+        username: usernameNoAt,
+        profile: selectedProfile,
+        chromePath: cfg.chromePath,
+        headless: body.headless,
+        forceHeadless: body.forceHeadless,
+        maxResponses: body.maxResponses ?? 30,
+        timeoutMs: body.timeoutMs ?? 90_000,
+        reporter: silentReporter(),
+      })
+    } catch (e) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'CAPTURE_FAILED',
+            message: e instanceof Error ? e.message : 'Capture threw.',
+          },
         },
-      },
-      500,
-    )
+        500,
+      )
+    }
   }
 
   if (!result.ok) {
@@ -144,8 +118,6 @@ captureRoutes.post('/competitors/:id', async (c) => {
     .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now))
   stack.capturedPosts.upsertMany(posts)
 
-  // Refresh competitor stats from this capture's profile entry +
-  // the avgLikes calculation in meta (modal-cluster-mean).
   const profileEntry =
     result.output.profiles.find((p) => p.username === usernameNoAt) ??
     result.output.profiles[0]
@@ -197,8 +169,6 @@ postRoutes.get('/', (c) => {
     orderBy: opts.orderBy ?? 'recent',
   })
 
-  // Join with competitor metadata so the UI can render handle + tint
-  // without a second request.
   const competitorsById = new Map(stack.competitors.list().map((c) => [c.id, c]))
   const items = rows.map((row) => {
     const owner = competitorsById.get(row.competitorId)
@@ -212,6 +182,37 @@ postRoutes.get('/', (c) => {
 })
 
 /* ---------- helpers ---------- */
+
+/**
+ * Wraps extension-returned raw posts in the StandardCrawlerOutput
+ * shape the downstream persistence + avg-likes code expects, then
+ * runs the modal-cluster-mean over the posts so the resulting
+ * meta.avgLikes matches the CDP path exactly.
+ */
+function synthStandardOutput(
+  data: { profiles: ProfileData[]; posts: PostData[] },
+  username: string,
+  maxResponses: number,
+): StandardCrawlerOutput {
+  const out: StandardCrawlerOutput = {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['Profile Data List', 'Post Data List'],
+    input: {
+      target: 'instagram',
+      mode: 'profile_capture',
+      username,
+      maxResponses,
+    },
+    output: { profiles: data.profiles, posts: data.posts },
+    meta: {
+      profileCount: data.profiles.length,
+      postCount: data.posts.length,
+      warnings: [],
+    },
+  }
+  return applyAvgLikesToOutput(out)
+}
 
 function postDataToCapturedPost(
   competitorId: string,

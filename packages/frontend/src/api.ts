@@ -3,8 +3,8 @@ import type {
   ApiHealthResponse,
   AppConfig,
   CapturedPostListResponse,
-  ChromeProfilesPayload,
   CapturedPostSummary,
+  ExtensionStatus,
   CaptureResultPayload,
   CompetitorListResponse,
   CompetitorSummary,
@@ -112,45 +112,24 @@ export async function updateAppConfig(patch: AppConfig): Promise<AppConfig> {
   return r.config
 }
 
-/* ---------- System introspection ---------- */
+/* ---------- Extension pairing ---------- */
 
-export async function listLocalChromeProfiles(): Promise<ChromeProfilesPayload> {
-  return api<ChromeProfilesPayload>('/system/chrome-profiles')
+export async function getExtensionStatus(): Promise<ExtensionStatus> {
+  const r = await api<{ ok: true; status: ExtensionStatus }>('/extension/status')
+  return r.status
 }
 
-export interface CloneChromeProfileResult {
-  syncedAt: number
-  bytesCopied: number
-  filesCopied: number
-  destRoot: string
-  config: AppConfig
+export async function revealExtensionSecret(): Promise<string> {
+  const r = await api<{ ok: true; secret: string }>('/extension/secret/reveal', { method: 'POST' })
+  return r.secret
 }
 
-/**
- * Triggers POST /system/chrome-profiles/clone — copies the given Chrome
- * profile into Anubis's own user-data root and updates AppConfig with
- * loginProfileDir + loginProfileSyncedAt atomically. Throws on the
- * 409 (Chrome running) and 400 (invalid source) responses with a
- * clean error message the UI can render.
- */
-export async function cloneChromeProfile(
-  source: string,
-): Promise<CloneChromeProfileResult> {
-  const r = await api<{ ok: true } & CloneChromeProfileResult>(
-    '/system/chrome-profiles/clone',
-    {
-      method: 'POST',
-      body: JSON.stringify({ source }),
-    },
-  )
-  return {
-    syncedAt: r.syncedAt,
-    bytesCopied: r.bytesCopied,
-    filesCopied: r.filesCopied,
-    destRoot: r.destRoot,
-    config: r.config,
-  }
+export async function rotateExtensionSecret(): Promise<string> {
+  const r = await api<{ ok: true; secret: string }>('/extension/secret/rotate', { method: 'POST' })
+  return r.secret
 }
+
+/* ---------- Profiles ---------- */
 
 export async function listProfiles(): Promise<ProfileSummary[]> {
   const r = await api<ProfileListResponse>('/profiles')

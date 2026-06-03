@@ -1,4 +1,3 @@
-import { basename, dirname } from 'node:path'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
@@ -6,30 +5,22 @@ import {
   discoverInstagramCompetitors,
   launchChrome,
   silentReporter,
+  type PostData,
+  type ProfileData,
 } from '@anubis/research-crawler'
-import { getStack } from './services.js'
-import { ensureFreshLoginChrome } from './chrome-guard.js'
+import { getStack, ensureExtensionStarted, getJobQueue } from './services.js'
+import { mapExtensionError } from './extension/error-mapping.js'
 
-/**
- * AppConfig stores the full path to a named Chrome profile
- * (e.g. ".../User Data/Profile 3"). Chrome wants that split into:
- *   - --user-data-dir = the parent (the User Data folder)
- *   - --profile-directory = the subdir name (Profile 3)
- * Without --profile-directory Chrome treats the whole path as a fresh
- * user-data root and creates a blank Default profile inside it.
- */
-function splitProfilePath(full: string | undefined): {
-  userDataDir?: string
-  profileDirectory?: string
-} {
-  if (!full) return {}
-  const trimmed = full.trim()
-  if (!trimmed) return {}
-  return {
-    userDataDir: dirname(trimmed),
-    profileDirectory: basename(trimmed),
-  }
-}
+/* -----------------------------------------------------------
+   Research-crawler routes
+   -----------------------------------------------------------
+   - profile=login   → dispatched to the Anubis extension; the
+                       chrome/open route returns NOT_APPLICABLE
+                       because there is no Chrome for us to
+                       launch on the login flow anymore.
+   - profile=public  → existing CDP scraper (anonymous mode).
+   - profile=flow    → existing CDP scraper.
+   ----------------------------------------------------------- */
 
 const profileSchema = z.enum(['login', 'public', 'flow'])
 
@@ -37,7 +28,6 @@ const openChromeSchema = z.object({
   url: z.string().url().optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
-  profileDirectory: z.string().min(1).optional(),
   remoteDebuggingPort: z.number().int().positive().optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
@@ -57,7 +47,6 @@ const captureInstagramProfileSchema = z.object({
   initialDelayMs: z.number().int().nonnegative().max(10000).optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
-  profileDirectory: z.string().min(1).optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
@@ -78,7 +67,6 @@ const discoverInstagramSchema = z.object({
   includeRaw: z.boolean().optional(),
   profile: profileSchema.optional(),
   profileDir: z.string().min(1).optional(),
-  profileDirectory: z.string().min(1).optional(),
   chromePath: z.string().min(1).optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
@@ -91,69 +79,51 @@ const discoverInstagramSchema = z.object({
 
 export const researchCrawlerRoutes = new Hono()
 
-/**
- * Returns a partial input that wires up the user's configured Chrome
- * profile + executable path. For the 'login' profile the path is split
- * into (userDataDir, profileDirectory) so Chrome loads the named
- * profile inside the existing user-data root instead of treating the
- * full path as a fresh root.
- */
-function configOverrides(profile: string | undefined): {
-  profileDir?: string
-  profileDirectory?: string
-  chromePath?: string
-} {
-  const cfg = getStack().appConfig.get()
-  if (profile === 'login') {
-    const split = splitProfilePath(cfg.loginProfileDir)
-    return {
-      profileDir: split.userDataDir,
-      profileDirectory: split.profileDirectory,
-      chromePath: cfg.chromePath,
-    }
-  }
-  return { chromePath: cfg.chromePath }
-}
-
-/**
- * Merges request input with config overrides using the precedence
- *   explicit body field > config > undefined
- * Spread order matters — we cannot `{ ...overrides, ...input }` because
- * the request body has the keys present-but-undefined when the caller
- * didn't set them, which would wipe the configured value.
- */
-function withOverrides<
-  T extends { profileDir?: string; profileDirectory?: string; chromePath?: string },
->(
-  input: T,
-  overrides: { profileDir?: string; profileDirectory?: string; chromePath?: string },
-): T {
-  return {
-    ...input,
-    profileDir: input.profileDir ?? overrides.profileDir,
-    profileDirectory: input.profileDirectory ?? overrides.profileDirectory,
-    chromePath: input.chromePath ?? overrides.chromePath,
-  }
-}
-
 researchCrawlerRoutes.post('/chrome/open', async (c) => {
   const input = openChromeSchema.parse(await c.req.json())
-  const merged = withOverrides(input, configOverrides(input.profile))
   if (input.profile === 'login') {
-    await ensureFreshLoginChrome(merged.profileDir)
+    return c.json({
+      ok: false,
+      error: {
+        code: 'NOT_APPLICABLE_FOR_LOGIN',
+        message: 'Login captures use the Anubis extension; there is no Chrome for the backend to launch.',
+      },
+    }, 400)
   }
-  return c.json(await launchChrome(merged))
+  const chromePath = getStack().appConfig.get().chromePath
+  return c.json(await launchChrome({ ...input, chromePath: input.chromePath ?? chromePath }))
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
   const input = captureInstagramProfileSchema.parse(await c.req.json())
-  const merged = withOverrides(input, configOverrides(input.profile))
   if (input.profile === 'login') {
-    await ensureFreshLoginChrome(merged.profileDir)
+    await ensureExtensionStarted()
+    const queue = getJobQueue()
+    if (!queue) return c.json({ ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Extension queue not ready.' } }, 503)
+    const username = input.username?.replace(/^@/, '').trim()
+    if (!username) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'username required for login profile' } }, 400)
+    try {
+      const data = await queue.dispatch({
+        kind: 'capture-profile',
+        input: { username, maxResponses: input.maxResponses ?? 30 },
+        timeoutMs: input.timeoutMs ?? 90_000,
+      }) as { profiles: ProfileData[]; posts: PostData[] }
+      return c.json({
+        ok: true,
+        schemaVersion: '1.0',
+        outputTypes: ['Profile Data List', 'Post Data List'],
+        output: { profiles: data.profiles, posts: data.posts },
+        meta: { profileCount: data.profiles.length, postCount: data.posts.length, warnings: [] },
+      })
+    } catch (e) {
+      return mapExtensionError(c, e)
+    }
   }
+  const chromePath = getStack().appConfig.get().chromePath
   return c.json(
     await captureInstagramData({
-      ...merged,
+      ...input,
+      chromePath: input.chromePath ?? chromePath,
       reporter: silentReporter(),
     }),
   )
@@ -161,13 +131,37 @@ researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
 
 researchCrawlerRoutes.post('/instagram/discover', async (c) => {
   const input = discoverInstagramSchema.parse(await c.req.json())
-  const merged = withOverrides(input, configOverrides(input.profile))
   if (input.profile === 'login') {
-    await ensureFreshLoginChrome(merged.profileDir)
+    await ensureExtensionStarted()
+    const queue = getJobQueue()
+    if (!queue) return c.json({ ok: false, error: { code: 'EXTENSION_OFFLINE', message: 'Extension queue not ready.' } }, 503)
+    try {
+      const data = await queue.dispatch({
+        kind: 'discover',
+        input: {
+          source: input.source ?? 'explore',
+          hashtag: input.hashtag,
+          keyword: input.keyword,
+          targetCompetitors: input.targetCompetitors ?? 10,
+        },
+        timeoutMs: input.timeoutMs ?? 60_000,
+      }) as { profiles: ProfileData[]; posts: PostData[] }
+      return c.json({
+        ok: true,
+        schemaVersion: '1.0',
+        outputTypes: ['Profile Data List', 'Post Data List'],
+        output: { profiles: data.profiles, posts: data.posts },
+        meta: { profileCount: data.profiles.length, postCount: data.posts.length, warnings: [] },
+      })
+    } catch (e) {
+      return mapExtensionError(c, e)
+    }
   }
+  const chromePath = getStack().appConfig.get().chromePath
   return c.json(
     await discoverInstagramCompetitors({
-      ...merged,
+      ...input,
+      chromePath: input.chromePath ?? chromePath,
       reporter: silentReporter(),
     }),
   )

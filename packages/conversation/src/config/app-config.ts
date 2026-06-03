@@ -4,24 +4,29 @@ import { join } from 'node:path'
 /* ============================================================
    Application-level configuration
    ============================================================
-   Lives at {dataDir}/config.json and stores per-machine knobs
-   the user can change at runtime. Today it just holds two
-   Chrome-related fields used by the research-crawler:
+   Lives at {dataDir}/config.json. Holds per-machine knobs the
+   user can tweak at runtime:
 
-     - loginProfileDir: which Chrome user-data dir to launch
-       when a flow asks for the 'login' profile (e.g. the
-       user's Profile 3 where they're already signed into IG)
-     - chromePath:     optional path to chrome.exe / Chrome
-       binary if it's not on PATH
+     - chromePath:           optional path to chrome.exe (when
+                             not on PATH)
+     - extensionSecret:      shared secret for the Anubis Chrome
+                             extension. Auto-generated on first
+                             construction.
+     - extensionPort:        WS port the backend bound to
+                             (47891–47900). Persisted so the
+                             extension can probe-and-find.
+     - extensionPairedAt:    epoch ms of the most recent
+                             successful extension `hello`.
 
-   Both are persisted as a flat object; partial PATCHes merge.
-   Empty strings collapse to "unset" so the form can clear
-   values cleanly.
+   Persisted as a flat object; partial PATCHes merge. Empty
+   strings collapse to "unset" for clean form-clear behaviour.
    ============================================================ */
 
 export interface AppConfig {
   chromePath?: string
-  loginProfileDir?: string
+  extensionSecret?: string
+  extensionPort?: number
+  extensionPairedAt?: number
 }
 
 const CONFIG_FILE = 'config.json'
@@ -32,6 +37,13 @@ export class AppConfigService {
 
   constructor(dataDir: string) {
     this.path = join(dataDir, CONFIG_FILE)
+    // Auto-generate the extension secret on first run so the user
+    // can paste it into the extension Options page without us ever
+    // having a code path where it's missing.
+    const current = this.get()
+    if (!current.extensionSecret) {
+      this.update({ extensionSecret: randomHex(32) })
+    }
   }
 
   get(): AppConfig {
@@ -60,9 +72,20 @@ export class AppConfigService {
 function sanitize(obj: Record<string, unknown>): AppConfig {
   const out: AppConfig = {}
   const chromePath = typeof obj.chromePath === 'string' ? obj.chromePath.trim() : ''
-  const loginProfileDir =
-    typeof obj.loginProfileDir === 'string' ? obj.loginProfileDir.trim() : ''
   if (chromePath) out.chromePath = chromePath
-  if (loginProfileDir) out.loginProfileDir = loginProfileDir
+  const secret = typeof obj.extensionSecret === 'string' ? obj.extensionSecret.trim() : ''
+  if (/^[0-9a-f]{32,}$/i.test(secret)) out.extensionSecret = secret
+  if (typeof obj.extensionPort === 'number' && obj.extensionPort > 0 && obj.extensionPort < 65536) {
+    out.extensionPort = Math.floor(obj.extensionPort)
+  }
+  if (typeof obj.extensionPairedAt === 'number' && obj.extensionPairedAt > 0) {
+    out.extensionPairedAt = Math.floor(obj.extensionPairedAt)
+  }
   return out
+}
+
+function randomHex(byteLen: number): string {
+  const buf = new Uint8Array(byteLen)
+  globalThis.crypto.getRandomValues(buf)
+  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('')
 }

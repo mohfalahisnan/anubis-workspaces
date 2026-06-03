@@ -17,13 +17,14 @@ afterAll(async () => {
 })
 
 describe('/config route', () => {
-  it('GET /config returns an empty config initially', async () => {
+  it('GET /config returns a config with an auto-generated extensionSecret', async () => {
     const { default: app } = await import('../src/app.js')
     const res = await app.request('/config')
     expect(res.status).toBe(200)
     const body = (await res.json()) as { ok: boolean; config: Record<string, unknown> }
     expect(body.ok).toBe(true)
-    expect(body.config).toEqual({})
+    expect(body.config.extensionSecret).toMatch(/^[0-9a-f]{64}$/)
+    expect(body.config.chromePath).toBeUndefined()
   })
 
   it('PATCH /config merges + persists; subsequent GET sees the value', async () => {
@@ -32,16 +33,16 @@ describe('/config route', () => {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        loginProfileDir: 'C:\\Users\\Falah\\AppData\\Local\\Google\\Chrome\\User Data\\Profile 3',
+        chromePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       }),
     })
     expect(patch.status).toBe(200)
-    const patchBody = (await patch.json()) as { ok: boolean; config: { loginProfileDir?: string } }
-    expect(patchBody.config.loginProfileDir).toMatch(/Profile 3$/)
+    const patchBody = (await patch.json()) as { ok: boolean; config: { chromePath?: string } }
+    expect(patchBody.config.chromePath).toMatch(/chrome\.exe$/)
 
     const get = await app.request('/config')
-    const getBody = (await get.json()) as { config: { loginProfileDir?: string } }
-    expect(getBody.config.loginProfileDir).toMatch(/Profile 3$/)
+    const getBody = (await get.json()) as { config: { chromePath?: string } }
+    expect(getBody.config.chromePath).toMatch(/chrome\.exe$/)
   })
 
   it('PATCH with empty string clears a value', async () => {
@@ -49,9 +50,9 @@ describe('/config route', () => {
     const patch = await app.request('/config', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ loginProfileDir: '' }),
+      body: JSON.stringify({ chromePath: '' }),
     })
-    const body = (await patch.json()) as { config: { loginProfileDir?: string } }
-    expect(body.config.loginProfileDir).toBeUndefined()
+    const body = (await patch.json()) as { config: { chromePath?: string } }
+    expect(body.config.chromePath).toBeUndefined()
   })
 })

@@ -164,38 +164,20 @@ export interface DiscoverCompetitorsInput {
 export interface AppConfig {
   /** Path to chrome.exe / Chrome binary, when not on PATH. */
   chromePath?: string
-  /**
-   * Full path to the Chrome user-data profile directory used as the
-   * SOURCE for the cloned login profile — e.g. the user's 'Profile 3'
-   * on this PC where they're already signed into IG. The crawler does
-   * not launch Chrome against this path directly; it launches against
-   * the Anubis-owned clone derived from it (see loginProfileSyncedAt).
-   */
-  loginProfileDir?: string
-  /**
-   * Epoch ms of the last successful clone of `loginProfileDir`. When
-   * undefined the login profile is unusable — the crawler refuses to
-   * launch and the UI prompts to sync.
-   */
-  loginProfileSyncedAt?: number
+  /** Shared secret with the Anubis Chrome extension. Auto-generated on first run. */
+  extensionSecret?: string
+  /** WS port the backend bound to (47891–47900). */
+  extensionPort?: number
+  /** Epoch ms of the most recent successful extension `hello`. */
+  extensionPairedAt?: number
 }
 
-export interface ChromeProfileInfo {
-  /** Subdirectory name as Chrome stores it ('Default', 'Profile 3', …). */
-  directory: string
-  /** Human-friendly name from Local State, falling back to `directory`. */
-  name: string
-  /** Absolute path — what we save to AppConfig.loginProfileDir. */
-  path: string
-  /** GAIA / email if Local State exposed one. */
-  email?: string
-}
-
-export interface ChromeProfilesPayload {
-  ok: boolean
-  /** The platform-detected user-data directory (or null if unknown). */
-  userDataDir: string | null
-  profiles: ChromeProfileInfo[]
+export interface ExtensionStatus {
+  connected: boolean
+  extensionVersion?: string
+  pairedAt?: number
+  port: number
+  dataDirPath: string
 }
 
 export interface DiscoveredCandidate {

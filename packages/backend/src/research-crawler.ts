@@ -70,9 +70,6 @@ export const researchCrawlerRoutes = new Hono()
  * profile dir + executable path. Applies the profile dir only when the
  * caller asked for the 'login' profile (the other profiles are the
  * crawler's own isolated dirs); chrome path always wins when set.
- *
- * An explicit profileDir on the request body still beats whatever the
- * config says, so power users can override per call.
  */
 function configOverrides(profile: string | undefined): {
   profileDir?: string
@@ -85,31 +82,48 @@ function configOverrides(profile: string | undefined): {
   }
 }
 
+/**
+ * Merges request input with config overrides using the precedence
+ *   explicit body field > config > undefined
+ * Spread order matters — we cannot `{ ...overrides, ...input }` because
+ * the request body has the keys present-but-undefined when the caller
+ * didn't set them, which would wipe the configured value.
+ */
+function withOverrides<T extends { profileDir?: string; chromePath?: string }>(
+  input: T,
+  overrides: { profileDir?: string; chromePath?: string },
+): T {
+  return {
+    ...input,
+    profileDir: input.profileDir ?? overrides.profileDir,
+    chromePath: input.chromePath ?? overrides.chromePath,
+  }
+}
+
 researchCrawlerRoutes.post('/chrome/open', async (c) => {
   const input = openChromeSchema.parse(await c.req.json())
   const overrides = configOverrides(input.profile)
-  return c.json(await launchChrome({
-    ...overrides,
-    ...input, // explicit body fields win over config
-  }))
+  return c.json(await launchChrome(withOverrides(input, overrides)))
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {
   const input = captureInstagramProfileSchema.parse(await c.req.json())
   const overrides = configOverrides(input.profile)
-  return c.json(await captureInstagramData({
-    ...overrides,
-    ...input,
-    reporter: silentReporter(),
-  }))
+  return c.json(
+    await captureInstagramData({
+      ...withOverrides(input, overrides),
+      reporter: silentReporter(),
+    }),
+  )
 })
 
 researchCrawlerRoutes.post('/instagram/discover', async (c) => {
   const input = discoverInstagramSchema.parse(await c.req.json())
   const overrides = configOverrides(input.profile)
-  return c.json(await discoverInstagramCompetitors({
-    ...overrides,
-    ...input,
-    reporter: silentReporter(),
-  }))
+  return c.json(
+    await discoverInstagramCompetitors({
+      ...withOverrides(input, overrides),
+      reporter: silentReporter(),
+    }),
+  )
 })

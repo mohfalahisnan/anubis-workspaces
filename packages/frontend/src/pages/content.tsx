@@ -28,6 +28,9 @@ import { captureCompetitor, deletePost, listPosts, updatePost } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
+import { CompetitorLevelDot } from '@/components/competitor-level-dot'
+import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
+import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
 import {
   Dialog,
   DialogContent,
@@ -232,6 +235,8 @@ export function ContentPage() {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const { config: levelsCfg, levelFor } = useCompetitorLevels()
 
   async function refresh() {
     setBusy(true)
@@ -402,15 +407,17 @@ export function ContentPage() {
 
   const usingMock = (posts ?? []).length === 0
   const allCards = usingMock ? MOCK_CARDS : posts!.map(realPostToCard)
-  const cards = allCards.filter((card) => matchesFilters(card, {
-    query,
-    competitor: competitorFilter,
-    dateFrom,
-    dateTo,
-  }))
+  const cards = allCards
+    .filter((card) => matchesFilters(card, {
+      query,
+      competitor: competitorFilter,
+      dateFrom,
+      dateTo,
+    }))
+    .filter((card) => matchesLevelFilter(levelFor(card.post?.competitorFollowers), levelFilter))
   const competitors = [...new Set(allCards.map((card) => card.handle))].sort()
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
-  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo
+  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all'
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -553,6 +560,7 @@ export function ContentPage() {
                   setCompetitorFilter('all')
                   setDateFrom('')
                   setDateTo('')
+                  setLevelFilter('all')
                 }}
                 className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
               >
@@ -592,6 +600,9 @@ export function ContentPage() {
               </button>
             </div>
           </div>
+          <div className='mt-2 px-1'>
+            <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+          </div>
         </div>
 
         {selectMode && (
@@ -617,6 +628,7 @@ export function ContentPage() {
               <PostCard
                 key={card.key}
                 card={card}
+                levelsCfg={levelsCfg}
                 starred={!!stars[card.key]}
                 onStar={() => toggleStar(card.key)}
                 onEdit={card.post ? () => setEditingPost(card.post!) : undefined}
@@ -779,6 +791,7 @@ function PostCard({
   selectMode,
   selected,
   onToggleSelect,
+  levelsCfg,
 }: {
   card: CardModel
   starred: boolean
@@ -788,6 +801,7 @@ function PostCard({
   selectMode: boolean
   selected: boolean
   onToggleSelect?: () => void
+  levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
 }) {
   const selectable = selectMode && !!onToggleSelect
   return (
@@ -828,6 +842,7 @@ function PostCard({
 
       <div className='p-3'>
         <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
+          <CompetitorLevelDot followers={card.post?.competitorFollowers} config={levelsCfg} />
           {card.postUrl ? (
             <a
               href={card.postUrl}

@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
 import type { Db } from '../db/client.js'
 import { newId } from '../util/ids.js'
@@ -27,7 +29,7 @@ export interface CreateConversationInput {
   title: string
   profileId?: string
   override?: ProfileOverride
-  workspacePath: string
+  workspacePath?: string
   agent?: 'claude' | 'codex'
 }
 
@@ -61,6 +63,13 @@ export interface ConversationServiceDeps {
    * Composition root sets this to {ANUBIS_DATA_DIR}/agent-homes.
    */
   agentHomeRoot: string
+  /**
+   * Root directory under which auto-generated workspace folders live
+   * ({workspacesRoot}/{conversationId}). Used when CreateConversationInput
+   * omits workspacePath. Composition root sets this to
+   * {ANUBIS_DATA_DIR}/workspaces and ensures it exists.
+   */
+  workspacesRoot: string
 }
 
 export class ConversationService {
@@ -70,13 +79,18 @@ export class ConversationService {
     const resolved = this.resolveOrThrow(input.profileId ?? null, input.override, input.agent)
     const skills = computeInitialSkills(this.deps.skills.discoverAll(), resolved)
     const now = nowMs()
+    const id = newId()
+    const workspacePath = input.workspacePath ?? join(this.deps.workspacesRoot, id)
+    if (!input.workspacePath) {
+      mkdirSync(workspacePath, { recursive: true })
+    }
     const conv: Conversation = {
-      id: newId(),
+      id,
       title: input.title,
       agent: resolved.agent,
       status: 'pending',
       profileId: input.profileId,
-      workspacePath: input.workspacePath,
+      workspacePath,
       extra: { skills, overrides: input.override },
       createdAt: now,
       updatedAt: now,

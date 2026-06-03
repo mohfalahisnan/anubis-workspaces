@@ -48,6 +48,7 @@ function setup() {
     scheduler: { schedule: () => ({ stop: () => undefined, start: () => undefined }) },
   })
   const agentHomeRoot = mkdtempSync(join(tmpdir(), 'anubis-test-homes-'))
+  const workspacesRoot = mkdtempSync(join(tmpdir(), 'anubis-test-workspaces-'))
   const svc = new ConversationService({
     db,
     profiles, skills: loader, sse, cron, tm, aiAgent: aiAgent as never,
@@ -56,8 +57,9 @@ function setup() {
     artifacts: new ArtifactsRepo(db),
     sessions: new AgentSessionsRepo(db),
     agentHomeRoot,
+    workspacesRoot,
   })
-  return { svc, profiles, db, aiAgent, tm, agentHomeRoot }
+  return { svc, profiles, db, aiAgent, tm, agentHomeRoot, workspacesRoot }
 }
 
 describe('ConversationService', () => {
@@ -68,6 +70,18 @@ describe('ConversationService', () => {
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
     expect(c.profileId).toBe('claude-coding')
     expect(c.extra.skills).toEqual([])
+  })
+
+  it('create auto-fills workspacePath when omitted', () => {
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding' })
+    expect(c.workspacePath.startsWith(ctx.workspacesRoot)).toBe(true)
+    expect(c.workspacePath.endsWith(c.id)).toBe(true)
+    expect(existsSync(c.workspacePath)).toBe(true)
+  })
+
+  it('create honors an explicit workspacePath', () => {
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp/custom' })
+    expect(c.workspacePath).toBe('/tmp/custom')
   })
 
   it('create rejects when agent cannot be determined', () => {

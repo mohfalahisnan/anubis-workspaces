@@ -47,6 +47,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   mkdirSync(opts.dataDir, { recursive: true })
   const agentHomeRoot = join(opts.dataDir, 'agent-homes')
   mkdirSync(agentHomeRoot, { recursive: true })
+  const workspacesRoot = join(opts.dataDir, 'workspaces')
+  mkdirSync(workspacesRoot, { recursive: true })
   const db = openDatabase(join(opts.dataDir, 'anubis.db'))
   runMigrations(db, MIGRATIONS)
 
@@ -84,6 +86,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     artifacts: artifactsRepo,
     sessions: sessionsRepo,
     agentHomeRoot,
+    workspacesRoot,
   })
 
   cron.loadFromDb()

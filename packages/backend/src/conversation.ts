@@ -6,7 +6,7 @@ import { getStack } from './services.js'
 const CreateBody = z.object({
   title: z.string().min(1),
   profileId: z.string().min(1).optional(),
-  workspacePath: z.string().min(1),
+  workspacePath: z.string().min(1).optional(),
   agent: z.enum(['claude', 'codex']).optional(),
   override: z.record(z.string(), z.unknown()).optional(),
 }).strict()

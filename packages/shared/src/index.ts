@@ -159,11 +159,19 @@ export interface AppConfig {
   /** Path to chrome.exe / Chrome binary, when not on PATH. */
   chromePath?: string
   /**
-   * Full path to the Chrome user-data profile directory used when a
-   * crawler flow asks for the 'login' profile — e.g. the user's
-   * 'Profile 3' on this PC where they're already signed into IG.
+   * Full path to the Chrome user-data profile directory used as the
+   * SOURCE for the cloned login profile — e.g. the user's 'Profile 3'
+   * on this PC where they're already signed into IG. The crawler does
+   * not launch Chrome against this path directly; it launches against
+   * the Anubis-owned clone derived from it (see loginProfileSyncedAt).
    */
   loginProfileDir?: string
+  /**
+   * Epoch ms of the last successful clone of `loginProfileDir`. When
+   * undefined the login profile is unusable — the crawler refuses to
+   * launch and the UI prompts to sync.
+   */
+  loginProfileSyncedAt?: number
 }
 
 export interface ChromeProfileInfo {
@@ -196,7 +204,7 @@ export interface DiscoveredCandidate {
 export interface CreateConversationInput {
   title: string
   profileId?: string
-  workspacePath: string
+  workspacePath?: string
   agent?: AgentKind
   override?: Record<string, unknown>
 }

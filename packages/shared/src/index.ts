@@ -183,6 +183,56 @@ export interface AppConfig {
   chromePath?: string
   /** Optional research-crawler project/data root whose Chrome profiles should be reused. */
   crawlerProfileRoot?: string
+  /** Follower-count bands that drive the competitor level badge. */
+  competitorLevels?: CompetitorLevelsConfig
+}
+
+/* ============================================================
+   Competitor levels
+   ============================================================
+   Five visible buckets derived live from `followers`. Two "black"
+   regions (below minActive and above maxActive) collapse to a
+   single 'black' value; the UI distinguishes them in tooltips.
+   ============================================================ */
+
+export type CompetitorLevel = 'black' | 'green' | 'yellow' | 'red' | 'unknown'
+
+export interface CompetitorLevelsConfig {
+  minActive: number
+  greenMax: number
+  yellowMax: number
+  maxActive: number
+}
+
+export const DEFAULT_COMPETITOR_LEVELS: CompetitorLevelsConfig = {
+  minActive: 10_000,
+  greenMax: 40_000,
+  yellowMax: 100_000,
+  maxActive: 1_000_000,
+}
+
+export function levelFor(
+  followers: number | null | undefined,
+  cfg: CompetitorLevelsConfig = DEFAULT_COMPETITOR_LEVELS,
+): CompetitorLevel {
+  if (followers == null) return 'unknown'
+  if (followers < cfg.minActive || followers > cfg.maxActive) return 'black'
+  if (followers <= cfg.greenMax) return 'green'
+  if (followers <= cfg.yellowMax) return 'yellow'
+  return 'red'
+}
+
+export function isValidCompetitorLevels(cfg: CompetitorLevelsConfig): boolean {
+  return (
+    Number.isInteger(cfg.minActive) &&
+    Number.isInteger(cfg.greenMax) &&
+    Number.isInteger(cfg.yellowMax) &&
+    Number.isInteger(cfg.maxActive) &&
+    cfg.minActive > 0 &&
+    cfg.minActive < cfg.greenMax &&
+    cfg.greenMax < cfg.yellowMax &&
+    cfg.yellowMax < cfg.maxActive
+  )
 }
 
 export interface DiscoveredCandidate {
@@ -246,6 +296,8 @@ export interface CapturedPostSummary {
   competitorHandle?: string
   /** Owning competitor's accent tint, joined in by the route layer. */
   competitorTint?: string
+  /** Owning competitor's follower count, joined in by the route layer. */
+  competitorFollowers?: number
 }
 
 export type CapturedPostListResponse = ListResponse<CapturedPostSummary>

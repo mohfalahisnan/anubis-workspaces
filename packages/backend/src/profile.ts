@@ -60,6 +60,21 @@ profileRoutes.post('/', async (c) => {
   return c.json({ ok: true, profile: withHome(p) }, 201)
 })
 
+const CopyBody = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+}).strict()
+
+profileRoutes.post('/:id/copy', async (c) => {
+  const body = CopyBody.parse(await c.req.json())
+  const stack = getStack()
+  const created = stack.profiles.copyProfile(c.req.param('id'), {
+    ...body,
+    agentHomeRoot: stack.agentHomeRoot,
+  })
+  return c.json({ ok: true, profile: withHome(created) }, 201)
+})
+
 profileRoutes.patch('/:id', async (c) => {
   const body = UpdateBody.parse(await c.req.json())
   const p = getStack().profiles.update(c.req.param('id'), body as never)

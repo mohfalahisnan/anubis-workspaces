@@ -3,6 +3,7 @@ import type {
   AppConfig,
   CapturedPostListResponse,
   CapturedPostSummary,
+  ExtensionStatus,
   CaptureResultPayload,
   CompetitorListResponse,
   CompetitorSummary,
@@ -91,11 +92,24 @@ export async function updateAppConfig(patch: AppConfig): Promise<AppConfig> {
   return r.config
 }
 
-/* ---------- System introspection ---------- */
+/* ---------- Extension pairing ---------- */
 
-// Chrome profile picker / clone helpers were removed alongside the
-// failed cookie-clone approach. The extension pairing helpers land
-// later in Task 19; this section stays slim in the interim.
+export async function getExtensionStatus(): Promise<ExtensionStatus> {
+  const r = await api<{ ok: true; status: ExtensionStatus }>('/extension/status')
+  return r.status
+}
+
+export async function revealExtensionSecret(): Promise<string> {
+  const r = await api<{ ok: true; secret: string }>('/extension/secret/reveal', { method: 'POST' })
+  return r.secret
+}
+
+export async function rotateExtensionSecret(): Promise<string> {
+  const r = await api<{ ok: true; secret: string }>('/extension/secret/rotate', { method: 'POST' })
+  return r.secret
+}
+
+/* ---------- Profiles ---------- */
 
 export async function listProfiles(): Promise<ProfileSummary[]> {
   const r = await api<ProfileListResponse>('/profiles')

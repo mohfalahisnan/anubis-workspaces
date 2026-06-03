@@ -19,6 +19,8 @@ export type Route =
   | { page: 'scheduled' }
   | { page: 'settings' }
   | { page: 'workflow-demo' }
+  | { page: 'workflows' }
+  | { page: 'workflow-editor'; workflowId: string }
 
 export type PageKey = Route['page']
 

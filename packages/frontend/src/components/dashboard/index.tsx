@@ -38,6 +38,8 @@ const BREADCRUMBS: Record<PageKey, string> = {
   scheduled: 'Scheduled jobs',
   settings: 'Settings',
   'workflow-demo': 'Workflow demo',
+  workflows: 'Workflows',
+  'workflow-editor': 'Workflows · Editor',
 }
 
 type BackendState = 'checking' | 'online' | 'offline'

@@ -18,6 +18,7 @@ export type Route =
   | { page: 'competitors' }
   | { page: 'scheduled' }
   | { page: 'settings' }
+  | { page: 'workflow-demo' }
 
 export type PageKey = Route['page']
 

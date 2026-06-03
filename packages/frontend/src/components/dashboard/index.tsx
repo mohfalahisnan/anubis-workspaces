@@ -20,6 +20,7 @@ import { ProfilesPage } from '@/pages/profiles'
 import { ScheduledPage } from '@/pages/scheduled'
 import { SettingsPage } from '@/pages/settings'
 import { SkillsPage } from '@/pages/skills'
+import { WorkflowDemoPage } from '@/components/workflow'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -36,6 +37,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   competitors: 'Competitors',
   scheduled: 'Scheduled jobs',
   settings: 'Settings',
+  'workflow-demo': 'Workflow demo',
 }
 
 type BackendState = 'checking' | 'online' | 'offline'
@@ -203,6 +205,8 @@ function CurrentPage() {
       return <ScheduledPage />
     case 'settings':
       return <SettingsPage />
+    case 'workflow-demo':
+      return <WorkflowDemoPage />
     default:
       return <HomePage />
   }

@@ -1,9 +1,11 @@
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createConversationService, type ConversationStack } from '@anubis/conversation'
 import { getBuiltinSkillRoots } from '@anubis/ai-agent'
 import { WSServer } from './extension/ws-server.js'
 import { JobQueue } from './extension/job-queue.js'
+import { ensureExtensionInstalled } from './extension/install.js'
 
 let stack: ConversationStack | null = null
 let wsServer: WSServer | null = null
@@ -40,6 +42,19 @@ export async function ensureExtensionStarted(): Promise<void> {
     const cfg = s.appConfig.get()
     const secret = cfg.extensionSecret
     if (!secret) throw new Error('extensionSecret missing — AppConfigService should have generated it')
+
+    // Copy the bundled extension into a stable path under ANUBIS_DATA_DIR
+    // so the user always has a fixed "Load unpacked" target.
+    const dataDirRoot = process.env.ANUBIS_DATA_DIR ?? join(tmpdir(), 'anubis')
+    const bundleDir = resolveExtensionBundleDir()
+    const installResult = ensureExtensionInstalled({
+      bundleDir,
+      destDir: join(dataDirRoot, 'extension'),
+    })
+    if (installResult.installed) {
+      console.log(`[extension] installed bundle v${installResult.installedVersion} to ${installResult.destDir}`)
+    }
+
     const ws = new WSServer({
       secret,
       backendVersion: BACKEND_VERSION,
@@ -58,6 +73,15 @@ export async function ensureExtensionStarted(): Promise<void> {
     jobQueue = q
   })()
   return startupPromise
+}
+
+function resolveExtensionBundleDir(): string {
+  // 1. When packaged: Electron passes the resource path explicitly.
+  if (process.env.ANUBIS_EXTENSION_BUNDLE_DIR) return process.env.ANUBIS_EXTENSION_BUNDLE_DIR
+  // 2. Dev: monorepo path relative to this file at runtime. From
+  //    packages/backend/dist/services.js → ../../../extension/dist.
+  const here = dirname(fileURLToPath(import.meta.url))
+  return join(here, '..', '..', '..', 'extension', 'dist')
 }
 
 export function getExtensionWS(): WSServer | null {

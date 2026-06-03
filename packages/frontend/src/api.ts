@@ -1,4 +1,5 @@
 import type {
+  AgentAvailability,
   ApiHealthResponse,
   AppConfig,
   CapturedPostListResponse,
@@ -202,6 +203,7 @@ export interface AgentCatalog {
   defaultModel: Record<'claude' | 'codex', string>
   reasoningEfforts: readonly ReasoningEffort[]
   defaultReasoningEffort: ReasoningEffort
+  agentAvailability: Record<'claude' | 'codex', AgentAvailability>
 }
 
 export async function getCatalog(): Promise<AgentCatalog> {

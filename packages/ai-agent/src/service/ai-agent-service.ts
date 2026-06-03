@@ -6,6 +6,7 @@ import { CodexAgent } from '../agents/codex/run.js'
 import { CodexPool } from '../agents/codex/pool.js'
 import { ClaudeAgent } from '../agents/claude/runner.js'
 import type { AgentEventMap, AgentStream } from '../events/stream.js'
+import { detectAgents, type AgentAvailability } from './detect-agents.js'
 
 export interface AiAgentServiceOptions {
   codexCommand?: string
@@ -56,6 +57,7 @@ export interface RunAgentResult {
 export class AiAgentService {
   private codex: CodexAgent
   private claude: ClaudeAgent
+  private availability: Record<'claude' | 'codex', AgentAvailability>
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
@@ -74,6 +76,7 @@ export class AiAgentService {
       command: opts.claudeCommand,
       env,
     })
+    this.availability = detectAgents()
   }
 
   catalog() {
@@ -83,6 +86,7 @@ export class AiAgentService {
       defaultModel: DEFAULT_MODEL,
       reasoningEfforts: REASONING_EFFORTS,
       defaultReasoningEffort: DEFAULT_REASONING_EFFORT,
+      agentAvailability: this.availability,
     }
   }
 

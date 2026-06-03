@@ -16,6 +16,12 @@ export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
 export type SkillSource = 'builtin-auto' | 'builtin-opt-in' | 'user'
 
+export interface AgentAvailability {
+  available: boolean
+  path?: string
+  source: 'detected' | 'env-override'
+}
+
 export interface ProfileHomeInfo {
   /** Absolute path to the profile's isolated agent home directory. */
   path: string

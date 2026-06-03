@@ -13,6 +13,7 @@
     "@anubis/conversation": "workspace:*",
     "@anubis/research-crawler": "workspace:*",
     "@anubis/shared": "workspace:*",
+    "@anubis/workflow-runtime": "workspace:*",
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.3.1",
     "hono": "^4.10.7",

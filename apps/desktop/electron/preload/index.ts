@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('anubis', {
     openPath: (target: string) =>
       ipcRenderer.invoke('anubis:open-path', target) as Promise<string>,
   },
+  skills: {
+    /** Open a native picker for a skill folder or .zip. Resolves to the
+     *  selected absolute path, or null if the user cancels. */
+    pickSource: (kind: 'folder' | 'zip') =>
+      ipcRenderer.invoke('anubis:pick-skill-source', kind) as Promise<string | null>,
+  },
   updater: {
     check: () => ipcRenderer.invoke('check-update'),
     startDownload: () => ipcRenderer.invoke('start-download'),

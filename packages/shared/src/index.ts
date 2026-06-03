@@ -14,7 +14,12 @@ export type AgentKind = 'claude' | 'codex'
 export type ProfileSource = 'builtin' | 'user'
 export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
-export type SkillSource = 'builtin-auto' | 'builtin-opt-in' | 'user'
+export type SkillSource =
+  | 'builtin-auto'
+  | 'builtin-opt-in'
+  | 'user-auto'
+  | 'user-opt-in'
+  | 'user'
 
 export interface AgentAvailability {
   available: boolean

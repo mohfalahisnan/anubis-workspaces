@@ -24,6 +24,7 @@ import {
   homePathFor,
   resetProfileHome,
   writeProfileInstructions,
+  writeProfileSkills,
 } from '../profiles/agent-home.js'
 import type { ConversationsRepo } from '../db/repositories/conversations-repo.js'
 import type { MessagesRepo } from '../db/repositories/messages-repo.js'
@@ -198,10 +199,13 @@ export class ConversationService {
     const skillDefs = cur.extra.skills
       .map(name => this.deps.skills.byName(name))
       .filter((s): s is NonNullable<typeof s> => Boolean(s))
-    // Build the instruction text from profile prompt + skills. This used
-    // to be sent every turn as `appendSystemPrompt` — paying tokens each
-    // time. We now write it to the profile home as CLAUDE.md instead, so
-    // the CLI loads it once on launch and reuses it across turns.
+    // Build the instruction text from profile prompt + a compact skills
+    // pointer. This used to be sent every turn as `appendSystemPrompt` —
+    // paying tokens each time. We now write it to the profile home as
+    // CLAUDE.md instead, so the CLI loads it once on launch and reuses it
+    // across turns. The skills themselves are materialised as files under
+    // the home's skills/ dir (writeProfileSkills below) and loaded on
+    // demand, so only the pointer lives in always-on context.
     const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
 
     // Auto-isolate this profile's agent home. profile.env always wins
@@ -223,6 +227,9 @@ export class ConversationService {
       // Sync the profile-level instruction files. Idempotent — only
       // touches disk when content has actually changed.
       writeProfileInstructions(path, profileInstructions)
+      // Materialise active skills as files under the home's skills/ dir
+      // (prunes stale ones). Also idempotent on unchanged skills.
+      writeProfileSkills(path, skillDefs)
     }
     // Strip appendSystemPrompt: it lives in CLAUDE.md now, no longer a
     // per-turn argument. Leaving it on the resolved profile would let

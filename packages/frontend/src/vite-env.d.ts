@@ -18,6 +18,10 @@ interface Window {
       /** Resolves to '' on success or an error message string. */
       openPath(target: string): Promise<string>
     }
+    skills: {
+      /** Resolves to the selected absolute path, or null if cancelled. */
+      pickSource(kind: 'folder' | 'zip'): Promise<string | null>
+    }
     updater: {
       check(): Promise<unknown>
       startDownload(): Promise<void>

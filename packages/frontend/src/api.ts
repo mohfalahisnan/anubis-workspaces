@@ -23,6 +23,7 @@ import type {
   ProfileSummary,
   SkillDetail,
   SkillListResponse,
+  SkillSource,
   SkillSummary,
   UpdateCompetitorInput,
   UpdateCapturedPostInput,
@@ -331,6 +332,24 @@ export async function reloadSkills(): Promise<{ count: number }> {
     method: 'POST',
   })
   return { count: r.count }
+}
+
+export type SkillImportCategory = 'auto' | 'opt-in' | 'user'
+
+export interface ImportSkillInput {
+  sourcePath: string
+  kind: 'folder' | 'zip'
+  category: SkillImportCategory
+}
+
+export async function importSkill(
+  input: ImportSkillInput,
+): Promise<{ name: string; source: SkillSource; count: number }> {
+  const r = await api<{ ok: true; name: string; source: SkillSource; count: number }>(
+    '/skills/import',
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+  return { name: r.name, source: r.source, count: r.count }
 }
 
 export async function listCronJobs(conversationId?: string): Promise<CronJobSummary[]> {

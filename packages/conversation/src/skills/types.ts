@@ -1,4 +1,9 @@
-export type SkillSource = 'builtin-auto' | 'builtin-opt-in' | 'user'
+export type SkillSource =
+  | 'builtin-auto'
+  | 'builtin-opt-in'
+  | 'user-auto'
+  | 'user-opt-in'
+  | 'user'
 
 export interface SkillDefinition {
   name: string

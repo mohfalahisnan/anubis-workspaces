@@ -1,5 +1,6 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import type { SkillDefinition } from '../skills/types.js'
 
 /* ============================================================
    Per-profile agent home directories.
@@ -155,6 +156,67 @@ export function writeProfileInstructions(
     writeFileSync(agentsPath, AGENTS_MD_BODY, 'utf8')
     changed = true
   }
+  return changed
+}
+
+/* ============================================================
+   Profile-level skill files.
+
+   Rather than inlining every active skill's full body into
+   CLAUDE.md (paid in always-on context), we materialise each
+   skill as files under the profile home's `skills/<name>/`
+   directory. Claude Code auto-discovers `$CLAUDE_CONFIG_DIR/skills/`
+   and loads them on demand; CLAUDE.md keeps only a short pointer
+   (see buildSkillsPointer). Codex doesn't auto-scan the dir but
+   the pointer tells it where to read them.
+
+   The directory is kept in sync with the active set each turn:
+   stale skill dirs are pruned and changed ones re-copied. Writes
+   are skipped when a skill's SKILL.md already matches on disk, so
+   the common (unchanged) case touches nothing.
+   ============================================================ */
+
+const SKILLS_DIR = 'skills'
+const SKILL_FILE = 'SKILL.md'
+
+/**
+ * Materialise the given skills under `{homePath}/skills/<name>/`,
+ * pruning any skill dirs that are no longer in the active set.
+ * Returns true when anything was written or removed.
+ */
+export function writeProfileSkills(
+  homePath: string,
+  skills: SkillDefinition[],
+): boolean {
+  const skillsRoot = join(homePath, SKILLS_DIR)
+  const active = new Map(skills.map(s => [s.name, s]))
+  let changed = false
+
+  // Prune skill dirs that are no longer active.
+  if (existsSync(skillsRoot)) {
+    for (const e of readdirSync(skillsRoot, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue
+      if (!active.has(e.name)) {
+        rmSync(join(skillsRoot, e.name), { recursive: true, force: true })
+        changed = true
+      }
+    }
+  }
+
+  // Copy / refresh each active skill from its source directory.
+  for (const skill of skills) {
+    const dest = join(skillsRoot, skill.name)
+    const destFile = join(dest, SKILL_FILE)
+    const srcBody = readFileSync(skill.path, 'utf8')
+    if (existsSync(destFile) && readFileSync(destFile, 'utf8') === srcBody) {
+      continue // unchanged — leave the dir (and any helper files) alone
+    }
+    mkdirSync(skillsRoot, { recursive: true })
+    rmSync(dest, { recursive: true, force: true })
+    cpSync(dirname(skill.path), dest, { recursive: true })
+    changed = true
+  }
+
   return changed
 }
 

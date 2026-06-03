@@ -7,7 +7,7 @@ export function computeInitialSkills(
 ): string[] {
   const disabled = new Set(profile.disabledBuiltinSkills ?? [])
   const autoInject = allSkills
-    .filter(s => s.source === 'builtin-auto')
+    .filter(s => s.source === 'builtin-auto' || s.source === 'user-auto')
     .map(s => s.name)
     .filter(n => !disabled.has(n))
 

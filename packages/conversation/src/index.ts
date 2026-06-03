@@ -132,11 +132,15 @@ export {
   hasCredentials,
   homePathFor,
   writeProfileInstructions,
+  writeProfileSkills,
   CREDENTIAL_FILE,
 } from './profiles/agent-home.js'
 export { ProfileService } from './profiles/profile-service.js'
 export { CompetitorsService } from './competitors/competitors-service.js'
 export { SkillLoader } from './skills/loader.js'
+export type { SkillRoots } from './skills/loader.js'
+export { importSkill, SkillImportError } from './skills/import.js'
+export type { ImportSkillOpts, ImportSkillResult, SkillCategory } from './skills/import.js'
 export { CronService } from './cron/cron-service.js'
 export { SseBroadcaster } from './sse/broadcaster.js'
 export type { SseEvent } from './sse/broadcaster.js'

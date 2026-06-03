@@ -1,20 +1,32 @@
 import type { SkillDefinition } from './types.js'
 
-export function buildSkillsBlock(skills: SkillDefinition[]): string {
+/**
+ * Compact pointer block listing the skills available to the agent.
+ *
+ * Skill bodies are materialised as files under `skills/<name>/SKILL.md`
+ * (see writeProfileSkills) and loaded on demand, so this block only
+ * names them — it never inlines the full body. Keeps always-on context
+ * small while still telling Codex (which doesn't auto-scan the dir)
+ * where the skills live.
+ */
+export function buildSkillsPointer(skills: SkillDefinition[]): string {
   if (skills.length === 0) return ''
   return [
     '## Available Skills',
-    'You have access to the following skills. Apply them when relevant.',
+    'These skills are installed as files under `skills/<name>/SKILL.md`. Read a skill\'s file when its description matches the task.',
     '',
-    ...skills.map(s => `### ${s.name}\n${s.body.trim()}`),
-  ].join('\n\n')
+    ...skills.map(s => {
+      const desc = s.description.trim()
+      return `- **${s.name}** (\`skills/${s.name}/SKILL.md\`)${desc ? ` — ${desc}` : ''}`
+    }),
+  ].join('\n')
 }
 
 export function composeAppendSystemPrompt(
   profilePrompt: string | undefined,
   skills: SkillDefinition[],
 ): string | undefined {
-  const block = buildSkillsBlock(skills)
+  const block = buildSkillsPointer(skills)
   const parts = [profilePrompt?.trim(), block].filter((s): s is string => Boolean(s && s.length))
   return parts.length > 0 ? parts.join('\n\n') : undefined
 }

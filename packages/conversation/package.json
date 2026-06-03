@@ -18,6 +18,7 @@
   "dependencies": {
     "@anubis/ai-agent": "workspace:*",
     "better-sqlite3": "^12.4.1",
+    "fflate": "^0.8.2",
     "gray-matter": "^4.0.3",
     "node-cron": "^3.0.3",
     "uuid": "^11.0.3",

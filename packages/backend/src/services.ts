@@ -19,12 +19,15 @@ export function getStack(): ConversationStack {
   if (stack) return stack
   const dataDir = getDataDir()
   const builtin = getBuiltinSkillRoots()
+  const userSkillsRoot = join(dataDir, 'skills')
   stack = createConversationService({
     dataDir,
     skillRoots: {
       autoInject: builtin.autoInject,
       optIn: builtin.optIn,
-      user: join(dataDir, 'skills'),
+      user: userSkillsRoot,
+      userAutoInject: join(userSkillsRoot, 'auto-inject'),
+      userOptIn: join(userSkillsRoot, 'opt-in'),
     },
   })
   return stack

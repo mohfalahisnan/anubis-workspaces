@@ -4,12 +4,23 @@ import matter from 'gray-matter'
 import type { SkillDefinition, SkillSource } from './types.js'
 
 export interface SkillRoots {
+  /** Built-in skills shipped in the package, auto-injected into every conversation. */
   autoInject: string
+  /** Built-in skills shipped in the package, activated only when a profile opts in. */
   optIn: string
+  /** User skills (plain) — discovered, invoked manually. */
   user: string
+  /** User-imported skills that auto-inject. Typically `{user}/auto-inject`. */
+  userAutoInject?: string
+  /** User-imported opt-in skills. Typically `{user}/opt-in`. */
+  userOptIn?: string
 }
 
+// Higher wins when the same skill name appears in multiple roots.
+// User variants outrank built-ins so a user can shadow a shipped skill.
 const SOURCE_PRECEDENCE: Record<SkillSource, number> = {
+  'user-auto': 5,
+  'user-opt-in': 4,
   user: 3,
   'builtin-opt-in': 2,
   'builtin-auto': 1,
@@ -25,6 +36,11 @@ export class SkillLoader {
     const collected: SkillDefinition[] = []
     this.walk(this.roots.autoInject, 'builtin-auto', collected)
     this.walk(this.roots.optIn, 'builtin-opt-in', collected)
+    if (this.roots.userAutoInject) this.walk(this.roots.userAutoInject, 'user-auto', collected)
+    if (this.roots.userOptIn) this.walk(this.roots.userOptIn, 'user-opt-in', collected)
+    // Plain user root last. Its walk only matches dirs that *directly*
+    // contain a SKILL.md, so the auto-inject/ and opt-in/ subdirs (which
+    // hold skill folders, not a SKILL.md themselves) are naturally skipped.
     this.walk(this.roots.user, 'user', collected)
     this.cache = this.dedupe(collected)
     return this.cache

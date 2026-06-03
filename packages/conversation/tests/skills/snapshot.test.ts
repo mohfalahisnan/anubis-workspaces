@@ -12,9 +12,14 @@ describe('computeInitialSkills', () => {
     expect(computeInitialSkills(skills, { agent: 'claude' })).toEqual(['a', 'b'])
   })
 
-  it('excludes disabledBuiltinSkills', () => {
-    const skills = [skill('a', 'builtin-auto'), skill('b', 'builtin-auto')]
-    const out = computeInitialSkills(skills, { agent: 'claude', disabledBuiltinSkills: ['a'] })
+  it('auto-injects user-auto skills alongside builtin-auto', () => {
+    const skills = [skill('a', 'builtin-auto'), skill('u', 'user-auto')]
+    expect(computeInitialSkills(skills, { agent: 'claude' })).toEqual(['a', 'u'])
+  })
+
+  it('excludes disabledBuiltinSkills (including user-auto by name)', () => {
+    const skills = [skill('a', 'builtin-auto'), skill('b', 'builtin-auto'), skill('u', 'user-auto')]
+    const out = computeInitialSkills(skills, { agent: 'claude', disabledBuiltinSkills: ['a', 'u'] })
     expect(out).toEqual(['b'])
   })
 

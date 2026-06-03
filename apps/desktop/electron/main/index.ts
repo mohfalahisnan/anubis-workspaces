@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -46,6 +46,21 @@ ipcMain.handle('anubis:open-path', async (_event, target: string) => {
     return 'invalid path'
   }
   return await shell.openPath(target)
+})
+
+// Native picker for importing a skill: a folder containing SKILL.md or a
+// .zip archive. Returns the selected absolute path, or null on cancel.
+ipcMain.handle('anubis:pick-skill-source', async (_event, kind: 'folder' | 'zip') => {
+  const options: Electron.OpenDialogOptions = {
+    title: kind === 'zip' ? 'Select skill .zip' : 'Select skill folder',
+    properties: kind === 'zip' ? ['openFile'] : ['openDirectory'],
+    filters: kind === 'zip' ? [{ name: 'Zip archive', extensions: ['zip'] }] : undefined,
+  }
+  const result = win
+    ? await dialog.showOpenDialog(win, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
 })
 
 async function createWindow() {

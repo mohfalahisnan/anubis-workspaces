@@ -7,8 +7,10 @@ import {
   copyHomeFromSystem,
   copyProfileHome,
   writeProfileInstructions,
+  writeProfileSkills,
   CREDENTIAL_FILE,
 } from '../../src/profiles/agent-home.js'
+import type { SkillDefinition } from '../../src/skills/types.js'
 
 let root: string
 
@@ -160,5 +162,56 @@ describe('writeProfileInstructions', () => {
     expect(existsSync(home)).toBe(false)
     writeProfileInstructions(home, 'hello')
     expect(existsSync(join(home, 'CLAUDE.md'))).toBe(true)
+  })
+})
+
+describe('writeProfileSkills', () => {
+  // Build a skill on disk in a source dir and return its SkillDefinition.
+  function makeSkill(name: string, body: string, extraFiles: Record<string, string> = {}): SkillDefinition {
+    const srcDir = join(root, 'src-skills', name)
+    mkdirSync(srcDir, { recursive: true })
+    const file = join(srcDir, 'SKILL.md')
+    writeFileSync(file, body)
+    for (const [rel, content] of Object.entries(extraFiles)) {
+      writeFileSync(join(srcDir, rel), content)
+    }
+    return { name, description: '', source: 'user', path: file, body }
+  }
+
+  it('materialises each skill under skills/<name>/ including helper files', () => {
+    const home = join(root, 'p1', 'claude')
+    const a = makeSkill('alpha', '# Alpha', { 'run.js': 'console.log(1)' })
+    const changed = writeProfileSkills(home, [a])
+    expect(changed).toBe(true)
+    expect(readFileSync(join(home, 'skills', 'alpha', 'SKILL.md'), 'utf8')).toBe('# Alpha')
+    expect(existsSync(join(home, 'skills', 'alpha', 'run.js'))).toBe(true)
+  })
+
+  it('is idempotent when skill bodies are unchanged', () => {
+    const home = join(root, 'p1', 'claude')
+    const a = makeSkill('alpha', '# Alpha')
+    expect(writeProfileSkills(home, [a])).toBe(true)
+    expect(writeProfileSkills(home, [a])).toBe(false)
+  })
+
+  it('prunes skill dirs that are no longer active', () => {
+    const home = join(root, 'p1', 'claude')
+    const a = makeSkill('alpha', '# Alpha')
+    const b = makeSkill('beta', '# Beta')
+    writeProfileSkills(home, [a, b])
+    expect(existsSync(join(home, 'skills', 'beta'))).toBe(true)
+
+    const changed = writeProfileSkills(home, [a])
+    expect(changed).toBe(true)
+    expect(existsSync(join(home, 'skills', 'beta'))).toBe(false)
+    expect(existsSync(join(home, 'skills', 'alpha'))).toBe(true)
+  })
+
+  it('re-copies when a skill body changes', () => {
+    const home = join(root, 'p1', 'claude')
+    writeProfileSkills(home, [makeSkill('alpha', '# Alpha v1')])
+    const changed = writeProfileSkills(home, [makeSkill('alpha', '# Alpha v2')])
+    expect(changed).toBe(true)
+    expect(readFileSync(join(home, 'skills', 'alpha', 'SKILL.md'), 'utf8')).toBe('# Alpha v2')
   })
 })

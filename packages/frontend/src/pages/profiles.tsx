@@ -11,6 +11,7 @@ import {
 import type { ProfileSummary } from '@anubis/shared'
 
 import {
+  copyProfile,
   createProfile,
   deleteProfile,
   getProfile,
@@ -99,16 +100,15 @@ export function ProfilesPage() {
     setBusy(true)
     setBanner(null)
     try {
-      // Fetch the latest config so we copy any in-flight overrides too.
-      const full = await getProfile(source.id)
-      const copied = await createProfile({
-        name: `${full.name} (copy)`,
-        description: full.description,
-        // The shared type allows extra fields via the index signature.
-        config: full.config,
+      const copied = await copyProfile(source.id, {
+        name: `${source.name} (copy)`,
+        description: source.description,
       })
       await refresh()
-      setBanner({ kind: 'success', message: `Copied to "${copied.name}".` })
+      setBanner({
+        kind: 'success',
+        message: `Copied to "${copied.name}" — credentials carried over.`,
+      })
     } catch (e) {
       setBanner({
         kind: 'error',

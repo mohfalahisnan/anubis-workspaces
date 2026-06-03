@@ -172,6 +172,22 @@ export async function createProfile(input: CreateProfileInput): Promise<ProfileS
   return r.profile
 }
 
+export interface CopyProfileInput {
+  name: string
+  description?: string
+}
+
+export async function copyProfile(
+  id: string,
+  input: CopyProfileInput,
+): Promise<ProfileSummary> {
+  const r = await api<{ ok: true; profile: ProfileSummary }>(
+    `/profiles/${encodeURIComponent(id)}/copy`,
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+  return r.profile
+}
+
 export async function deleteProfile(id: string): Promise<void> {
   await api<{ ok: true }>(`/profiles/${encodeURIComponent(id)}`, {
     method: 'DELETE',

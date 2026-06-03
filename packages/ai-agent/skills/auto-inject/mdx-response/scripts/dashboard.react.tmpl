@@ -1,0 +1,191 @@
+const CONFIG = __CONFIG_JSON__;
+
+function getPath(obj, path) {
+  if (path == null || path === '' || path === '.') return obj;
+  let cur = obj;
+  for (const seg of String(path).split('.')) {
+    if (cur == null) return undefined;
+    if (seg === 'length' && (Array.isArray(cur) || typeof cur === 'string')) return cur.length;
+    cur = cur[seg];
+  }
+  return cur;
+}
+
+function fmt(v, kind, prefix, suffix) {
+  if (v == null) return '—';
+  let s;
+  if (kind === 'number') {
+    const n = Number(v);
+    if (!Number.isFinite(n)) s = String(v);
+    else s = Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+  } else if (kind === 'date') {
+    const d = new Date(v);
+    s = isNaN(d.getTime()) ? String(v) : d.toLocaleDateString();
+  } else if (kind === 'handle') {
+    s = '@' + String(v).replace(/^@/, '');
+  } else {
+    s = String(v);
+  }
+  return (prefix || '') + s + (suffix || '');
+}
+
+async function safe(route) {
+  try {
+    const r = await anubis.fetch(route);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch (e) { return { __error: e.message }; }
+}
+
+function Kpi({ label, value, error }) {
+  return (
+    <div className="card" style={{ padding: 12 }}>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9a9ba1' }}>{label}</div>
+      <div style={{ fontSize: 22, fontFamily: 'ui-monospace, monospace', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+        {error ? <span style={{ fontSize: 11, color: '#ff8a8a' }}>{error}</span> : value}
+      </div>
+    </div>
+  );
+}
+
+function Sparkline({ values }) {
+  if (!values.length) return null;
+  const W = 480, H = 180, P = 16;
+  const min = Math.min.apply(null, values.concat([0]));
+  const max = Math.max.apply(null, values.concat([min + 1]));
+  const stepX = (W - 2 * P) / Math.max(1, values.length - 1);
+  const px = (i) => P + i * stepX;
+  const py = (v) => P + (H - 2 * P) * (1 - (v - min) / (max - min || 1));
+  const pts = values.map((v, i) => px(i) + ',' + py(v)).join(' ');
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height: 180 }}>
+      <polyline points={pts} fill="none" stroke="#d4a85c" strokeWidth={2} strokeLinejoin="round" />
+      {values.map((v, i) => <circle key={i} cx={px(i)} cy={py(v)} r={2.5} fill="#d4a85c" />)}
+    </svg>
+  );
+}
+
+function App() {
+  const [data, setData] = useState({});
+  const [stamp, setStamp] = useState('—');
+  const [busy, setBusy] = useState(false);
+
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const routes = new Set();
+      (CONFIG.kpis || []).forEach(k => routes.add(k.route));
+      if (CONFIG.table) routes.add(CONFIG.table.route);
+      if (CONFIG.chart) routes.add(CONFIG.chart.route);
+      const entries = await Promise.all([...routes].map(async r => [r, await safe(r)]));
+      setData(Object.fromEntries(entries));
+      setStamp(new Date().toLocaleTimeString());
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    if (CONFIG.pollIntervalMs && CONFIG.pollIntervalMs > 500) {
+      const t = setInterval(refresh, CONFIG.pollIntervalMs);
+      return () => clearInterval(t);
+    }
+  }, []);
+
+  const kpis = CONFIG.kpis || [];
+  const hasTable = !!CONFIG.table;
+  const hasChart = !!CONFIG.chart;
+
+  let tableRows = [];
+  let tableError = null;
+  if (hasTable) {
+    const j = data[CONFIG.table.route];
+    if (j && j.__error) tableError = j.__error;
+    else if (j) {
+      let rows = getPath(j, CONFIG.table.itemsPath || 'items');
+      if (!Array.isArray(rows)) rows = [];
+      if (CONFIG.table.sortBy) {
+        const dir = CONFIG.table.sortDir === 'asc' ? 1 : -1;
+        rows = rows.slice().sort((a, b) =>
+          ((Number(getPath(a, CONFIG.table.sortBy)) || 0) - (Number(getPath(b, CONFIG.table.sortBy)) || 0)) * dir);
+      }
+      if (CONFIG.table.limit) rows = rows.slice(0, CONFIG.table.limit);
+      tableRows = rows;
+    }
+  }
+
+  let chartValues = [];
+  let chartError = null;
+  if (hasChart) {
+    const j = data[CONFIG.chart.route];
+    if (j && j.__error) chartError = j.__error;
+    else if (j) {
+      let rows = getPath(j, CONFIG.chart.itemsPath || 'items');
+      if (!Array.isArray(rows)) rows = [];
+      chartValues = rows.map(r => Number(getPath(r, CONFIG.chart.yField)) || 0).reverse();
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <h3 style={{ margin: 0, fontSize: 14 }}>{CONFIG.title || 'Dashboard'}</h3>
+        <div>
+          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#9a9ba1', marginRight: 8 }}>{busy ? 'loading…' : stamp}</span>
+          {CONFIG.refreshable !== false && (
+            <button onClick={refresh} disabled={busy}>Refresh</button>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, Math.min(4, kpis.length || 1))}, 1fr)`, gap: 12, marginBottom: 12 }}>
+        {kpis.map((k, i) => {
+          const j = data[k.route];
+          if (j && j.__error) return <Kpi key={i} label={k.label} error={j.__error} />;
+          const v = j != null ? getPath(j, k.valuePath) : null;
+          return <Kpi key={i} label={k.label} value={fmt(v, k.format, k.prefix, k.suffix)} />;
+        })}
+      </div>
+
+      {(hasTable || hasChart) && (
+        <div style={{ display: 'grid', gridTemplateColumns: hasTable && hasChart ? '2fr 3fr' : '1fr', gap: 12 }}>
+          {hasTable && (
+            <div className="card">
+              <h4 style={{ margin: '0 0 8px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9a9ba1', fontWeight: 500 }}>{CONFIG.table.title || ''}</h4>
+              {tableError ? (
+                <div style={{ color: '#ff8a8a', fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{tableError}</div>
+              ) : (
+                <table>
+                  <thead><tr>{CONFIG.table.columns.map((c, i) => <th key={i}>{c.label}</th>)}</tr></thead>
+                  <tbody>
+                    {tableRows.length === 0 && (
+                      <tr><td colSpan={CONFIG.table.columns.length} style={{ color: '#9a9ba1', fontStyle: 'italic' }}>no rows</td></tr>
+                    )}
+                    {tableRows.map((r, i) => (
+                      <tr key={i}>
+                        {CONFIG.table.columns.map((c, j) => (
+                          <td key={j}>{fmt(getPath(r, c.field), c.format, c.prefix, c.suffix)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+          {hasChart && (
+            <div className="card">
+              <h4 style={{ margin: '0 0 8px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9a9ba1', fontWeight: 500 }}>{CONFIG.chart.title || ''}</h4>
+              {chartError ? (
+                <div style={{ color: '#ff8a8a', fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{chartError}</div>
+              ) : <Sparkline values={chartValues} />}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+render(<App />);

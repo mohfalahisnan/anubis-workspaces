@@ -1,0 +1,129 @@
+const INITIAL = __CONFIG_JSON__;
+
+const COLOR = { done: '#6ee7a7', running: '#d4a85c', pending: '#9a9ba1', failed: '#ff8a8a' };
+const PILL_BG = {
+  done: 'rgba(110,231,167,0.15)',
+  running: 'rgba(212,168,92,0.15)',
+  pending: 'rgba(255,255,255,0.08)',
+  failed: 'rgba(255,138,138,0.15)',
+};
+
+function Edge({ from, to, active }) {
+  const cx1 = from.x + 110, cy1 = from.y + 22;
+  const cx2 = to.x,         cy2 = to.y + 22;
+  const mid = (cx1 + cx2) / 2;
+  const d = `M ${cx1} ${cy1} C ${mid} ${cy1}, ${mid} ${cy2}, ${cx2} ${cy2}`;
+  return (
+    <path d={d} fill="none"
+      stroke={active ? '#d4a85c' : 'rgba(255,255,255,0.25)'}
+      strokeWidth={1.5}
+      strokeDasharray={active ? '4 4' : undefined}
+      markerEnd="url(#arrow)"
+      style={active ? { animation: 'flow 1.2s linear infinite' } : undefined} />
+  );
+}
+
+function Node({ node, selected, onClick }) {
+  return (
+    <g transform={`translate(${node.x},${node.y})`} onClick={onClick} style={{ cursor: 'pointer' }}>
+      <rect width={110} height={44} rx={6} ry={6}
+        fill="rgba(255,255,255,0.04)"
+        stroke={selected ? '#d4a85c' : 'rgba(255,255,255,0.18)'}
+        strokeWidth={selected ? 2 : 1} />
+      <text x={55} y={20} textAnchor="middle" fill="#e6e7ea" fontSize={12} fontFamily="ui-sans-serif, system-ui">{node.label}</text>
+      <text x={55} y={35} textAnchor="middle" fill={COLOR[node.status] || '#9a9ba1'} fontSize={10} fontFamily="ui-monospace, monospace">{node.status}</text>
+    </g>
+  );
+}
+
+function App() {
+  const [wf, setWf] = useState(INITIAL);
+  const [selectedId, setSelected] = useState(null);
+
+  useEffect(() => {
+    if (!INITIAL.pollRoute) return;
+    const t = setInterval(async () => {
+      try {
+        const r = await anubis.fetch(INITIAL.pollRoute);
+        if (!r.ok) return;
+        const j = await r.json();
+        const next = j.workflow || j;
+        if (next && Array.isArray(next.nodes)) {
+          setWf((prev) => ({
+            ...prev,
+            nodes: next.nodes,
+            edges: next.edges || prev.edges,
+          }));
+        }
+      } catch (e) { /* ignore */ }
+    }, INITIAL.pollIntervalMs || 2000);
+    return () => clearInterval(t);
+  }, []);
+
+  const byId = Object.fromEntries(wf.nodes.map((n) => [n.id, n]));
+  const sel = selectedId ? byId[selectedId] : null;
+
+  let maxX = 600, maxY = 320;
+  wf.nodes.forEach((n) => {
+    maxX = Math.max(maxX, n.x + 130);
+    maxY = Math.max(maxY, n.y + 70);
+  });
+
+  const dimLabel = { color: '#9a9ba1', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' };
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+      <style>{`@keyframes flow { to { stroke-dashoffset: -16; } }`}</style>
+      <div className="card">
+        <h4 style={{ margin: '0 0 8px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9a9ba1', fontWeight: 500 }}>
+          {wf.title || 'Pipeline'}
+        </h4>
+        <svg viewBox={`0 0 ${maxX} ${maxY}`} style={{ width: '100%', height: maxY }}>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth={6} markerHeight={6} orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="rgba(255,255,255,0.45)" />
+            </marker>
+          </defs>
+          {wf.edges.map((e, i) => {
+            const a = byId[e.from], b = byId[e.to];
+            if (!a || !b) return null;
+            const active = a.status === 'running' || b.status === 'running';
+            return <Edge key={i} from={a} to={b} active={active} />;
+          })}
+          {wf.nodes.map((n) => (
+            <Node key={n.id} node={n} selected={selectedId === n.id} onClick={() => setSelected(n.id)} />
+          ))}
+        </svg>
+      </div>
+
+      <div className="card">
+        <h4 style={{ margin: '0 0 8px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9a9ba1', fontWeight: 500 }}>Node</h4>
+        {!sel && <div style={{ color: '#9a9ba1' }}>click a node</div>}
+        {sel && (
+          <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, lineHeight: 1.7 }}>
+            <div style={dimLabel}>id</div>
+            <div>{sel.id}</div>
+            <div style={{ ...dimLabel, marginTop: 8 }}>status</div>
+            <div>
+              <span style={{
+                display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: 11,
+                background: PILL_BG[sel.status] || PILL_BG.pending,
+                color: COLOR[sel.status] || '#9a9ba1',
+              }}>{sel.status}</span>
+            </div>
+            <div style={{ ...dimLabel, marginTop: 8 }}>elapsed</div>
+            <div>{sel.ms != null ? sel.ms + ' ms' : '—'}</div>
+            {sel.info && (
+              <>
+                <div style={{ ...dimLabel, marginTop: 8 }}>operation</div>
+                <div>{sel.info}</div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+render(<App />);

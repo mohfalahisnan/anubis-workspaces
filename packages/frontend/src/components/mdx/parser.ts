@@ -4,6 +4,8 @@ export type ComponentName =
   | 'DataTable'
   | 'KeyValueList'
   | 'LineChart'
+  | 'HtmlPreview'
+  | 'ReactPreview'
 
 const WHITELIST: ReadonlySet<string> = new Set<ComponentName>([
   'Buttons',
@@ -11,6 +13,8 @@ const WHITELIST: ReadonlySet<string> = new Set<ComponentName>([
   'DataTable',
   'KeyValueList',
   'LineChart',
+  'HtmlPreview',
+  'ReactPreview',
 ])
 
 export type Segment =

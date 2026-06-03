@@ -1,0 +1,184 @@
+<style>
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .toolbar h3 { margin: 0; font-size: 14px; }
+  #stamp { font-family: ui-monospace, monospace; font-size: 11px; color: #9a9ba1; margin-right: 8px; }
+  .kpis { display: grid; gap: 12px; margin-bottom: 12px; }
+  .kpi { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); border-radius: 8px; padding: 12px; }
+  .kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #9a9ba1; }
+  .kpi .value { font-size: 22px; font-family: ui-monospace, monospace; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .row { display: grid; gap: 12px; }
+  .panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10); border-radius: 8px; padding: 12px; }
+  .panel h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #9a9ba1; font-weight: 500; }
+  svg { display: block; width: 100%; height: 180px; }
+  .skeleton { color: #9a9ba1; font-style: italic; }
+  .error { color: #ff8a8a; font-family: ui-monospace, monospace; font-size: 11px; }
+</style>
+
+<div class="toolbar">
+  <h3 id="title"></h3>
+  <div><span id="stamp">—</span><button id="refresh" hidden>Refresh</button></div>
+</div>
+<div class="kpis" id="kpis"></div>
+<div class="row" id="row">
+  <div class="panel" id="table-panel" hidden>
+    <h4 id="table-title"></h4>
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="panel" id="chart-panel" hidden>
+    <h4 id="chart-title"></h4>
+    <svg id="chart" viewBox="0 0 480 180" preserveAspectRatio="none"></svg>
+  </div>
+</div>
+
+<script>
+const CONFIG = __CONFIG_JSON__;
+const $ = (id) => document.getElementById(id);
+
+function getPath(obj, path) {
+  if (path == null || path === '' || path === '.') return obj;
+  let cur = obj;
+  for (const seg of String(path).split('.')) {
+    if (cur == null) return undefined;
+    if (seg === 'length' && (Array.isArray(cur) || typeof cur === 'string')) return cur.length;
+    cur = cur[seg];
+  }
+  return cur;
+}
+
+function fmt(v, kind, prefix, suffix) {
+  if (v == null) return '—';
+  let s;
+  if (kind === 'number') {
+    const n = Number(v);
+    if (!Number.isFinite(n)) s = String(v);
+    else s = Math.abs(n) >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+  } else if (kind === 'date') {
+    const d = new Date(v);
+    s = isNaN(d.getTime()) ? String(v) : d.toLocaleDateString();
+  } else if (kind === 'handle') {
+    s = '@' + String(v).replace(/^@/, '');
+  } else {
+    s = String(v);
+  }
+  return (prefix || '') + s + (suffix || '');
+}
+
+async function safe(route) {
+  try {
+    const r = await anubis.fetch(route);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch (e) { return { __error: e.message }; }
+}
+
+function plotLine(svg, values) {
+  svg.innerHTML = '';
+  if (!values.length) return;
+  const W = 480, H = 180, P = 16;
+  const min = Math.min.apply(null, values.concat([0]));
+  const max = Math.max.apply(null, values.concat([min + 1]));
+  const stepX = (W - 2 * P) / Math.max(1, values.length - 1);
+  const px = (i) => P + i * stepX;
+  const py = (v) => P + (H - 2 * P) * (1 - (v - min) / (max - min || 1));
+  const pts = values.map((v, i) => px(i) + ',' + py(v)).join(' ');
+  svg.insertAdjacentHTML('beforeend',
+    '<polyline points="' + pts + '" fill="none" stroke="#d4a85c" stroke-width="2" stroke-linejoin="round" />');
+  for (let i = 0; i < values.length; i++) {
+    svg.insertAdjacentHTML('beforeend',
+      '<circle cx="' + px(i) + '" cy="' + py(values[i]) + '" r="2.5" fill="#d4a85c" />');
+  }
+}
+
+function init() {
+  $('title').textContent = CONFIG.title || 'Dashboard';
+
+  const kpis = CONFIG.kpis || [];
+  $('kpis').style.gridTemplateColumns = 'repeat(' + Math.max(1, Math.min(4, kpis.length || 1)) + ', 1fr)';
+  $('kpis').innerHTML = kpis.map((k, i) =>
+    '<div class="kpi"><div class="label">' + escapeHtml(k.label || '') + '</div>' +
+    '<div class="value" id="kpi-' + i + '">—</div></div>'
+  ).join('');
+
+  const hasTable = !!CONFIG.table;
+  const hasChart = !!CONFIG.chart;
+  $('row').style.gridTemplateColumns = hasTable && hasChart ? '2fr 3fr' : '1fr';
+  if (hasTable) {
+    $('table-panel').hidden = false;
+    $('table-title').textContent = CONFIG.table.title || '';
+    $('thead').innerHTML = '<tr>' + CONFIG.table.columns.map(c => '<th>' + escapeHtml(c.label) + '</th>').join('') + '</tr>';
+  }
+  if (hasChart) {
+    $('chart-panel').hidden = false;
+    $('chart-title').textContent = CONFIG.chart.title || '';
+  }
+  if (CONFIG.refreshable !== false) {
+    $('refresh').hidden = false;
+    $('refresh').addEventListener('click', refresh);
+  }
+  refresh();
+  if (CONFIG.pollIntervalMs && CONFIG.pollIntervalMs > 500) {
+    setInterval(refresh, CONFIG.pollIntervalMs);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function refresh() {
+  $('stamp').textContent = 'loading…';
+  const cache = Object.create(null);
+  const get = (route) => (cache[route] || (cache[route] = safe(route)));
+
+  const kpis = CONFIG.kpis || [];
+  await Promise.all([
+    ...kpis.map(async (k, i) => {
+      const j = await get(k.route);
+      const el = $('kpi-' + i);
+      if (j.__error) { el.innerHTML = '<span class="error">' + escapeHtml(j.__error) + '</span>'; return; }
+      el.textContent = fmt(getPath(j, k.valuePath), k.format, k.prefix, k.suffix);
+    }),
+    (async () => {
+      if (!CONFIG.table) return;
+      const j = await get(CONFIG.table.route);
+      const tb = $('tbody');
+      const cols = CONFIG.table.columns;
+      if (j.__error) {
+        tb.innerHTML = '<tr><td colspan="' + cols.length + '" class="error">' + escapeHtml(j.__error) + '</td></tr>';
+        return;
+      }
+      let rows = getPath(j, CONFIG.table.itemsPath || 'items');
+      if (!Array.isArray(rows)) rows = [];
+      if (CONFIG.table.sortBy) {
+        const dir = CONFIG.table.sortDir === 'asc' ? 1 : -1;
+        rows = rows.slice().sort((a, b) =>
+          ((Number(getPath(a, CONFIG.table.sortBy)) || 0) - (Number(getPath(b, CONFIG.table.sortBy)) || 0)) * dir);
+      }
+      if (CONFIG.table.limit) rows = rows.slice(0, CONFIG.table.limit);
+      tb.innerHTML = rows.length
+        ? rows.map(r => '<tr>' + cols.map(c =>
+            '<td>' + escapeHtml(fmt(getPath(r, c.field), c.format, c.prefix, c.suffix)) + '</td>'
+          ).join('') + '</tr>').join('')
+        : '<tr><td colspan="' + cols.length + '" class="skeleton">no rows</td></tr>';
+    })(),
+    (async () => {
+      if (!CONFIG.chart) return;
+      const j = await get(CONFIG.chart.route);
+      if (j.__error) {
+        $('chart').innerHTML = '<text x="10" y="20" fill="#ff8a8a" font-family="ui-monospace, monospace" font-size="11">' + escapeHtml(j.__error) + '</text>';
+        return;
+      }
+      let rows = getPath(j, CONFIG.chart.itemsPath || 'items');
+      if (!Array.isArray(rows)) rows = [];
+      const values = rows.map(r => Number(getPath(r, CONFIG.chart.yField)) || 0).reverse();
+      plotLine($('chart'), values);
+    })(),
+  ]);
+  $('stamp').textContent = 'refreshed ' + new Date().toLocaleTimeString();
+}
+
+init();
+</script>

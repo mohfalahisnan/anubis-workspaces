@@ -1,0 +1,154 @@
+<style>
+  .frame { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+  .stage { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10); border-radius: 8px; padding: 12px; }
+  .stage h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #9a9ba1; font-weight: 500; }
+  svg { display: block; width: 100%; }
+  .node rect { transition: stroke 0.15s; cursor: pointer; }
+  .node:hover rect { stroke: #d4a85c; }
+  .node.selected rect { stroke: #d4a85c; stroke-width: 2; }
+  .node text { pointer-events: none; }
+  .edge { stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  .edge.active { stroke: #d4a85c; stroke-dasharray: 4 4; animation: flow 1.2s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -16; } }
+  .status-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-family: ui-monospace, monospace; }
+  .s-done { background: rgba(110,231,167,0.15); color: #6ee7a7; }
+  .s-running { background: rgba(212,168,92,0.15); color: #d4a85c; }
+  .s-pending { background: rgba(255,255,255,0.08); color: #9a9ba1; }
+  .s-failed { background: rgba(255,138,138,0.15); color: #ff8a8a; }
+  .meta b { color: #9a9ba1; font-weight: normal; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+</style>
+
+<div class="frame">
+  <div class="stage">
+    <h4 id="title"></h4>
+    <svg id="g" viewBox="0 0 600 320">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="rgba(255,255,255,0.45)" />
+        </marker>
+      </defs>
+    </svg>
+  </div>
+  <div class="stage">
+    <h4>Node</h4>
+    <div id="detail">click a node</div>
+  </div>
+</div>
+
+<script>
+let WORKFLOW = __CONFIG_JSON__;
+const COLOR = { done: '#6ee7a7', running: '#d4a85c', pending: '#9a9ba1', failed: '#ff8a8a' };
+const PILL  = { done: 's-done',  running: 's-running', pending: 's-pending', failed: 's-failed' };
+const NS    = 'http://www.w3.org/2000/svg';
+
+document.getElementById('title').textContent = WORKFLOW.title || 'Pipeline';
+const svg = document.getElementById('g');
+let selected = null;
+
+function nodeById(id) { return WORKFLOW.nodes.find((n) => n.id === id); }
+
+function clear() {
+  [...svg.querySelectorAll('.node, .edge')].forEach((el) => el.remove());
+}
+
+function draw() {
+  clear();
+  let maxX = 600, maxY = 320;
+  WORKFLOW.nodes.forEach((n) => {
+    maxX = Math.max(maxX, n.x + 130);
+    maxY = Math.max(maxY, n.y + 70);
+  });
+  svg.setAttribute('viewBox', '0 0 ' + maxX + ' ' + maxY);
+  svg.style.height = maxY + 'px';
+
+  WORKFLOW.edges.forEach((e) => {
+    const a = nodeById(e.from);
+    const b = nodeById(e.to);
+    if (!a || !b) return;
+    const cx1 = a.x + 110, cy1 = a.y + 22;
+    const cx2 = b.x,       cy2 = b.y + 22;
+    const mid = (cx1 + cx2) / 2;
+    const active = a.status === 'running' || b.status === 'running';
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', 'M ' + cx1 + ' ' + cy1 + ' C ' + mid + ' ' + cy1 + ', ' + mid + ' ' + cy2 + ', ' + cx2 + ' ' + cy2);
+    path.setAttribute('class', 'edge' + (active ? ' active' : ''));
+    path.setAttribute('stroke', active ? '#d4a85c' : 'rgba(255,255,255,0.25)');
+    svg.appendChild(path);
+  });
+
+  WORKFLOW.nodes.forEach((n) => {
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'node' + (selected === n.id ? ' selected' : ''));
+    g.setAttribute('transform', 'translate(' + n.x + ',' + n.y + ')');
+    g.dataset.id = n.id;
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('width', 110);
+    rect.setAttribute('height', 44);
+    rect.setAttribute('rx', 6);
+    rect.setAttribute('ry', 6);
+    rect.setAttribute('fill', 'rgba(255,255,255,0.04)');
+    rect.setAttribute('stroke', selected === n.id ? '#d4a85c' : 'rgba(255,255,255,0.18)');
+    rect.setAttribute('stroke-width', selected === n.id ? '2' : '1');
+    g.appendChild(rect);
+    const label = document.createElementNS(NS, 'text');
+    label.setAttribute('x', 55);
+    label.setAttribute('y', 20);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('fill', '#e6e7ea');
+    label.setAttribute('font-family', 'ui-sans-serif, system-ui, sans-serif');
+    label.setAttribute('font-size', '12');
+    label.textContent = n.label;
+    g.appendChild(label);
+    const status = document.createElementNS(NS, 'text');
+    status.setAttribute('x', 55);
+    status.setAttribute('y', 35);
+    status.setAttribute('text-anchor', 'middle');
+    status.setAttribute('fill', COLOR[n.status] || '#9a9ba1');
+    status.setAttribute('font-size', '10');
+    status.setAttribute('font-family', 'ui-monospace, monospace');
+    status.textContent = n.status;
+    g.appendChild(status);
+    g.addEventListener('click', () => select(n.id));
+    svg.appendChild(g);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function select(id) {
+  selected = id;
+  draw();
+  const n = nodeById(id);
+  if (!n) return;
+  document.getElementById('detail').innerHTML =
+    '<div class="meta" style="font-family:ui-monospace, monospace; font-size:12px; line-height:1.7;">' +
+    '<div><b>id</b><br>' + escapeHtml(n.id) + '</div>' +
+    '<div style="margin-top:8px"><b>status</b><br><span class="status-pill ' + (PILL[n.status] || 's-pending') + '">' + escapeHtml(n.status) + '</span></div>' +
+    '<div style="margin-top:8px"><b>elapsed</b><br>' + (n.ms != null ? n.ms + ' ms' : '—') + '</div>' +
+    (n.info ? '<div style="margin-top:8px"><b>operation</b><br>' + escapeHtml(n.info) + '</div>' : '') +
+    '</div>';
+}
+
+draw();
+
+if (WORKFLOW.pollRoute) {
+  setInterval(async () => {
+    try {
+      const r = await anubis.fetch(WORKFLOW.pollRoute);
+      if (!r.ok) return;
+      const j = await r.json();
+      const next = j.workflow || j;
+      if (next && Array.isArray(next.nodes)) {
+        WORKFLOW = Object.assign({}, WORKFLOW, {
+          nodes: next.nodes,
+          edges: next.edges || WORKFLOW.edges,
+        });
+        draw();
+        if (selected) select(selected);
+      }
+    } catch (e) { /* ignore poll errors */ }
+  }, WORKFLOW.pollIntervalMs || 2000);
+}
+</script>

@@ -8,6 +8,8 @@ import { Button } from './components/Button'
 import { DataTable } from './components/DataTable'
 import { KeyValueList } from './components/KeyValueList'
 import { LineChart } from './components/LineChart'
+import { HtmlPreview } from './components/HtmlPreview'
+import { ReactPreview } from './components/ReactPreview'
 
 export interface MdxContentProps {
   source: string
@@ -113,6 +115,26 @@ function ComponentSegment({
           title={typeof props.title === 'string' ? props.title : undefined}
         />
       )
+    case 'HtmlPreview': {
+      const html = typeof props.html === 'string' ? props.html : childrenRaw
+      return (
+        <HtmlPreview
+          html={html}
+          height={typeof props.height === 'number' ? props.height : undefined}
+          maxHeight={typeof props.maxHeight === 'number' ? props.maxHeight : undefined}
+        />
+      )
+    }
+    case 'ReactPreview': {
+      const code = typeof props.code === 'string' ? props.code : childrenRaw
+      return (
+        <ReactPreview
+          code={code}
+          height={typeof props.height === 'number' ? props.height : undefined}
+          maxHeight={typeof props.maxHeight === 'number' ? props.maxHeight : undefined}
+        />
+      )
+    }
     default:
       return <Fallback raw={`<${String(name)} />`} />
   }

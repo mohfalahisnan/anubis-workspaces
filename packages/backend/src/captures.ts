@@ -161,6 +161,7 @@ postRoutes.get('/', (c) => {
       competitorHandle: owner?.handle,
       competitorTint: owner?.tint,
       competitorFollowers: owner?.followers,
+      competitorAvgLikes: owner?.avgLikes,
       competitorLevel: owner?.level,
     }
   })
@@ -232,6 +233,7 @@ function enrichPost(post: CapturedPost) {
     competitorHandle: owner?.handle,
     competitorTint: owner?.tint,
     competitorFollowers: owner?.followers,
+    competitorAvgLikes: owner?.avgLikes,
     competitorLevel: owner?.level,
   }
 }

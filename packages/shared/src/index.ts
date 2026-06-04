@@ -395,6 +395,8 @@ export interface CapturedPostSummary {
   competitorTint?: string
   /** Owning competitor's follower count, joined in by the route layer. */
   competitorFollowers?: number
+  /** Owning competitor's avgLikes, joined in by the route layer. */
+  competitorAvgLikes?: number
   /** Owning competitor's manual level override, joined in by the route layer. */
   competitorLevel?: CompetitorLevelOverride
 }

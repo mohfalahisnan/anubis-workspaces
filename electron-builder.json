@@ -3,6 +3,7 @@
   "appId": "com.mohfalahisnan.anubis",
   "productName": "Anubis",
   "asar": true,
+  "npmRebuild": false,
   "directories": {
     "output": "release/${version}"
   },
@@ -26,7 +27,11 @@
     "packages/research-crawler/node_modules/**",
     "packages/shared/dist",
     "packages/shared/package.json",
-    "node_modules/**"
+    "!packages/*/node_modules/typescript/**",
+    "!packages/*/node_modules/@types/**",
+    "!packages/*/node_modules/undici-types/**",
+    "!packages/*/node_modules/.vite/**",
+    "!packages/*/node_modules/.vite-temp/**"
   ],
   "asarUnpack": [
     "packages/backend/dist/**",
@@ -45,8 +50,7 @@
     "packages/research-crawler/node_modules/**",
     "packages/shared/dist/**",
     "packages/shared/package.json",
-    "node_modules/bindings/**",
-    "node_modules/file-uri-to-path/**",
+    "node_modules/**",
     "**/*.node"
   ],
   "mac": {

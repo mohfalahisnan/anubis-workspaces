@@ -52,7 +52,7 @@ jobs:
           pnpm exec vite build
 
       - name: Rebuild native modules for Electron ABI
-        run: pnpm exec electron-rebuild -f -w better-sqlite3
+        run: pnpm exec electron-rebuild -f --only better-sqlite3
 
       - name: Publish to GitHub Releases
         env:

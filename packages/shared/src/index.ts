@@ -129,6 +129,8 @@ export interface CompetitorSummary {
   postCount: number
   lastRefreshedAt?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
   addedAt: number
   updatedAt: number
 }
@@ -141,6 +143,8 @@ export interface CreateCompetitorInput {
   followers?: number
   avgLikes?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
 }
 
 export interface UpdateCompetitorInput {
@@ -151,6 +155,8 @@ export interface UpdateCompetitorInput {
   avgLikes?: number
   postCount?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride | null
 }
 
 export interface UpdateCapturedPostInput {
@@ -313,6 +319,8 @@ export interface CapturedPostSummary {
   competitorTint?: string
   /** Owning competitor's follower count, joined in by the route layer. */
   competitorFollowers?: number
+  /** Owning competitor's manual level override, joined in by the route layer. */
+  competitorLevel?: CompetitorLevelOverride
 }
 
 export type CapturedPostListResponse = ListResponse<CapturedPostSummary>

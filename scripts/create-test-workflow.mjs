@@ -4,14 +4,15 @@
 //
 // Usage:  node scripts/create-test-workflow.mjs
 //
-// What gets seeded (all pre-published, no external deps):
-//   1. "Test: Echo static data"            — single Table node, instant smoke test
-//   2. "Test: Chain — Source → Sink"       — two Table nodes connected by an edge,
-//                                            so you can watch orange → green progression
+// What gets seeded:
+//   1. "Test: Echo static data"          — single Table node, instant smoke test
+//   2. "Test: Chain — Source → Sink"     — two Table nodes connected, visible progression
+//   3. "Test: IG → analyze → ideas →
+//        choose → final"                 — 5-node real workflow (uses an existing
+//                                          captured Instagram post + 2 AI Agent calls)
 //
-// Open Anubis → Workflows after running; both appear at the top of the list.
-// Click "Open" then "▶ Run published" — the engine, SSE stream, status banner,
-// and node-glow ring should light up in sequence.
+// Open Anubis → Workflows after running; all three appear in the list.
+// Click "Open" then "▶ Run published".
 
 import Database from 'better-sqlite3'
 import { existsSync, mkdirSync, statSync } from 'node:fs'
@@ -201,6 +202,130 @@ const wf2 = seedWorkflow({
   },
 })
 console.log('[seed]', wf2, '→ Test: Chain — Source → Sink')
+
+// 3) Real workflow: existing IG post → AI analyze → Table of suggested ideas → AI choose → Table final.
+//
+// We look up a real captured post to use as the IG source (so the workflow runs
+// without needing Chrome to be open). If no captured posts exist yet, fall back
+// to a URL-source node — the user can edit it in the inspector before running.
+//
+// For the AI Agent nodes, we prefer a "yolo"-style profile because the two
+// agent calls in this chain run unattended and should not stop for plan-mode
+// approval. We pick the first profile whose name suggests autonomous behavior;
+// otherwise the first one we find. The user can override in the inspector.
+
+const profiles = db.prepare(`SELECT id, name FROM profiles ORDER BY sort_order ASC`).all()
+const yoloProfile =
+  profiles.find((p) => /yolo/i.test(p.name)) ??
+  profiles.find((p) => /research/i.test(p.name)) ??
+  profiles[0]
+const profileId = yoloProfile?.id ?? 'claude-yolo'
+console.log('[seed] Using profile for AI Agent nodes:', profileId, yoloProfile ? `(${yoloProfile.name})` : '(no profile found — placeholder, please set in inspector)')
+
+const capturedPost = db
+  .prepare(
+    `SELECT id, post_url, caption FROM captured_posts
+     WHERE caption IS NOT NULL AND length(caption) > 80
+     ORDER BY captured_at DESC
+     LIMIT 1`,
+  )
+  .get()
+
+let igNodeData
+if (capturedPost) {
+  igNodeData = { source: 'existing', postId: capturedPost.id }
+  console.log('[seed] Using captured post:', capturedPost.id, `(${capturedPost.post_url})`)
+} else {
+  igNodeData = { source: 'url', url: 'https://www.instagram.com/p/REPLACE-WITH-A-PUBLIC-POST/' }
+  console.log('[seed] No captured posts found — IG node defaults to a URL placeholder; edit it in the inspector before running.')
+}
+
+const analyzePrompt = `You are a content strategist analyzing an Instagram post to inspire new content for a similar audience.
+
+The captured post is provided in the <context> block above (caption, media URLs, metrics).
+
+Your task: suggest 3 distinct content ideas inspired by this post — each one taking a different angle. For each idea, output:
+- "title": short, hook-style first line (max 70 chars)
+- "angle": one of "educational" | "provocative" | "authority"
+- "cta": the closing call to action
+
+Output ONLY a JSON array of exactly 3 objects. No prose before or after, no markdown fences.
+
+Example shape:
+[
+  {"title":"...","angle":"educational","cta":"..."},
+  {"title":"...","angle":"provocative","cta":"..."},
+  {"title":"...","angle":"authority","cta":"..."}
+]`
+
+const choosePrompt = `The <context> above contains 3 content ideas (from the analyze step's output).
+
+Pick the SINGLE best idea — favor ideas that are specific, novel, and immediately actionable.
+
+Then expand it into a complete Instagram caption:
+- First line: the hook (≤ 80 chars)
+- Body: 3–5 short paragraphs that deliver the promised value
+- Last line: the CTA
+
+Output ONLY the final caption text — no JSON, no commentary, no markdown fences.`
+
+const wf3 = seedWorkflow({
+  name: 'Test: IG → analyze → ideas → choose → final',
+  description:
+    '5-node real workflow. Reads a captured Instagram post, asks an AI Agent to ' +
+    'suggest 3 content ideas, displays them in a Table, asks a second AI Agent to ' +
+    'pick the best one and expand it into a finished caption, then displays the final ' +
+    'output in another Table. Requires a working AI Agent profile (credentials set up).',
+  graph: {
+    nodes: [
+      {
+        id: 'ig',
+        type: 'instagramPost',
+        position: { x: 0, y: 200 },
+        data: igNodeData,
+      },
+      {
+        id: 'analyze',
+        type: 'aiAgent',
+        position: { x: 440, y: 200 },
+        data: {
+          profileId,
+          reasoning: 'medium',
+          prompt: analyzePrompt,
+        },
+      },
+      {
+        id: 'ideas',
+        type: 'table',
+        position: { x: 880, y: 200 },
+        data: { staticData: [] },
+      },
+      {
+        id: 'choose',
+        type: 'aiAgent',
+        position: { x: 1320, y: 200 },
+        data: {
+          profileId,
+          reasoning: 'medium',
+          prompt: choosePrompt,
+        },
+      },
+      {
+        id: 'final',
+        type: 'table',
+        position: { x: 1760, y: 200 },
+        data: { staticData: [] },
+      },
+    ],
+    edges: [
+      { id: 'e-ig-analyze',     source: 'ig',       target: 'analyze' },
+      { id: 'e-analyze-ideas',  source: 'analyze',  target: 'ideas' },
+      { id: 'e-ideas-choose',   source: 'ideas',    target: 'choose' },
+      { id: 'e-choose-final',   source: 'choose',   target: 'final' },
+    ],
+  },
+})
+console.log('[seed]', wf3, '→ Test: IG → analyze → ideas → choose → final')
 
 db.close()
 

@@ -75,8 +75,16 @@ export class WorkflowRunManager {
     }
 
     void this.runAndPersist(active, JSON.parse(workflow.publishedGraph), emit, now).finally(() => {
-      this.active.delete(runId)
+      // Free the workflow slot so the user can start another run immediately.
       this.runsByWorkflow.delete(workflowId)
+      // Keep the active entry (with buffered events) alive for a grace period
+      // so late SSE subscribers — which is common for fast workflows that
+      // finish before the EventSource connection completes — can still replay
+      // the events. Without this, instantly-finishing workflows look stuck:
+      // the run-started/node-*/run-finished events all happen before the
+      // frontend's EventSource attaches, the buffered events get deleted, and
+      // the subscriber sees an empty stream.
+      setTimeout(() => this.active.delete(runId), 60_000).unref?.()
     })
 
     return { runId }
@@ -89,11 +97,12 @@ export class WorkflowRunManager {
     return true
   }
 
-  subscribe(runId: string, listener: Listener): { unsubscribe: () => void; replay: RunEvent[] } {
+  subscribe(runId: string, listener: Listener): { unsubscribe: () => void; replay: RunEvent[]; finished: boolean } {
     const active = this.active.get(runId)
-    if (!active) return { unsubscribe: () => {}, replay: [] }
+    if (!active) return { unsubscribe: () => {}, replay: [], finished: true }
     active.listeners.add(listener)
     return {
+      finished: active.finished,
       unsubscribe: () => active.listeners.delete(listener),
       replay: [...active.buffered],
     }

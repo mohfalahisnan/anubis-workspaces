@@ -66,4 +66,50 @@ describe('workflow REST', () => {
     const run = await app.request(`/workflows/${wf.id}/runs`, { method: 'POST' })
     expect(run.status).toBe(400)
   })
+
+  it('SSE events are replayed even when the subscriber attaches after the run finishes', async () => {
+    const app = await loadApp()
+    // Create + publish a workflow that finishes instantly (single Table node).
+    const created = await app.request('/workflows', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Fast' }),
+    })
+    const wf = await created.json()
+    const draft = JSON.stringify({
+      nodes: [{ id: 't1', type: 'table', position: { x: 0, y: 0 }, data: { staticData: [{ k: 'v' }] } }],
+      edges: [],
+    })
+    await app.request(`/workflows/${wf.id}/draft`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ draftGraph: draft }),
+    })
+    await app.request(`/workflows/${wf.id}/publish`, { method: 'POST' })
+
+    // Start the run. The Table executor returns synchronously, so by the time
+    // we get back to this code the run is already finished.
+    const runResp = await app.request(`/workflows/${wf.id}/runs`, { method: 'POST' })
+    expect(runResp.status).toBe(201)
+    const { runId } = await runResp.json()
+
+    // Yield to let the in-process runner promise actually flush its emit() calls
+    // and persist run-finished before we subscribe.
+    await new Promise((r) => setTimeout(r, 10))
+
+    // Late subscribe — should still receive the buffered events incl. run-finished.
+    const sseResp = await app.request(`/workflows/runs/${runId}/events`)
+    expect(sseResp.status).toBe(200)
+    expect(sseResp.headers.get('content-type')).toContain('text/event-stream')
+    const text = await sseResp.text()
+    expect(text).toContain('"kind":"run-started"')
+    expect(text).toContain('"kind":"node-started"')
+    expect(text).toContain('"kind":"node-succeeded"')
+    expect(text).toContain('"kind":"run-finished"')
+    expect(text).toContain('"status":"succeeded"')
+
+    // Run row in the DB reflects the final status.
+    const runState = await app.request(`/workflows/runs/${runId}`).then((r) => r.json())
+    expect(runState.run.status).toBe('succeeded')
+    expect(runState.steps.length).toBe(1)
+    expect(runState.steps[0].status).toBe('succeeded')
+  })
 })

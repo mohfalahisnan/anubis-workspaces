@@ -139,8 +139,12 @@ workflowRoutes.get('/runs/:runId/events', (c) => {
       }
       const sub = mgr.subscribe(runId, send)
       for (const e of sub.replay) send(e)
-      if (!mgr.isActive(runId)) {
-        controller.close()
+      // If the run had already finished by the time we subscribed, the replay
+      // above includes the run-finished event. Close the stream eagerly — no
+      // more events are coming.
+      if (sub.finished) {
+        sub.unsubscribe()
+        try { controller.close() } catch { /* already closed */ }
         return
       }
       const close = () => {

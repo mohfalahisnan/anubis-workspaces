@@ -231,6 +231,7 @@ export class CodexAgent {
           this.emit(k, 'tool_result', {
             name: 'codex_stderr',
             result: text,
+            isError: true,
           })
         }
       })

@@ -4,7 +4,7 @@ import { getApiBaseUrl, listMessages } from '@/api'
 
 export type ToolEvent =
   | { kind: 'call'; callId: string; name: string; args: unknown }
-  | { kind: 'result'; callId: string; name: string; result: unknown }
+  | { kind: 'result'; callId: string; name: string; args: unknown; result: unknown; isError: boolean }
 
 export type Fragment =
   | { kind: 'text'; text: string }
@@ -154,10 +154,12 @@ export function useConversationMessages(
       })
 
       es.addEventListener('tool_result', (raw) => {
-        const data = parseSse<{ callId: string; name: string; result: unknown }>(raw)
+        const data = parseSse<{ callId: string; name: string; result: unknown; isError?: boolean }>(raw)
         if (!data) return
         setStreaming((cur) => {
           if (!cur) return cur
+          const prev = cur.toolEvents[data.callId]
+          const args = prev && prev.kind === 'call' ? prev.args : prev && prev.kind === 'result' ? prev.args : undefined
           return {
             ...cur,
             toolEvents: {
@@ -166,7 +168,9 @@ export function useConversationMessages(
                 kind: 'result',
                 callId: data.callId,
                 name: data.name,
+                args,
                 result: data.result,
+                isError: data.isError === true,
               },
             },
           }

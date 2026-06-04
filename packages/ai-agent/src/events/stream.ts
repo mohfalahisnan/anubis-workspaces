@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 export interface AgentEventMap {
   partial: { deltaText: string }
   tool_call: { name: string; args: unknown }
-  tool_result: { name: string; result: unknown }
+  tool_result: { name: string; result: unknown; isError?: boolean }
   approval_required: { approvalId: string; kind: string; payload: unknown }
   done: { finishReason: string; usage?: unknown }
   error: { error: Error }

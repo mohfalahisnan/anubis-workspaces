@@ -612,11 +612,7 @@ function StreamingMessage({
             }
             const ev = live.toolEvents[frag.callId]
             if (!ev) return null
-            return ev.kind === 'call' ? (
-              <ToolCardRunning key={i} ev={ev} />
-            ) : (
-              <ToolCardSuccess key={i} ev={ev} />
-            )
+            return <ToolCard key={i} ev={ev} />
           })}
         </div>
       )}
@@ -624,47 +620,124 @@ function StreamingMessage({
   )
 }
 
-function ToolCardSuccess({ ev }: { ev: ToolEvent & { kind: 'result' } }) {
-  return (
-    <div className='relative max-w-[480px] overflow-hidden rounded-[10px] border border-border bg-card p-3'>
-      <div className='flex items-center gap-2.5'>
-        <span className='flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-[var(--anubis-gold)]'>
-          <GlobeIcon className='size-[15px]' strokeWidth={2} />
-        </span>
-        <div className='flex min-w-0 flex-1 flex-col'>
-          <span className='truncate font-mono text-[12px] tracking-[-0.01em] text-foreground'>
-            {ev.name}
-          </span>
-          <span className='mt-1 truncate font-mono text-[11.5px] text-muted-foreground'>
-            completed
-          </span>
-        </div>
-        <span className='size-[7px] rounded-full bg-[var(--anubis-success)]' />
-      </div>
-    </div>
-  )
+function summarizeToolArgs(name: string, args: unknown): string {
+  if (!args || typeof args !== 'object') return ''
+  const a = args as Record<string, unknown>
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+  const n = name.toLowerCase()
+  if (n === 'powershell' || n === 'bash') return str(a.description) || str(a.command)
+  if (n === 'read' || n === 'write' || n === 'edit' || n === 'notebookedit') return str(a.file_path)
+  if (n === 'glob') return str(a.pattern) + (a.path ? ` in ${str(a.path)}` : '')
+  if (n === 'grep') return str(a.pattern) + (a.path ? ` in ${str(a.path)}` : '')
+  if (n === 'webfetch' || n === 'webSearch') return str(a.url) || str(a.query) || str(a.prompt)
+  if (n === 'agent' || n === 'task') return str(a.description) || str(a.prompt)
+  if (n === 'skill') return str(a.skill)
+  for (const k of ['description', 'command', 'query', 'prompt', 'url', 'pattern', 'path', 'file_path']) {
+    const v = str(a[k])
+    if (v) return v
+  }
+  return ''
 }
 
-function ToolCardRunning({ ev }: { ev: ToolEvent & { kind: 'call' } }) {
+function formatJson(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function ToolCard({ ev }: { ev: ToolEvent }) {
+  const [expanded, setExpanded] = useState(false)
+  const running = ev.kind === 'call'
+  const isError = ev.kind === 'result' && ev.isError
+  const args = ev.kind === 'call' ? ev.args : ev.args
+  const result = ev.kind === 'result' ? ev.result : undefined
+  const summary = summarizeToolArgs(ev.name, args)
+  const statusLabel = running ? 'running…' : isError ? 'failed' : 'completed'
+  const dotClass = running
+    ? 'bg-[var(--anubis-gold-hi)] animate-[anubisPulse_1.7s_ease-out_infinite]'
+    : isError
+      ? 'bg-[var(--destructive)]'
+      : 'bg-[var(--anubis-success)]'
+  const Icon = running ? BrainIcon : GlobeIcon
+  const hasDetails = Boolean(summary || args || result)
+
   return (
-    <div className='relative max-w-[480px] overflow-hidden rounded-[10px] border border-border bg-card p-3'>
-      <div className='flex items-center gap-2.5'>
+    <div className='relative max-w-[480px] overflow-hidden rounded-[10px] border border-border bg-card'>
+      <button
+        type='button'
+        onClick={() => hasDetails && setExpanded((v) => !v)}
+        disabled={!hasDetails}
+        className={cn(
+          'flex w-full items-center gap-2.5 p-3 text-left',
+          hasDetails && 'cursor-pointer hover:bg-muted/40',
+        )}
+        aria-expanded={expanded}
+      >
         <span className='flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-[var(--anubis-gold)]'>
-          <BrainIcon className='size-[15px]' strokeWidth={2} />
+          <Icon className='size-[15px]' strokeWidth={2} />
         </span>
         <div className='flex min-w-0 flex-1 flex-col'>
           <span className='truncate font-mono text-[12px] tracking-[-0.01em] text-foreground'>
             {ev.name}
           </span>
-          <span className='mt-1 truncate font-mono text-[11.5px] text-muted-foreground'>
-            running…
+          <span
+            className={cn(
+              'mt-1 truncate font-mono text-[11.5px]',
+              isError ? 'text-[var(--destructive)]' : 'text-muted-foreground',
+            )}
+          >
+            {summary ? `${statusLabel} · ${summary}` : statusLabel}
           </span>
         </div>
-        <span className='size-[7px] rounded-full bg-[var(--anubis-gold-hi)] animate-[anubisPulse_1.7s_ease-out_infinite]' />
-      </div>
-      <div className='absolute inset-x-0 bottom-0 h-[2px] bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)]'>
-        <div className='h-full w-[32%] animate-[anubisIndeterminate_1.7s_cubic-bezier(0.5,0.1,0.5,0.9)_infinite] rounded-sm bg-[var(--anubis-gold)]' />
-      </div>
+        {hasDetails && (
+          <ChevronDownIcon
+            className={cn(
+              'size-[14px] shrink-0 text-muted-foreground transition-transform',
+              !expanded && '-rotate-90',
+            )}
+            strokeWidth={2}
+          />
+        )}
+        <span className={cn('size-[7px] shrink-0 rounded-full', dotClass)} />
+      </button>
+      {expanded && hasDetails && (
+        <div className='border-t border-border bg-muted/30 px-3 py-2 text-[11.5px]'>
+          {args != null && (
+            <div className='mb-2'>
+              <div className='mb-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground'>
+                input
+              </div>
+              <pre className='overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11.5px] text-foreground'>
+                {formatJson(args)}
+              </pre>
+            </div>
+          )}
+          {result != null && (
+            <div>
+              <div className='mb-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground'>
+                {isError ? 'error' : 'output'}
+              </div>
+              <pre
+                className={cn(
+                  'overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11.5px]',
+                  isError ? 'text-[var(--destructive)]' : 'text-foreground',
+                )}
+              >
+                {formatJson(result)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+      {running && (
+        <div className='absolute inset-x-0 bottom-0 h-[2px] bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)]'>
+          <div className='h-full w-[32%] animate-[anubisIndeterminate_1.7s_cubic-bezier(0.5,0.1,0.5,0.9)_infinite] rounded-sm bg-[var(--anubis-gold)]' />
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,5 @@
 import type { FC } from 'react'
 import { useEditorStore } from './editor-store'
-import { AiAgentConfigForm }          from './inspector/config/ai-agent-config'
 import { InstagramPostConfigForm }    from './inspector/config/instagram-post-config'
 import { TransformerMediaConfigForm } from './inspector/config/transformer-media-config'
 import { TransformerBriefConfigForm } from './inspector/config/transformer-brief-config'
@@ -12,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
-  aiAgent:          AiAgentConfigForm,
   instagramPost:    InstagramPostConfigForm,
   transformerMedia: TransformerMediaConfigForm,
   transformerBrief: TransformerBriefConfigForm,

@@ -51,18 +51,7 @@ export interface CapturedPost {
   [key: string]: unknown
 }
 
-export interface AgentRunRequest {
-  profileId: string
-  reasoning: 'low' | 'medium' | 'high'
-  prompt: string
-}
-
-export interface AgentRunResult {
-  text: string
-}
-
 export interface ExecutorContext {
-  agent:   { run: (req: AgentRunRequest) => Promise<AgentRunResult> }
   crawler: { captureProfile: (url: string) => Promise<CapturedPost> }
   ocr:     { extractFromImage: (path: string) => Promise<string> }
   db:      { getCapturedPost: (id: string) => Promise<CapturedPost> }

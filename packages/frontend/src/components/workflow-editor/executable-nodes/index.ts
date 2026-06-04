@@ -1,5 +1,4 @@
 import type { NodeTypes } from '@xyflow/react'
-import { AiAgentExecutableNode }          from './ai-agent'
 import { InstagramPostExecutableNode }    from './instagram-post'
 import { TransformerMediaExecutableNode } from './transformer-media'
 import { TransformerBriefExecutableNode } from './transformer-brief'
@@ -8,7 +7,6 @@ import { TableExecutableNode }            from './table'
 import { ImageVideoExecutableNode }       from './image-video'
 
 export const executableNodeTypes: NodeTypes = {
-  aiAgent:          AiAgentExecutableNode as never,
   instagramPost:    InstagramPostExecutableNode as never,
   transformerMedia: TransformerMediaExecutableNode as never,
   transformerBrief: TransformerBriefExecutableNode as never,
@@ -18,7 +16,6 @@ export const executableNodeTypes: NodeTypes = {
 }
 
 export const NODE_PALETTE = [
-  { type: 'aiAgent',          label: 'AI Agent' },
   { type: 'instagramPost',    label: 'Instagram Post' },
   { type: 'imageVideo',       label: 'Image / Video' },
   { type: 'transformerMedia', label: 'Transformer · Media' },

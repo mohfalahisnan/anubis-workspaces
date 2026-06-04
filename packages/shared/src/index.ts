@@ -222,6 +222,21 @@ export function levelFor(
   return 'red'
 }
 
+/** The manually-selectable levels — `'unknown'` is computed-only. */
+export type CompetitorLevelOverride = Exclude<CompetitorLevel, 'unknown'>
+
+/**
+ * The level actually shown for a competitor: a manual override wins;
+ * otherwise the follower-count-derived level is used.
+ */
+export function effectiveLevel(
+  override: CompetitorLevelOverride | null | undefined,
+  followers: number | null | undefined,
+  cfg: CompetitorLevelsConfig = DEFAULT_COMPETITOR_LEVELS,
+): CompetitorLevel {
+  return override ?? levelFor(followers, cfg)
+}
+
 export function isValidCompetitorLevels(cfg: CompetitorLevelsConfig): boolean {
   return (
     Number.isInteger(cfg.minActive) &&

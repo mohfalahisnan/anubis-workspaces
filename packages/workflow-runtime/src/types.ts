@@ -9,7 +9,8 @@ export const WorkflowNodeSchema = z.object({
   id: z.string().min(1),
   type: z.string().min(1),
   position: NodePositionSchema,
-  config: z.unknown(),
+  /** Node config payload. Named `data` to match React Flow's wire shape. */
+  data: z.unknown(),
 })
 
 export const WorkflowEdgeSchema = z.object({

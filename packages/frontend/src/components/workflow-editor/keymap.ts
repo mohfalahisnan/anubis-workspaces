@@ -20,13 +20,11 @@ export function useEditorKeymap() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      const inFormInput = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
       const cmd = e.ctrlKey || e.metaKey
 
-      if (cmd && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
-      if ((cmd && e.key.toLowerCase() === 'y') || (cmd && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); redo(); return }
-      if (cmd && e.key.toLowerCase() === 'c') { e.preventDefault(); copy(); return }
-      if (cmd && e.key.toLowerCase() === 'v') { e.preventDefault(); void paste(); return }
+      // Ctrl+S (save) and Ctrl+Shift+S (publish) always work — even from inside form inputs,
+      // otherwise the browser's "save page" action fires.
       if (cmd && e.key.toLowerCase() === 's' && !e.shiftKey) {
         e.preventDefault()
         if (!workflowId) return
@@ -43,6 +41,15 @@ export function useEditorKeymap() {
         }).catch(console.error)
         return
       }
+
+      // The remaining shortcuts (undo/redo/copy/paste/delete) should not fire while
+      // typing into a form field — those keys belong to the input.
+      if (inFormInput) return
+
+      if (cmd && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
+      if ((cmd && e.key.toLowerCase() === 'y') || (cmd && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); redo(); return }
+      if (cmd && e.key.toLowerCase() === 'c') { e.preventDefault(); copy(); return }
+      if (cmd && e.key.toLowerCase() === 'v') { e.preventDefault(); void paste(); return }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selection.length === 0) return
         e.preventDefault()

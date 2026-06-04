@@ -24,9 +24,9 @@ function makeCtx(emit: (e: NodeRunEvent) => void, signal: AbortSignal = new Abor
 function g(): WorkflowGraph {
   return {
     nodes: [
-      { id: 'a', type: 'echo', position: { x: 0, y: 0 }, config: { v: 'A' } },
-      { id: 'b', type: 'echo', position: { x: 0, y: 0 }, config: { v: 'B' } },
-      { id: 'c', type: 'merge', position: { x: 0, y: 0 }, config: {} },
+      { id: 'a', type: 'echo', position: { x: 0, y: 0 }, data: { v: 'A' } },
+      { id: 'b', type: 'echo', position: { x: 0, y: 0 }, data: { v: 'B' } },
+      { id: 'c', type: 'merge', position: { x: 0, y: 0 }, data: {} },
     ],
     edges: [
       { id: 'e1', source: 'a', target: 'c' },
@@ -77,8 +77,8 @@ describe('runWorkflow', () => {
   it('rejects an invalid graph before any node runs', async () => {
     const cyclic: WorkflowGraph = {
       nodes: [
-        { id: 'a', type: 'echo', position: { x: 0, y: 0 }, config: {} },
-        { id: 'b', type: 'echo', position: { x: 0, y: 0 }, config: {} },
+        { id: 'a', type: 'echo', position: { x: 0, y: 0 }, data: {} },
+        { id: 'b', type: 'echo', position: { x: 0, y: 0 }, data: {} },
       ],
       edges: [
         { id: 'e1', source: 'a', target: 'b' },

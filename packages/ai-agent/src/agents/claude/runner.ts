@@ -43,6 +43,7 @@ export async function runClaudeStream(
               opts.emitter.emit('tool_result', {
                 name: toolNamesById.get(c.tool_use_id) ?? c.tool_use_id,
                 result: c.content,
+                isError: c.is_error === true,
               })
             }
           }
@@ -113,6 +114,14 @@ export class ClaudeAgent {
     })
     const emitter = new TypedEmitter<AgentEventMap>()
 
+    // Track whether a terminal event already fired so we can guarantee
+    // exactly one done/error per run. Without this, a clean exit (code 0)
+    // that produced no `result` line would leave consumers waiting forever
+    // for a done event — that hangs anything that `await`s the run.
+    let terminalEmitted = false
+    emitter.on('done', () => { terminalEmitted = true })
+    emitter.on('error', () => { terminalEmitted = true })
+
     let stderrData = ''
     let lastStdoutLine = ''
     child.stderr?.on('data', (chunk) => {
@@ -128,6 +137,7 @@ export class ClaudeAgent {
       if (trimmed) lastStdoutLine = trimmed.slice(-2000)
     })
     child.on('close', (code) => {
+      if (terminalEmitted) return
       if (code !== 0 && code !== null) {
         const stderr = stderrData.trim()
         const detail =
@@ -136,12 +146,27 @@ export class ClaudeAgent {
         emitter.emit('error', {
           error: new Error(`Process exited with code ${code}. Stderr: ${detail}`),
         })
+        return
       }
+      // Clean exit (or killed: code === null) but no `result` line was
+      // emitted on stdout. Surface this as an error rather than hanging
+      // the consumer's `done` await indefinitely.
+      const detail =
+        stderrData.trim() ||
+        lastStdoutLine ||
+        '(no output)'
+      emitter.emit('error', {
+        error: new Error(`Process exited without emitting a result (code=${code}). Output: ${detail}`),
+      })
     })
-    child.on('error', (e) => emitter.emit('error', { error: e }))
-    runClaudeStream({ stdout: child.stdout!, emitter }).catch((e) =>
-      emitter.emit('error', { error: e as Error }),
-    )
+    child.on('error', (e) => {
+      if (terminalEmitted) return
+      emitter.emit('error', { error: e })
+    })
+    runClaudeStream({ stdout: child.stdout!, emitter }).catch((e) => {
+      if (terminalEmitted) return
+      emitter.emit('error', { error: e as Error })
+    })
 
     return { emitter, sessionId }
   }

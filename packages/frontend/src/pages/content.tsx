@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 
 import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
+import { effectiveLevel } from '@anubis/shared'
 
 import { captureCompetitor, deletePost, listPosts, updatePost } from '@/api'
 import { cn } from '@/lib/utils'
@@ -236,7 +237,7 @@ export function ContentPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
-  const { config: levelsCfg, levelFor } = useCompetitorLevels()
+  const { config: levelsCfg } = useCompetitorLevels()
 
   async function refresh() {
     setBusy(true)
@@ -414,7 +415,12 @@ export function ContentPage() {
       dateFrom,
       dateTo,
     }))
-    .filter((card) => matchesLevelFilter(levelFor(card.post?.competitorFollowers), levelFilter))
+    .filter((card) =>
+      matchesLevelFilter(
+        effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg),
+        levelFilter,
+      ),
+    )
   const competitors = [...new Set(allCards.map((card) => card.handle))].sort()
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
   const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all'
@@ -842,7 +848,7 @@ function PostCard({
 
       <div className='p-3'>
         <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
-          <CompetitorLevelDot followers={card.post?.competitorFollowers} config={levelsCfg} />
+          <CompetitorLevelDot followers={card.post?.competitorFollowers} levelOverride={card.post?.competitorLevel} config={levelsCfg} />
           {card.postUrl ? (
             <a
               href={card.postUrl}

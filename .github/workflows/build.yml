@@ -39,6 +39,7 @@ jobs:
 
       - name: Build (no publish)
         run: |
+          pnpm --filter @anubis/shared build
           pnpm --filter @anubis/research-crawler build
           pnpm --filter @anubis/ai-agent build
           pnpm --filter @anubis/workflow-runtime build

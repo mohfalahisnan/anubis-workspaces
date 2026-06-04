@@ -17,9 +17,9 @@
   "packageManager": "pnpm@10.12.4",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-builder --config electron-builder.json",
+    "build": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-builder --config electron-builder.json",
     "preview": "pnpm --filter @anubis/frontend preview",
-    "pretest": "pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build --mode=test",
+    "pretest": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build --mode=test",
     "test": "vitest run && pnpm --filter @anubis/frontend test",
     "test:e2e": "pnpm pretest && playwright test",
     "typecheck": "pnpm -r --if-present typecheck"

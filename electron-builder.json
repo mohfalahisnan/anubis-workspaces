@@ -19,7 +19,9 @@
     "packages/conversation/dist",
     "packages/conversation/package.json",
     "packages/research-crawler/dist",
-    "packages/research-crawler/package.json"
+    "packages/research-crawler/package.json",
+    "packages/shared/dist",
+    "packages/shared/package.json"
   ],
   "asarUnpack": [
     "packages/backend/dist/**",
@@ -31,7 +33,9 @@
     "packages/conversation/dist/**",
     "packages/conversation/package.json",
     "packages/research-crawler/dist/**",
-    "packages/research-crawler/package.json"
+    "packages/research-crawler/package.json",
+    "packages/shared/dist/**",
+    "packages/shared/package.json"
   ],
   "mac": {
     "identity": null,

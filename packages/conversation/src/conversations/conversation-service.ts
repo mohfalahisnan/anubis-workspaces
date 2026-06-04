@@ -49,6 +49,21 @@ export interface SendMessageInput {
   override?: ProfileOverride
 }
 
+export interface CreateAndAwaitFirstTurnInput {
+  title: string
+  profileId: string
+  override?: ProfileOverride
+  content: string
+  workspacePath?: string
+  signal?: AbortSignal
+}
+
+export interface CreateAndAwaitFirstTurnResult {
+  conversationId: string
+  messageId: string
+  text: string
+}
+
 export interface UpdateConversationInput {
   title?: string
   override?: ProfileOverride
@@ -243,6 +258,52 @@ export class ConversationService {
     const { msgId, messageId, done } = await this.startTurn(cur, input)
     void done
     return { msgId, messageId }
+  }
+
+  async createAndAwaitFirstTurn(
+    input: CreateAndAwaitFirstTurnInput,
+  ): Promise<CreateAndAwaitFirstTurnResult> {
+    const conv = this.create({
+      title: input.title,
+      profileId: input.profileId,
+      override: input.override,
+      workspacePath: input.workspacePath,
+    })
+    const { done } = await this.startTurn(conv, { content: input.content })
+
+    if (input.signal?.aborted) {
+      await this.cancel(conv.id)
+      throw new Error('cancelled before first turn started')
+    }
+    const abortPromise = input.signal
+      ? new Promise<'aborted'>((resolve) => {
+          const onAbort = () => resolve('aborted')
+          input.signal!.addEventListener('abort', onAbort, { once: true })
+        })
+      : null
+
+    const result = abortPromise
+      ? await Promise.race([done.then(() => 'done' as const), abortPromise])
+      : await done.then(() => 'done' as const)
+
+    if (result === 'aborted') {
+      await this.cancel(conv.id)
+      throw new Error('cancelled during first turn')
+    }
+
+    const final = this.deps.conversations.findById(conv.id)
+    if (!final) throw new Error(`Conversation vanished: ${conv.id}`)
+    if (final.status === 'error') {
+      const messages = this.deps.messages.listForConversation(conv.id)
+      const last = messages.filter((m) => m.role === 'assistant').pop()
+      const errMsg = (last?.metadata as { error?: { message?: string } } | undefined)?.error?.message
+        ?? 'agent run failed'
+      throw new Error(errMsg)
+    }
+    const messages = this.deps.messages.listForConversation(conv.id)
+    const last = messages.filter((m) => m.role === 'assistant').pop()
+    if (!last) throw new Error('first turn finished without an assistant message')
+    return { conversationId: conv.id, messageId: last.id, text: last.content }
   }
 
   async cancel(id: string): Promise<void> {

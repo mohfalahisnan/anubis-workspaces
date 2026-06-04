@@ -101,6 +101,7 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const totalPostsInDb = stack.capturedPosts.countForCompetitor(competitor.id)
   stack.competitors.update(competitor.id, {
     displayName: deriveDisplayName(competitor.displayName, profileEntry),
+    bio: deriveBio(competitor.bio, profileEntry),
     followers: profileEntry?.followers,
     avgLikes: avgLikesEntry?.avgLikes ?? profileEntry?.avgLikes,
     postCount: totalPostsInDb,
@@ -160,6 +161,7 @@ postRoutes.get('/', (c) => {
       competitorHandle: owner?.handle,
       competitorTint: owner?.tint,
       competitorFollowers: owner?.followers,
+      competitorLevel: owner?.level,
     }
   })
   return c.json({ ok: true, items })
@@ -216,6 +218,13 @@ function deriveDisplayName(
   return profile?.fullName?.trim() || existing
 }
 
+function deriveBio(
+  existing: string | undefined,
+  profile: ProfileData | undefined,
+): string | undefined {
+  return profile?.bio?.trim() || existing
+}
+
 function enrichPost(post: CapturedPost) {
   const owner = getStack().competitors.get(post.competitorId)
   return {
@@ -223,5 +232,6 @@ function enrichPost(post: CapturedPost) {
     competitorHandle: owner?.handle,
     competitorTint: owner?.tint,
     competitorFollowers: owner?.followers,
+    competitorLevel: owner?.level,
   }
 }

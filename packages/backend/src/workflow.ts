@@ -1,10 +1,24 @@
 import { Hono } from 'hono'
 import { z, ZodError } from 'zod'
 import { randomUUID } from 'node:crypto'
+import { createReadStream, existsSync } from 'node:fs'
+import { resolve, sep, join, extname } from 'node:path'
 import { getStack, getDataDir } from './services.js'
 import { WorkflowGraphSchema } from '@anubis/workflow-runtime'
 import { WorkflowRunManager } from './workflow-run-manager.js'
 import type { ConversationStack } from '@anubis/conversation'
+
+const ARTIFACT_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.json': 'application/json',
+  '.txt': 'text/plain; charset=utf-8',
+}
 
 let runManager: WorkflowRunManager | null = null
 function getRunManager(stack: ConversationStack): WorkflowRunManager {
@@ -47,6 +61,24 @@ workflowRoutes.get('/', (c) => {
     }
   })
   return c.json({ items })
+})
+
+workflowRoutes.get('/artifacts', (c) => {
+  const requested = c.req.query('path')
+  if (!requested) return c.json({ error: 'missing_path' }, 400)
+  const root = resolve(join(getDataDir(), 'workflow-runs'))
+  const target = resolve(requested)
+  // Allow only paths under {dataDir}/workflow-runs/ with no `..` escape.
+  if (!target.startsWith(root + sep) && target !== root) {
+    return c.json({ error: 'forbidden' }, 403)
+  }
+  if (!existsSync(target)) return c.json({ error: 'not_found' }, 404)
+  const stream = createReadStream(target)
+  const contentType = ARTIFACT_MIME[extname(target).toLowerCase()] ?? 'application/octet-stream'
+  return c.body(stream as unknown as ReadableStream, 200, {
+    'Content-Type': contentType,
+    'Cache-Control': 'private, max-age=300',
+  })
 })
 
 workflowRoutes.get('/:id', (c) => {

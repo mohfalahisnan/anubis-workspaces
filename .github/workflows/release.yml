@@ -44,6 +44,7 @@ jobs:
         run: |
           pnpm --filter @anubis/research-crawler build
           pnpm --filter @anubis/ai-agent build
+          pnpm --filter @anubis/workflow-runtime build
           pnpm --filter @anubis/conversation build
           pnpm --filter @anubis/backend build
           pnpm --filter @anubis/frontend build

@@ -29,10 +29,22 @@ export interface CompetitorLevelsConfig {
   maxActive: number
 }
 
+export interface MultiplierBand {
+  min: number
+  good: number
+}
+
+export interface LevelMultipliersConfig {
+  green: MultiplierBand
+  yellow: MultiplierBand
+  red: MultiplierBand
+}
+
 export interface AppConfig {
   chromePath?: string
   crawlerProfileRoot?: string
   competitorLevels?: CompetitorLevelsConfig
+  levelMultipliers?: LevelMultipliersConfig
 }
 
 const CONFIG_FILE = 'config.json'
@@ -76,6 +88,8 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   if (crawlerProfileRoot) out.crawlerProfileRoot = crawlerProfileRoot
   const levels = sanitizeLevels(obj.competitorLevels)
   if (levels) out.competitorLevels = levels
+  const multipliers = sanitizeMultipliers(obj.levelMultipliers)
+  if (multipliers) out.levelMultipliers = multipliers
   return out
 }
 
@@ -105,4 +119,30 @@ function toPositiveInt(value: unknown): number | undefined {
   if (!Number.isFinite(n)) return undefined
   const i = Math.floor(n)
   return i > 0 ? i : undefined
+}
+
+function sanitizeMultipliers(raw: unknown): LevelMultipliersConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const green = sanitizeBand(r.green)
+  const yellow = sanitizeBand(r.yellow)
+  const red = sanitizeBand(r.red)
+  if (!green || !yellow || !red) return undefined
+  return { green, yellow, red }
+}
+
+function sanitizeBand(raw: unknown): MultiplierBand | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const min = toPositiveNumber(r.min)
+  const good = toPositiveNumber(r.good)
+  if (min === undefined || good === undefined) return undefined
+  if (!(min < good)) return undefined
+  return { min, good }
+}
+
+function toPositiveNumber(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return undefined
+  return n > 0 ? n : undefined
 }

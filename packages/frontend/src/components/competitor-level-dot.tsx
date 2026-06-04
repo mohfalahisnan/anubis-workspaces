@@ -1,4 +1,4 @@
-import type { CompetitorLevel, CompetitorLevelsConfig } from '@anubis/shared'
+import type { CompetitorLevel, CompetitorLevelOverride, CompetitorLevelsConfig } from '@anubis/shared'
 import { DEFAULT_COMPETITOR_LEVELS, levelFor } from '@anubis/shared'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +12,7 @@ const LEVEL_COLOR: Record<CompetitorLevel, string> = {
 
 interface Props {
   followers: number | null | undefined
+  levelOverride?: CompetitorLevelOverride | null
   config?: CompetitorLevelsConfig
   size?: 'sm' | 'md'
   className?: string
@@ -40,14 +41,17 @@ function tooltipFor(
   return `Red — ${formatK(cfg.yellowMax)}–${formatK(cfg.maxActive)} followers`
 }
 
-export function CompetitorLevelDot({ followers, config, size = 'sm', className }: Props) {
+export function CompetitorLevelDot({ followers, levelOverride, config, size = 'sm', className }: Props) {
   const cfg = config ?? DEFAULT_COMPETITOR_LEVELS
-  const level = levelFor(followers, cfg)
+  const level = levelOverride ?? levelFor(followers, cfg)
+  const tip = levelOverride
+    ? `Manually set — ${levelOverride}`
+    : tooltipFor(level, followers, cfg)
   const dim = size === 'md' ? 10 : 8
   return (
     <span
-      aria-label={tooltipFor(level, followers, cfg)}
-      title={tooltipFor(level, followers, cfg)}
+      aria-label={tip}
+      title={tip}
       data-level={level}
       className={cn('inline-block shrink-0 rounded-full ring-1 ring-black/20', className)}
       style={{

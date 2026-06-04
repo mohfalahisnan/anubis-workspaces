@@ -1,0 +1,37 @@
+import { memo } from 'react'
+import { Handle, Position } from '@xyflow/react'
+
+const TYPE_LABELS: Record<string, string> = {
+  instagramPost: 'IG Post',
+  imageVideo: 'Image / Video',
+  transformerMedia: 'Transform · Media',
+  transformerBrief: 'Transform · Brief',
+  ocrExtractor: 'OCR',
+  table: 'Table',
+  aiAgentConversation: 'AI Agent',
+}
+
+const TYPE_DOTS: Record<string, string> = {
+  instagramPost: 'bg-[#ff6b35]',
+  imageVideo: 'bg-[#ff9b7a]',
+  transformerMedia: 'bg-[#ff9b7a]',
+  transformerBrief: 'bg-[#fd551d]',
+  ocrExtractor: 'bg-[#22c55e]',
+  table: 'bg-[#22c55e]',
+  aiAgentConversation: 'bg-white',
+}
+
+export const PreviewNode = memo(function PreviewNode({ type }: { type?: string }) {
+  const label = TYPE_LABELS[type ?? ''] ?? type ?? 'Node'
+  const dot = TYPE_DOTS[type ?? ''] ?? 'bg-zinc-400'
+  return (
+    <>
+      <Handle type='target' position={Position.Left} className='!h-1 !w-1 !border-0 !bg-transparent' isConnectable={false} />
+      <div className='flex items-center gap-1.5 rounded-md border border-white/15 bg-[#161617]/95 px-2 py-1 shadow-md shadow-black/40 text-[9px] text-white'>
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+        <span className='truncate'>{label}</span>
+      </div>
+      <Handle type='source' position={Position.Right} className='!h-1 !w-1 !border-0 !bg-transparent' isConnectable={false} />
+    </>
+  )
+})

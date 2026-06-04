@@ -172,9 +172,10 @@ export class ConversationService {
     return this.deps.messages.listForConversation(id)
   }
 
-  async sendMessage(id: string, input: SendMessageInput): Promise<{ msgId: string; messageId: string }> {
-    const cur = this.deps.conversations.findById(id)
-    if (!cur) throw new Error(`Conversation not found: ${id}`)
+  private async startTurn(
+    cur: Conversation,
+    input: SendMessageInput,
+  ): Promise<{ msgId: string; messageId: string; done: Promise<void> }> {
     if (input.override?.agent && input.override.agent !== cur.agent) {
       throw new Error('Cannot change conversation agent via per-turn override')
     }
@@ -183,68 +184,44 @@ export class ConversationService {
         throw new NoCredentialsError(cur.profileId, cur.agent)
       }
     }
-    if (this.deps.tm.isBusy(id)) {
-      throw new Error(`Conversation ${id} already has a running agent task`)
+    if (this.deps.tm.isBusy(cur.id)) {
+      throw new Error(`Conversation ${cur.id} already has a running agent task`)
     }
     const resolved = this.resolveOrThrow(cur.profileId ?? null, { ...cur.extra.overrides, ...input.override }, cur.agent)
     const now = nowMs()
     const msgId = newId()
     const userRowId = newId()
     this.deps.messages.insert({
-      id: userRowId, conversationId: id, msgId, role: 'user',
+      id: userRowId, conversationId: cur.id, msgId, role: 'user',
       content: input.content, createdAt: now,
     })
-    this.deps.conversations.updateStatus(id, 'running')
+    this.deps.conversations.updateStatus(cur.id, 'running')
 
     const skillDefs = cur.extra.skills
       .map(name => this.deps.skills.byName(name))
       .filter((s): s is NonNullable<typeof s> => Boolean(s))
-    // Build the instruction text from profile prompt + a compact skills
-    // pointer. This used to be sent every turn as `appendSystemPrompt` —
-    // paying tokens each time. We now write it to the profile home as
-    // CLAUDE.md instead, so the CLI loads it once on launch and reuses it
-    // across turns. The skills themselves are materialised as files under
-    // the home's skills/ dir (writeProfileSkills below) and loaded on
-    // demand, so only the pointer lives in always-on context.
     const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
 
-    // Auto-isolate this profile's agent home. profile.env always wins
-    // so power users can override (e.g. point two profiles at the same
-    // identity) if they really want to.
-    let prevSession = this.deps.sessions.findByConversation(id)?.agentSessionId
+    let prevSession = this.deps.sessions.findByConversation(cur.id)?.agentSessionId
     let envWithHome: Record<string, string> | undefined = resolved.env
     if (cur.profileId) {
-      const { path, isNew } = ensureAgentHome(
-        this.deps.agentHomeRoot,
-        cur.profileId,
-        cur.agent,
-      )
+      const { path, isNew } = ensureAgentHome(this.deps.agentHomeRoot, cur.profileId, cur.agent)
       envWithHome = { ...envFor(cur.agent, path), ...(resolved.env ?? {}) }
-      // First turn after the home dir was provisioned: the agent has no
-      // record of the prior resume id (it lived in the OLD shared home),
-      // so we start fresh inside the new isolated home.
       if (isNew) prevSession = undefined
-      // Sync the profile-level instruction files. Idempotent — only
-      // touches disk when content has actually changed.
       writeProfileInstructions(path, profileInstructions)
-      // Materialise active skills as files under the home's skills/ dir
-      // (prunes stale ones). Also idempotent on unchanged skills.
       writeProfileSkills(path, skillDefs)
     }
-    // Strip appendSystemPrompt: it lives in CLAUDE.md now, no longer a
-    // per-turn argument. Leaving it on the resolved profile would let
-    // TaskManager re-send it.
     const { appendSystemPrompt: _, ...resolvedWithoutAppend } = resolved
     const resolvedForTurn: ResolvedProfile = { ...resolvedWithoutAppend, env: envWithHome }
     const task = await this.deps.tm.getOrBuild(
-      { id, agent: cur.agent, workspacePath: cur.workspacePath },
+      { id: cur.id, agent: cur.agent, workspacePath: cur.workspacePath },
       resolvedForTurn,
       { prompt: input.content, msgId, prevAgentSessionId: prevSession },
     )
 
     const messageRowId = newId()
     const relay = new StreamRelay({
-      conversationId: id, msgId, messageRowId,
+      conversationId: cur.id, msgId, messageRowId,
       conversations: this.deps.conversations,
       messages: this.deps.messages,
       artifacts: this.deps.artifacts,
@@ -253,11 +230,19 @@ export class ConversationService {
       cronHandler: async (cmd, convId) => this.deps.cron.handle(cmd, convId),
       agent: cur.agent,
     })
-    void relay.attach(task.emitter).then(() => {
+    const done = relay.attach(task.emitter).then(() => {
       if (cur.profileId) this.deps.profiles.touchLastUsed(cur.profileId)
     })
 
-    return { msgId, messageId: userRowId }
+    return { msgId, messageId: userRowId, done }
+  }
+
+  async sendMessage(id: string, input: SendMessageInput): Promise<{ msgId: string; messageId: string }> {
+    const cur = this.deps.conversations.findById(id)
+    if (!cur) throw new Error(`Conversation not found: ${id}`)
+    const { msgId, messageId, done } = await this.startTurn(cur, input)
+    void done
+    return { msgId, messageId }
   }
 
   async cancel(id: string): Promise<void> {

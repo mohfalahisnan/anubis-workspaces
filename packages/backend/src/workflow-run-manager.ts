@@ -179,6 +179,26 @@ export class WorkflowRunManager {
           await writeFile(path, data)
           return path
         }},
+        conversations: {
+          createAndAwaitFirstTurn: async (input: {
+            title: string
+            profileId: string
+            reasoning?: 'minimal' | 'low' | 'medium' | 'high'
+            content: string
+          }) => {
+            const override = input.reasoning ? { reasoningEffort: input.reasoning } : undefined
+            return this.stack.conversation.createAndAwaitFirstTurn({
+              title: input.title,
+              profileId: input.profileId,
+              override,
+              content: input.content,
+              signal: active.controller.signal,
+            })
+          },
+          cancel: async (conversationId: string) => {
+            await this.stack.conversation.cancel(conversationId)
+          },
+        },
         runId: active.runId,
         signal: active.controller.signal,
         emit: (e: NodeRunEvent) => { void wrappedEmit(e) },

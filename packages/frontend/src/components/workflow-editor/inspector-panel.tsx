@@ -6,17 +6,19 @@ import { TransformerBriefConfigForm } from './inspector/config/transformer-brief
 import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-config'
 import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
+import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conversation-config'
 import { RunViewer } from './inspector/run-viewer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
-  instagramPost:    InstagramPostConfigForm,
-  transformerMedia: TransformerMediaConfigForm,
-  transformerBrief: TransformerBriefConfigForm,
-  ocrExtractor:     OcrExtractorConfigForm,
-  table:            TableConfigForm,
-  imageVideo:       ImageVideoConfigForm,
+  instagramPost:       InstagramPostConfigForm,
+  transformerMedia:    TransformerMediaConfigForm,
+  transformerBrief:    TransformerBriefConfigForm,
+  ocrExtractor:        OcrExtractorConfigForm,
+  table:               TableConfigForm,
+  imageVideo:          ImageVideoConfigForm,
+  aiAgentConversation: AiAgentConversationConfigForm,
 }
 
 export function InspectorPanel() {

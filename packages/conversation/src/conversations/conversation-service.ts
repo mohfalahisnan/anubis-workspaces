@@ -269,7 +269,18 @@ export class ConversationService {
       override: input.override,
       workspacePath: input.workspacePath,
     })
-    const { done } = await this.startTurn(conv, { content: input.content })
+    let done: Promise<void>
+    try {
+      ;({ done } = await this.startTurn(conv, { content: input.content }))
+    } catch (e) {
+      // startTurn throws before updating status from 'pending' (e.g.
+      // NoCredentialsError, agent mismatch). Without this catch, the
+      // conversation row sits at 'pending' forever and the user has no
+      // visible feedback. Mark it as 'error' so the chat UI surfaces it,
+      // then re-throw so the workflow node fails with the actual reason.
+      try { this.deps.conversations.updateStatus(conv.id, 'error') } catch { /* best-effort */ }
+      throw e
+    }
 
     if (input.signal?.aborted) {
       await this.cancel(conv.id)

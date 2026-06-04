@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-// Inserts a self-contained test workflow into the Anubis SQLite so the
-// "▶ Run published" button has something to chew on without needing AI Agent
-// credentials, Chrome, or the crawler.
+// Seeds self-contained test workflows into the Anubis SQLite. Idempotent —
+// re-running first deletes any prior workflows whose name starts with "Test:".
 //
 // Usage:  node scripts/create-test-workflow.mjs
 //
-// The created workflow:
-//   - one Table node
-//   - staticData carries some demo rows
-//   - no edges, no upstream — runs instantly to the "succeeded" state
+// What gets seeded (all pre-published, no external deps):
+//   1. "Test: Echo static data"            — single Table node, instant smoke test
+//   2. "Test: Chain — Source → Sink"       — two Table nodes connected by an edge,
+//                                            so you can watch orange → green progression
 //
-// After running, open Anubis → Workflows. The new workflow appears at the
-// top of the list. Click "Run" to verify the live status banner + node
-// glow + run inspector all work end-to-end.
+// Open Anubis → Workflows after running; both appear at the top of the list.
+// Click "Open" then "▶ Run published" — the engine, SSE stream, status banner,
+// and node-glow ring should light up in sequence.
 
 import Database from 'better-sqlite3'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -35,8 +34,8 @@ mkdirSync(dataDir, { recursive: true })
 const dbPath = join(dataDir, 'anubis.db')
 
 if (!existsSync(dbPath)) {
-  console.error('[create-test-workflow] Anubis SQLite not found at', dbPath)
-  console.error('[create-test-workflow] Open the Anubis app at least once so migrations run, then re-run this script.')
+  console.error('[seed] Anubis SQLite not found at', dbPath)
+  console.error('[seed] Open the Anubis app at least once so migrations run, then re-run this script.')
   process.exit(1)
 }
 
@@ -45,14 +44,12 @@ db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 db.pragma('busy_timeout = 5000')
 
-// Sanity: the workflow tables must exist (migration 004). If they don't, apply
-// the migration ourselves so this script works against an older install.
+// Migration 004 — apply inline if the user's install predates it.
 const tableCount = db
   .prepare(`SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name IN ('workflows','workflow_runs','workflow_run_steps')`)
   .get().c
 if (tableCount !== 3) {
-  console.log('[create-test-workflow] Workflow tables missing — applying migration 004 inline.')
-  // Mirror packages/conversation/src/db/migrations/004_workflows.sql verbatim.
+  console.log('[seed] Workflow tables missing — applying migration 004 inline.')
   db.exec(`
     CREATE TABLE IF NOT EXISTS workflows (
       id                TEXT PRIMARY KEY,
@@ -89,51 +86,88 @@ if (tableCount !== 3) {
   `)
 }
 
-const id = randomUUID()
-const now = Date.now()
-const graph = {
-  nodes: [
-    {
-      id: 't1',
-      type: 'table',
-      position: { x: 240, y: 200 },
-      data: {
-        staticData: [
-          { step: 'hello', from: 'static rows' },
-          { step: 'world', from: 'static rows' },
-          { step: 'this is a runnable test workflow', from: 'static rows' },
-        ],
-      },
-    },
-  ],
-  edges: [],
+// Clean up any prior seeded test workflows (cascade removes their runs).
+const removed = db.prepare(`DELETE FROM workflows WHERE name LIKE 'Test:%'`).run()
+if (removed.changes > 0) {
+  console.log(`[seed] Removed ${removed.changes} prior test workflow(s).`)
 }
-const graphJson = JSON.stringify(graph)
 
-db.prepare(
+const insert = db.prepare(
   `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
                           draft_updated_at, published_at, created_at, updated_at)
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-).run(
-  id,
-  'Test: Echo static data',
-  'Self-contained test workflow created by scripts/create-test-workflow.mjs. ' +
-    'Single Table node, no external dependencies. Run it to verify the live status banner ' +
-    'and node-glow feedback work end-to-end.',
-  graphJson,       // draft_graph
-  graphJson,       // published_graph (pre-published so "Run" is enabled immediately)
-  now,             // draft_updated_at
-  now,             // published_at
-  now,             // created_at
-  now,             // updated_at
 )
+
+function seedWorkflow({ name, description, graph }) {
+  const id = randomUUID()
+  const now = Date.now()
+  const graphJson = JSON.stringify(graph)
+  insert.run(id, name, description, graphJson, graphJson, now, now, now, now)
+  return id
+}
+
+// 1) Single Table — instant smoke test.
+const wf1 = seedWorkflow({
+  name: 'Test: Echo static data',
+  description:
+    'Single Table node, no external dependencies. Runs instantly. Use this to ' +
+    'verify the engine, SSE stream, status banner, and node-glow ring.',
+  graph: {
+    nodes: [
+      {
+        id: 't1',
+        type: 'table',
+        position: { x: 240, y: 200 },
+        data: {
+          staticData: [
+            { step: 'hello', from: 'static rows' },
+            { step: 'world', from: 'static rows' },
+            { step: 'this is a runnable test workflow', from: 'static rows' },
+          ],
+        },
+      },
+    ],
+    edges: [],
+  },
+})
+console.log('[seed]', wf1, '→ Test: Echo static data')
+
+// 2) Two Table nodes wired together — visible progression.
+const wf2 = seedWorkflow({
+  name: 'Test: Chain — Source → Sink',
+  description:
+    'Two Table nodes connected by an edge. The source has staticData; the sink ' +
+    'receives the source\'s output unchanged. Lets you watch the orange → green ' +
+    'progression travel through the graph.',
+  graph: {
+    nodes: [
+      {
+        id: 'source',
+        type: 'table',
+        position: { x: 120, y: 200 },
+        data: {
+          staticData: [
+            { id: 1, label: 'first row from the source node' },
+            { id: 2, label: 'second row from the source node' },
+          ],
+        },
+      },
+      {
+        id: 'sink',
+        type: 'table',
+        position: { x: 620, y: 200 },
+        data: { staticData: [] },
+      },
+    ],
+    edges: [
+      { id: 'e-source-sink', source: 'source', target: 'sink' },
+    ],
+  },
+})
+console.log('[seed]', wf2, '→ Test: Chain — Source → Sink')
 
 db.close()
 
-console.log('[create-test-workflow] Created workflow', id)
-console.log('[create-test-workflow] Open Anubis → Workflows → "Test: Echo static data" → click Run.')
-console.log('[create-test-workflow] You should see:')
-console.log('[create-test-workflow]   - orange pulsing glow on the Table node while running')
-console.log('[create-test-workflow]   - green glow when succeeded')
-console.log('[create-test-workflow]   - status banner above the canvas ("Run Succeeded")')
-console.log('[create-test-workflow]   - inspector "Run" tab shows the static rows as the node output')
+console.log('')
+console.log('[seed] Done. Open Anubis → Workflows → click "Open" on either entry → "▶ Run published".')
+console.log('[seed] Watch the Table node turn orange (running) → green (succeeded), with a banner above the canvas.')

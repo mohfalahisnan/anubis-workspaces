@@ -46,6 +46,29 @@ describe('CompetitorsService', () => {
     expect(next.handle).toBe('@notion') // immutable through update
   })
 
+  it('create round-trips bio and level', () => {
+    const c = svc.create({ handle: '@figma', bio: 'Design tools', level: 'red' })
+    expect(c.bio).toBe('Design tools')
+    expect(c.level).toBe('red')
+  })
+
+  it('update sets and preserves bio and level', () => {
+    const c = svc.create({ handle: '@canva' })
+    const next = svc.update(c.id, { bio: 'Make designs', level: 'green' })
+    expect(next.bio).toBe('Make designs')
+    expect(next.level).toBe('green')
+    // omitting them on a later patch preserves the stored values
+    const after = svc.update(c.id, { niche: 'Design' })
+    expect(after.bio).toBe('Make designs')
+    expect(after.level).toBe('green')
+  })
+
+  it('update clears the level override when passed null', () => {
+    const c = svc.create({ handle: '@webflow', level: 'yellow' })
+    const next = svc.update(c.id, { level: null })
+    expect(next.level).toBeUndefined()
+  })
+
   it('remove soft-deletes', () => {
     const c = svc.create({ handle: '@linear' })
     svc.remove(c.id)

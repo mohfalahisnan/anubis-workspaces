@@ -56,6 +56,7 @@ export const workflowsApi = {
   publish:     (id: string) => jsonFetch<WorkflowDetail>(`/workflows/${id}/publish`, { method: 'POST' }),
   remove:      (id: string) => jsonFetch<void>(`/workflows/${id}`, { method: 'DELETE' }),
   startRun:    (id: string) => jsonFetch<{ runId: string }>(`/workflows/${id}/runs`, { method: 'POST' }),
+  activeRun:   (id: string) => jsonFetch<{ runId: string | null }>(`/workflows/${id}/active-run`),
   listRuns:    (id: string) => jsonFetch<{ items: Array<{ id: string; status: string; startedAt: number }> }>(`/workflows/${id}/runs`),
   getRun:      (runId: string) =>
                 jsonFetch<{ run: { id: string; status: string; startedAt: number; finishedAt?: number; error?: string },

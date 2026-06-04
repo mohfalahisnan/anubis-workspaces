@@ -126,6 +126,12 @@ workflowRoutes.delete('/runs/:runId', (c) => {
   return c.body(null, 204)
 })
 
+workflowRoutes.get('/:id/active-run', (c) => {
+  const mgr = getRunManager(getStack())
+  const runId = mgr.activeRunFor(c.req.param('id'))
+  return c.json({ runId: runId ?? null })
+})
+
 workflowRoutes.get('/runs/:runId/events', (c) => {
   const stack = getStack()
   const mgr = getRunManager(stack)

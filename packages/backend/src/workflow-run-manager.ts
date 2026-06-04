@@ -111,6 +111,14 @@ export class WorkflowRunManager {
     return this.active.has(runId)
   }
 
+  /**
+   * Returns the runId currently active for a workflow, or undefined. Used
+   * by the editor page to auto-resubscribe when the user returns mid-run.
+   */
+  activeRunFor(workflowId: string): string | undefined {
+    return this.runsByWorkflow.get(workflowId)
+  }
+
   private async runAndPersist(
     active: ActiveRun,
     graph: ReturnType<typeof WorkflowGraphSchema.parse>,

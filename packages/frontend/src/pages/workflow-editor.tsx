@@ -24,15 +24,31 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    workflowsApi.get(workflowId).then((wf) => {
+    let cancelled = false
+    let closeStream: (() => void) | undefined
+    workflowsApi.get(workflowId).then(async (wf) => {
+      if (cancelled) return
       hydrate({
         workflowId: wf.id, name: wf.name, description: wf.description,
         draft: JSON.parse(wf.draftGraph),
         published: wf.publishedGraph ? JSON.parse(wf.publishedGraph) : null,
         draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt ?? null,
       })
+      // If a run is in flight for this workflow (user navigated away and
+      // came back mid-run), resubscribe so node-level progress shows up
+      // again instead of just the conversation-level "running" status.
+      try {
+        const { runId } = await workflowsApi.activeRun(workflowId)
+        if (cancelled || !runId) return
+        setActiveRun({ runId, steps: {}, status: 'running' })
+        closeStream = await openRunEventStream(runId, (ev) => applyRunEvent(ev))
+      } catch { /* missing /active-run is non-fatal */ }
     }).catch((e) => setError(String(e)))
-  }, [workflowId, hydrate])
+    return () => {
+      cancelled = true
+      closeStream?.()
+    }
+  }, [workflowId, hydrate, setActiveRun, applyRunEvent])
 
   useAutosaveDraft()
   useEditorKeymap()

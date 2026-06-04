@@ -1,6 +1,6 @@
 {
   "name": "anubis-workspaces",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "description": "Anubis desktop app.",
   "license": "MIT",
@@ -23,6 +23,9 @@
     "test": "vitest run && pnpm --filter @anubis/frontend test",
     "test:e2e": "pnpm pretest && playwright test",
     "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

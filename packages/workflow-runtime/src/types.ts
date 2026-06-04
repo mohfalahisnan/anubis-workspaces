@@ -56,6 +56,15 @@ export interface ExecutorContext {
   ocr:     { extractFromImage: (path: string) => Promise<string> }
   db:      { getCapturedPost: (id: string) => Promise<CapturedPost> }
   fs:      { writeRunArtifact: (runId: string, nodeId: string, ext: string, data: Buffer) => Promise<string> }
+  conversations: {
+    createAndAwaitFirstTurn(input: {
+      title: string
+      profileId: string
+      reasoning?: 'minimal' | 'low' | 'medium' | 'high'
+      content: string
+    }): Promise<{ conversationId: string; messageId: string; text: string }>
+    cancel(conversationId: string): Promise<void>
+  }
   runId:   string
   signal:  AbortSignal
   emit:    (event: NodeRunEvent) => void

@@ -14,6 +14,7 @@ export type ActiveRun = {
   runId: string
   steps: Record<string, StepState>
   status: 'running' | 'succeeded' | 'failed' | 'cancelled'
+  error?: string
 }
 
 export interface Snapshot { nodes: Node[]; edges: Edge[] }
@@ -132,7 +133,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     } else if (event.kind === 'node-failed') {
       steps[event.nodeId] = { ...steps[event.nodeId], status: 'failed', finishedAt: event.at, error: event.error }
     } else if (event.kind === 'run-finished') {
-      set({ activeRun: { ...s.activeRun, status: event.status as ActiveRun['status'], steps } })
+      set({
+        activeRun: {
+          ...s.activeRun,
+          status: event.status as ActiveRun['status'],
+          error: event.error,
+          steps,
+        },
+      })
       return
     }
     set({ activeRun: { ...s.activeRun, steps } })

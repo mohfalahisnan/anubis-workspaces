@@ -11,7 +11,7 @@ export {
 } from './handles'
 
 export { NodeShell } from './node-shell'
-export type { NodeShellProps } from './node-shell'
+export type { NodeShellProps, NodeRunStatus } from './node-shell'
 
 export {
   applyVisualEdgeRouting,

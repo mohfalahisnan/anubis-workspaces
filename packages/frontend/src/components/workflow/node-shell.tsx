@@ -6,6 +6,8 @@ import { motion } from 'motion/react'
 import { ACCENT_GRADIENTS } from './theme'
 import { NodeDirectionalHandles } from './handles'
 
+export type NodeRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+
 export interface NodeShellProps {
   icon: ComponentType<{ className?: string }>
   title: string
@@ -17,11 +19,21 @@ export interface NodeShellProps {
   className?: string
   /** Skip the framer-motion entry animation. */
   disableMotion?: boolean
+  /** Run lifecycle status — drives the glow ring around the node. */
+  runStatus?: NodeRunStatus
 }
 
 const SHELL_BASE =
-  'relative w-[360px] overflow-visible rounded-2xl border border-[#fd551d]/20 ' +
-  'bg-[#0b0b0c]/90 backdrop-blur-xl text-white shadow-2xl shadow-black/35'
+  'relative w-[360px] overflow-visible rounded-2xl border bg-[#0b0b0c]/90 backdrop-blur-xl ' +
+  'text-white shadow-2xl shadow-black/35 transition-shadow duration-300'
+
+const RUN_STATUS_BORDER: Record<NodeRunStatus, string> = {
+  pending:   'border-[#fd551d]/20',
+  running:   'border-[#fd551d] shadow-[0_0_28px_4px_rgba(253,85,29,0.55)] animate-pulse',
+  succeeded: 'border-[#22c55e] shadow-[0_0_24px_2px_rgba(34,197,94,0.45)]',
+  failed:    'border-[#ef4444] shadow-[0_0_28px_4px_rgba(239,68,68,0.55)]',
+  skipped:   'border-[#a1a1aa]/40',
+}
 
 export function NodeShell({
   icon: Icon,
@@ -32,9 +44,12 @@ export function NodeShell({
   children,
   className,
   disableMotion = false,
+  runStatus,
 }: NodeShellProps) {
+  const runClass = runStatus ? RUN_STATUS_BORDER[runStatus] : 'border-[#fd551d]/20'
+
   const inner = (
-    <div className={cn(SHELL_BASE, className)}>
+    <div className={cn(SHELL_BASE, runClass, className)}>
       <NodeDirectionalHandles />
       <div className='overflow-hidden rounded-2xl'>
         <div className={cn('h-1 bg-gradient-to-r', accent)} />

@@ -112,24 +112,28 @@ export class WorkflowRunManager {
     emit({ kind: 'run-started', runId: active.runId, at: startedAt })
 
     const wrappedEmit = async (event: NodeRunEvent) => {
-      const repo = this.stack.workflowRuns
-      const stepId = `${active.runId}:${event.nodeId}`
-      if (event.kind === 'node-started') {
-        repo.upsertStep({
-          id: stepId, runId: active.runId, nodeId: event.nodeId,
-          status: 'running', startedAt: event.at,
-        })
-      } else if (event.kind === 'node-succeeded') {
-        const stored = await this.maybeMaterializeOutput(active.runId, event.nodeId, event.output)
-        repo.upsertStep({
-          id: stepId, runId: active.runId, nodeId: event.nodeId,
-          status: 'succeeded', finishedAt: event.at, output: JSON.stringify(stored),
-        })
-      } else {
-        repo.upsertStep({
-          id: stepId, runId: active.runId, nodeId: event.nodeId,
-          status: 'failed', finishedAt: event.at, error: event.error,
-        })
+      try {
+        const repo = this.stack.workflowRuns
+        const stepId = `${active.runId}:${event.nodeId}`
+        if (event.kind === 'node-started') {
+          repo.upsertStep({
+            id: stepId, runId: active.runId, nodeId: event.nodeId,
+            status: 'running', startedAt: event.at,
+          })
+        } else if (event.kind === 'node-succeeded') {
+          const stored = await this.maybeMaterializeOutput(active.runId, event.nodeId, event.output)
+          repo.upsertStep({
+            id: stepId, runId: active.runId, nodeId: event.nodeId,
+            status: 'succeeded', finishedAt: event.at, output: JSON.stringify(stored),
+          })
+        } else {
+          repo.upsertStep({
+            id: stepId, runId: active.runId, nodeId: event.nodeId,
+            status: 'failed', finishedAt: event.at, error: event.error || '(executor failed without a message)',
+          })
+        }
+      } catch (err) {
+        console.error('[workflow] failed to persist run step', err)
       }
       emit(event)
     }
@@ -187,11 +191,12 @@ export class WorkflowRunManager {
       status = result.status
       runError = result.error
     } catch (err) {
-      runError = err instanceof Error ? err.message : String(err)
+      runError = (err instanceof Error ? err.message : String(err)) || '(unknown runtime error)'
       status = 'failed'
     }
 
     const finishedAt = Date.now()
+    if (status === 'failed' && !runError) runError = 'run failed without a reported error'
     this.stack.workflowRuns.setRunStatus(active.runId, status, finishedAt, runError ?? null)
     emit({ kind: 'run-finished', runId: active.runId, at: finishedAt, status, error: runError })
     active.finished = true

@@ -5,13 +5,12 @@ const NOW = 0
 export const BUILTIN_PROFILES: Profile[] = [
   {
     id: 'claude-coding',
-    name: 'Claude — Coding (plan mode)',
-    description: 'Claude Sonnet with plan-mode permissions and auto-inject skills only.',
+    name: 'Claude — Coding',
+    description: 'Claude Sonnet with default permissions and auto-inject skills.',
     source: 'builtin',
     config: {
       agent: 'claude',
       model: 'claude-sonnet-4-6',
-      permissionMode: 'plan',
     },
     sortOrder: 10,
     createdAt: NOW,
@@ -39,7 +38,6 @@ export const BUILTIN_PROFILES: Profile[] = [
     config: {
       agent: 'claude',
       model: 'claude-opus-4-7',
-      permissionMode: 'plan',
       appendSystemPrompt: 'You are in research mode. Cite sources. Prefer breadth-first exploration over premature synthesis.',
     },
     sortOrder: 30,

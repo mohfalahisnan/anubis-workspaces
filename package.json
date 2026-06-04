@@ -1,6 +1,6 @@
 {
   "name": "anubis-workspaces",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "private": true,
   "description": "Anubis desktop app.",
   "license": "MIT",
@@ -17,7 +17,7 @@
   "packageManager": "pnpm@10.12.4",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-builder --config electron-builder.json",
+    "build": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-rebuild -f -w better-sqlite3 && electron-builder --config electron-builder.json",
     "preview": "pnpm --filter @anubis/frontend preview",
     "pretest": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build --mode=test",
     "test": "vitest run && pnpm --filter @anubis/frontend test",
@@ -25,6 +25,7 @@
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
@@ -34,7 +35,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "electron": "^42.1.0",
+    "electron": "^41.7.1",
     "electron-builder": "^26.8.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",

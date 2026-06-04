@@ -51,6 +51,9 @@ jobs:
           pnpm --filter @anubis/frontend build
           pnpm exec vite build
 
+      - name: Rebuild native modules for Electron ABI
+        run: pnpm exec electron-rebuild -f -w better-sqlite3
+
       - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

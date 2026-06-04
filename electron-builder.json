@@ -25,7 +25,8 @@
     "packages/research-crawler/package.json",
     "packages/research-crawler/node_modules/**",
     "packages/shared/dist",
-    "packages/shared/package.json"
+    "packages/shared/package.json",
+    "node_modules/**"
   ],
   "asarUnpack": [
     "packages/backend/dist/**",
@@ -43,7 +44,10 @@
     "packages/research-crawler/package.json",
     "packages/research-crawler/node_modules/**",
     "packages/shared/dist/**",
-    "packages/shared/package.json"
+    "packages/shared/package.json",
+    "node_modules/bindings/**",
+    "node_modules/file-uri-to-path/**",
+    "**/*.node"
   ],
   "mac": {
     "identity": null,

@@ -14,29 +14,65 @@
 // and node-glow ring should light up in sequence.
 
 import Database from 'better-sqlite3'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-function getDataDir() {
-  if (process.env.ANUBIS_DATA_DIR) return process.env.ANUBIS_DATA_DIR
-  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
-    return join(process.env.LOCALAPPDATA, 'Anubis', 'anubis')
+// The Electron main process always sets ANUBIS_DATA_DIR = `${userData}/anubis`,
+// where userData is `%APPDATA%\<app-name>` on Windows. App-name is "Electron"
+// for `pnpm dev` (unpackaged) and "Anubis" for the packaged build. We search
+// the likely paths and use whichever anubis.db is most recently modified.
+function candidateDataDirs() {
+  if (process.env.ANUBIS_DATA_DIR) return [process.env.ANUBIS_DATA_DIR]
+  const out = []
+  if (process.platform === 'win32') {
+    if (process.env.APPDATA) {
+      out.push(join(process.env.APPDATA, 'Anubis', 'anubis'))     // packaged
+      out.push(join(process.env.APPDATA, 'Electron', 'anubis'))   // `pnpm dev`
+    }
+    if (process.env.LOCALAPPDATA) {
+      out.push(join(process.env.LOCALAPPDATA, 'Anubis', 'anubis')) // bare backend fallback
+    }
+  } else if (process.platform === 'darwin') {
+    const home = homedir()
+    if (home) {
+      out.push(join(home, 'Library', 'Application Support', 'Anubis', 'anubis'))
+      out.push(join(home, 'Library', 'Application Support', 'Electron', 'anubis'))
+    }
+  } else {
+    if (process.env.XDG_DATA_HOME) out.push(join(process.env.XDG_DATA_HOME, 'anubis'))
+    const home = homedir()
+    if (home) {
+      out.push(join(home, '.config', 'Anubis', 'anubis'))
+      out.push(join(home, '.config', 'Electron', 'anubis'))
+      out.push(join(home, '.local', 'share', 'anubis'))
+    }
   }
-  if (process.env.XDG_DATA_HOME) return join(process.env.XDG_DATA_HOME, 'anubis')
-  const home = homedir()
-  return home ? join(home, '.local', 'share', 'anubis') : join(tmpdir(), 'anubis')
+  if (out.length === 0) out.push(join(tmpdir(), 'anubis'))
+  return out
 }
 
-const dataDir = getDataDir()
-mkdirSync(dataDir, { recursive: true })
-const dbPath = join(dataDir, 'anubis.db')
+function resolveDataDir() {
+  const candidates = candidateDataDirs()
+  let best = null
+  for (const dir of candidates) {
+    const dbPath = join(dir, 'anubis.db')
+    if (!existsSync(dbPath)) continue
+    const mtime = statSync(dbPath).mtimeMs
+    if (!best || mtime > best.mtime) best = { dir, dbPath, mtime }
+  }
+  if (best) return best
+  // No DB found — seed into the first candidate so the user can still try it.
+  const fallback = candidates[0]
+  mkdirSync(fallback, { recursive: true })
+  return { dir: fallback, dbPath: join(fallback, 'anubis.db'), mtime: 0 }
+}
 
-if (!existsSync(dbPath)) {
-  console.error('[seed] Anubis SQLite not found at', dbPath)
-  console.error('[seed] Open the Anubis app at least once so migrations run, then re-run this script.')
-  process.exit(1)
+const { dir: dataDir, dbPath, mtime } = resolveDataDir()
+console.log('[seed] Using dataDir:', dataDir)
+if (mtime === 0) {
+  console.log('[seed] (no existing anubis.db at any candidate path — created fresh; open the app once if seeded workflows still don\'t appear)')
 }
 
 const db = new Database(dbPath)

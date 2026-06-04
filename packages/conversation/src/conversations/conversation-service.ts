@@ -225,8 +225,12 @@ export class ConversationService {
       envWithHome = { ...envFor(cur.agent, path), ...(resolved.env ?? {}) }
       if (isNew) prevSession = undefined
       writeProfileInstructions(path, profileInstructions)
-      writeProfileSkills(path, skillDefs)
     }
+    // Materialise active skills into the conversation workspace (the agent's
+    // cwd) so the relative `skills/<name>/SKILL.md` pointer resolves for every
+    // agent — Claude and Codex alike — regardless of which config dir each one
+    // auto-scans.
+    writeProfileSkills(cur.workspacePath, skillDefs)
     const { appendSystemPrompt: _, ...resolvedWithoutAppend } = resolved
     const resolvedForTurn: ResolvedProfile = { ...resolvedWithoutAppend, env: envWithHome }
     const task = await this.deps.tm.getOrBuild(

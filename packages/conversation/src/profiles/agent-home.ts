@@ -160,15 +160,18 @@ export function writeProfileInstructions(
 }
 
 /* ============================================================
-   Profile-level skill files.
+   Skill files.
 
-   Rather than inlining every active skill's full body into
-   CLAUDE.md (paid in always-on context), we materialise each
-   skill as files under the profile home's `skills/<name>/`
-   directory. Claude Code auto-discovers `$CLAUDE_CONFIG_DIR/skills/`
-   and loads them on demand; CLAUDE.md keeps only a short pointer
-   (see buildSkillsPointer). Codex doesn't auto-scan the dir but
-   the pointer tells it where to read them.
+   Rather than inlining every active skill's full body into the
+   instruction file (paid in always-on context), we materialise
+   each skill as files under `<targetDir>/skills/<name>/`. The
+   instruction file keeps only a short pointer (see
+   buildSkillsPointer) that references `skills/<name>/SKILL.md`.
+
+   We write these into the conversation workspace (the agent's
+   cwd), so that relative pointer resolves for every agent —
+   Claude and Codex alike — instead of relying on a per-agent
+   config-dir auto-scan.
 
    The directory is kept in sync with the active set each turn:
    stale skill dirs are pruned and changed ones re-copied. Writes
@@ -180,15 +183,15 @@ const SKILLS_DIR = 'skills'
 const SKILL_FILE = 'SKILL.md'
 
 /**
- * Materialise the given skills under `{homePath}/skills/<name>/`,
+ * Materialise the given skills under `{targetDir}/skills/<name>/`,
  * pruning any skill dirs that are no longer in the active set.
  * Returns true when anything was written or removed.
  */
 export function writeProfileSkills(
-  homePath: string,
+  targetDir: string,
   skills: SkillDefinition[],
 ): boolean {
-  const skillsRoot = join(homePath, SKILLS_DIR)
+  const skillsRoot = join(targetDir, SKILLS_DIR)
   const active = new Map(skills.map(s => [s.name, s]))
   let changed = false
 

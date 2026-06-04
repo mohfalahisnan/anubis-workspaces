@@ -59,14 +59,15 @@ export class StreamRelay {
       })
 
       emitter.on('tool_result', (d) => {
-        const dx = d as unknown as { id?: string; call_id?: string; name: string; result: unknown }
+        const dx = d as unknown as { id?: string; call_id?: string; name: string; result: unknown; isError?: boolean }
+        const status = dx.isError ? 'error' : 'success'
         const callId = dx.id ?? dx.call_id
         if (callId && this.toolArtIdByCall.has(callId)) {
-          this.opts.artifacts.updateResult(callId, this.opts.conversationId, dx.result, 'success')
+          this.opts.artifacts.updateResult(callId, this.opts.conversationId, dx.result, status)
         } else {
           for (const [cid, name] of this.toolNameByCall) {
             if (name === dx.name) {
-              this.opts.artifacts.updateResult(cid, this.opts.conversationId, dx.result, 'success')
+              this.opts.artifacts.updateResult(cid, this.opts.conversationId, dx.result, status)
               break
             }
           }
@@ -90,49 +91,60 @@ export class StreamRelay {
         this.publish({ name: 'approval_required', data: d })
       })
 
+      // Both terminal handlers are wrapped in try/finally so resolve() runs
+      // even if a downstream side-effect throws (a DB write failure, a
+      // publisher exception, a cron handler crash). Without this, anything
+      // awaiting the relay's done promise — including the workflow's
+      // createAndAwaitFirstTurn — would hang forever.
       emitter.on('done', async (d) => {
-        this.flushAssistant({ finishReason: d.finishReason, usage: d.usage })
-        const cmds = detectCronCommands(this.buffer)
-        for (const cmd of cmds) {
-          try {
-            const summary = await this.opts.cronHandler(cmd, this.opts.conversationId)
-            const now = nowMs()
-            this.opts.messages.insert({
-              id: newId(), conversationId: this.opts.conversationId, msgId: this.opts.msgId,
-              role: 'system', content: summary, createdAt: now,
-            })
-            this.publish({ name: 'system', data: { content: summary } })
-          } catch (e) {
-            this.publish({ name: 'error', data: { error: (e as Error).message } })
+        try {
+          this.flushAssistant({ finishReason: d.finishReason, usage: d.usage })
+          const cmds = detectCronCommands(this.buffer)
+          for (const cmd of cmds) {
+            try {
+              const summary = await this.opts.cronHandler(cmd, this.opts.conversationId)
+              const now = nowMs()
+              this.opts.messages.insert({
+                id: newId(), conversationId: this.opts.conversationId, msgId: this.opts.msgId,
+                role: 'system', content: summary, createdAt: now,
+              })
+              this.publish({ name: 'system', data: { content: summary } })
+            } catch (e) {
+              this.publish({ name: 'error', data: { error: (e as Error).message } })
+            }
           }
+          this.opts.conversations.updateStatus(this.opts.conversationId, 'finished')
+          this.publish({ name: 'done', data: d })
+        } finally {
+          resolve()
         }
-        this.opts.conversations.updateStatus(this.opts.conversationId, 'finished')
-        this.publish({ name: 'done', data: d })
-        resolve()
       })
 
       emitter.on('error', (d) => {
-        const now = nowMs()
-        // If no partials streamed before the failure, fall back to writing
-        // the error text into the message body. Otherwise we leave the
-        // partial content alone and only attach the error in metadata.
-        const errMessage = d.error.message
-        const codexInfo = (d.error as { codexErrorInfo?: string }).codexErrorInfo
-        const content = this.buffer || `_${errMessage}_`
-        this.opts.messages.upsertAssistant({
-          id: this.opts.messageRowId, conversationId: this.opts.conversationId,
-          msgId: this.opts.msgId, role: 'assistant', content,
-          metadata: {
-            error: {
-              message: errMessage,
-              ...(codexInfo ? { codexErrorInfo: codexInfo } : {}),
+        try {
+          const now = nowMs()
+          // If no partials streamed before the failure, fall back to writing
+          // the error text into the message body. Otherwise we leave the
+          // partial content alone and only attach the error in metadata.
+          const errMessage = d.error.message
+          const codexInfo = (d.error as { codexErrorInfo?: string }).codexErrorInfo
+          const content = this.buffer || `_${errMessage}_`
+          this.opts.messages.upsertAssistant({
+            id: this.opts.messageRowId, conversationId: this.opts.conversationId,
+            msgId: this.opts.msgId, role: 'assistant', content,
+            metadata: {
+              error: {
+                message: errMessage,
+                ...(codexInfo ? { codexErrorInfo: codexInfo } : {}),
+              },
             },
-          },
-          createdAt: now,
-        })
-        this.opts.conversations.updateStatus(this.opts.conversationId, 'error')
-        this.publish({ name: 'error', data: { message: errMessage } })
-        resolve()
+            createdAt: now,
+          })
+          this.opts.conversations.updateStatus(this.opts.conversationId, 'error')
+          this.publish({ name: 'error', data: { message: errMessage } })
+        } finally {
+          resolve()
+        }
       })
     })
   }

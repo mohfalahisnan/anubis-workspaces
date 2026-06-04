@@ -90,11 +90,17 @@ conversationRoutes.post('/:id/cancel', async (c) => {
 conversationRoutes.get('/:id/stream', (c) => {
   const id = c.req.param('id')
   return streamSSE(c, async (stream) => {
-    const unsub = getStack().sse.subscribe(id, async (event) => {
+    const sub = getStack().sse.subscribe(id, async (event) => {
       await stream.writeSSE({ event: event.name, data: JSON.stringify(event.data) })
     })
+    // Flush replay (events from the current or just-finished turn) before
+    // live events resume. Lets a reconnecting client catch up on partials,
+    // tool calls, and tool results it missed while disconnected.
+    for (const event of sub.replay) {
+      await stream.writeSSE({ event: event.name, data: JSON.stringify(event.data) })
+    }
     await new Promise<void>((resolve) => {
-      stream.onAbort(() => { unsub(); resolve() })
+      stream.onAbort(() => { sub.unsubscribe(); resolve() })
     })
   })
 })

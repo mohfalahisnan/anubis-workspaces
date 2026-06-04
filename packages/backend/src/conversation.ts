@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { NoCredentialsError } from '@anubis/conversation'
+import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import { getStack } from './services.js'
 
 const CreateBody = z.object({
@@ -70,7 +71,7 @@ conversationRoutes.post('/:id/messages', async (c) => {
   } catch (e) {
     if (e instanceof NoCredentialsError) {
       return c.json(
-        { ok: false, error: { code: 'no_credentials', profileId: e.profileId, agent: e.agent } },
+        { ok: false, error: { code: NO_CREDENTIALS_ERROR_CODE, profileId: e.profileId, agent: e.agent } },
         409,
       )
     }

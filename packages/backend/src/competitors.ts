@@ -12,6 +12,8 @@ const CreateBody = z.object({
   followers: z.number().int().nonnegative().optional(),
   avgLikes: z.number().int().nonnegative().optional(),
   notes: z.string().optional(),
+  bio: z.string().optional(),
+  level: z.enum(['black', 'green', 'yellow', 'red']).optional(),
 }).strict()
 
 const UpdateBody = z.object({
@@ -22,6 +24,8 @@ const UpdateBody = z.object({
   avgLikes: z.number().int().nonnegative().optional(),
   postCount: z.number().int().nonnegative().optional(),
   notes: z.string().optional(),
+  bio: z.string().optional(),
+  level: z.enum(['black', 'green', 'yellow', 'red']).nullable().optional(),
 }).strict()
 
 export const competitorRoutes = new Hono()

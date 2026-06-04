@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_COMPETITOR_LEVELS,
+  effectiveLevel,
   levelFor,
   type CompetitorLevelsConfig,
 } from '../src/index.js'
@@ -60,6 +61,21 @@ describe('levelFor (custom config)', () => {
     expect(levelFor(5_001, custom)).toBe('yellow')
     expect(levelFor(50_001, custom)).toBe('red')
     expect(levelFor(500_001, custom)).toBe('black')
+  })
+})
+
+describe('effectiveLevel', () => {
+  const cfg = DEFAULT_COMPETITOR_LEVELS
+
+  it('uses the manual override when set, ignoring followers', () => {
+    expect(effectiveLevel('red', 25_000, cfg)).toBe('red')
+    expect(effectiveLevel('black', 25_000, cfg)).toBe('black')
+  })
+
+  it('falls back to the derived level when override is null/undefined', () => {
+    expect(effectiveLevel(null, 25_000, cfg)).toBe('green')
+    expect(effectiveLevel(undefined, 25_000, cfg)).toBe('green')
+    expect(effectiveLevel(undefined, null, cfg)).toBe('unknown')
   })
 })
 

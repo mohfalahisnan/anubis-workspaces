@@ -12,4 +12,3 @@ export type {
   ProfileData,
   StandardCrawlerOutput,
 } from './core/standard-output.js'
-export { applyAvgLikesToOutput } from './core/instagram/avg-likes.js'

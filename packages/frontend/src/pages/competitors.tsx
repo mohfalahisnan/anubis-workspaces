@@ -12,7 +12,8 @@ import {
   XIcon,
 } from 'lucide-react'
 
-import type { CompetitorLevelsConfig, CompetitorSummary } from '@anubis/shared'
+import type { CompetitorLevelsConfig, CompetitorLevelOverride, CompetitorSummary } from '@anubis/shared'
+import { effectiveLevel } from '@anubis/shared'
 
 import {
   captureCompetitor,
@@ -60,9 +61,11 @@ export function CompetitorsPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
-  const { config: levelsCfg, levelFor } = useCompetitorLevels()
+  const { config: levelsCfg } = useCompetitorLevels()
 
-  const visibleItems = items?.filter((c) => matchesLevelFilter(levelFor(c.followers), levelFilter))
+  const visibleItems = items?.filter((c) =>
+    matchesLevelFilter(effectiveLevel(c.level, c.followers, levelsCfg), levelFilter),
+  )
 
   async function refresh() {
     try {
@@ -179,6 +182,8 @@ export function CompetitorsPage() {
       followers?: number
       avgLikes?: number
       notes?: string
+      bio?: string
+      level?: CompetitorLevelOverride | null
     },
   ) {
     setBusy(true)
@@ -545,12 +550,17 @@ function CompetitorCard({
         </span>
         <div className='min-w-0 flex-1'>
           <h3 className='flex items-center gap-1.5 truncate font-mono text-[13.5px] font-semibold text-foreground'>
-            <CompetitorLevelDot followers={competitor.followers} config={levelsCfg} />
+            <CompetitorLevelDot followers={competitor.followers} levelOverride={competitor.level} config={levelsCfg} />
             {competitor.handle}
           </h3>
           {competitor.displayName && (
             <p className='truncate text-[12.5px] text-muted-foreground'>
               {competitor.displayName}
+            </p>
+          )}
+          {competitor.bio && (
+            <p className='mt-1 line-clamp-2 text-[11.5px] leading-snug text-muted-foreground'>
+              {competitor.bio}
             </p>
           )}
         </div>
@@ -791,6 +801,8 @@ function EditCompetitorDialog({
       followers?: number
       avgLikes?: number
       notes?: string
+      bio?: string
+      level?: CompetitorLevelOverride | null
     },
   ) => void
 }) {
@@ -800,6 +812,8 @@ function EditCompetitorDialog({
   const [followers, setFollowers] = useState('')
   const [avgLikes, setAvgLikes] = useState('')
   const [notes, setNotes] = useState('')
+  const [bio, setBio] = useState('')
+  const [level, setLevel] = useState<CompetitorLevelOverride | ''>('')
 
   useEffect(() => {
     if (!competitor) return
@@ -809,6 +823,8 @@ function EditCompetitorDialog({
     setFollowers(competitor.followers === undefined ? '' : String(competitor.followers))
     setAvgLikes(competitor.avgLikes === undefined ? '' : String(competitor.avgLikes))
     setNotes(competitor.notes ?? '')
+    setBio(competitor.bio ?? '')
+    setLevel(competitor.level ?? '')
   }, [competitor])
 
   function submit(e: FormEvent) {
@@ -821,6 +837,8 @@ function EditCompetitorDialog({
       followers: parseOptionalInt(followers),
       avgLikes: parseOptionalInt(avgLikes),
       notes: notes.trim() || undefined,
+      bio: bio.trim() || undefined,
+      level: level === '' ? null : level,
     })
   }
 
@@ -889,6 +907,31 @@ function EditCompetitorDialog({
                 />
               </Field>
             </div>
+
+            <Field label='Level' htmlFor='edit-c-level' hint='Overrides the followers-based level. Auto = derive from followers.'>
+              <select
+                id='edit-c-level'
+                value={level}
+                onChange={(e) => setLevel(e.target.value as CompetitorLevelOverride | '')}
+                className={textInput}
+              >
+                <option value=''>Auto (from followers)</option>
+                <option value='black'>Black</option>
+                <option value='green'>Green</option>
+                <option value='yellow'>Yellow</option>
+                <option value='red'>Red</option>
+              </select>
+            </Field>
+
+            <Field label='Bio' htmlFor='edit-c-bio' hint='Auto-filled from Instagram on capture; edit to override.'>
+              <textarea
+                id='edit-c-bio'
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                className={`${textInput} h-auto resize-none py-2 leading-relaxed`}
+              />
+            </Field>
 
             <Field label='Notes' htmlFor='edit-c-notes'>
               <textarea

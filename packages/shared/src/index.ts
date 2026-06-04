@@ -129,6 +129,8 @@ export interface CompetitorSummary {
   postCount: number
   lastRefreshedAt?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
   addedAt: number
   updatedAt: number
 }
@@ -141,6 +143,8 @@ export interface CreateCompetitorInput {
   followers?: number
   avgLikes?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
 }
 
 export interface UpdateCompetitorInput {
@@ -151,6 +155,8 @@ export interface UpdateCompetitorInput {
   avgLikes?: number
   postCount?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride | null
 }
 
 export interface UpdateCapturedPostInput {
@@ -220,6 +226,21 @@ export function levelFor(
   if (followers <= cfg.greenMax) return 'green'
   if (followers <= cfg.yellowMax) return 'yellow'
   return 'red'
+}
+
+/** The manually-selectable levels — `'unknown'` is computed-only. */
+export type CompetitorLevelOverride = Exclude<CompetitorLevel, 'unknown'>
+
+/**
+ * The level actually shown for a competitor: a manual override wins;
+ * otherwise the follower-count-derived level is used.
+ */
+export function effectiveLevel(
+  override: CompetitorLevelOverride | null | undefined,
+  followers: number | null | undefined,
+  cfg: CompetitorLevelsConfig = DEFAULT_COMPETITOR_LEVELS,
+): CompetitorLevel {
+  return override ?? levelFor(followers, cfg)
 }
 
 export function isValidCompetitorLevels(cfg: CompetitorLevelsConfig): boolean {
@@ -298,6 +319,8 @@ export interface CapturedPostSummary {
   competitorTint?: string
   /** Owning competitor's follower count, joined in by the route layer. */
   competitorFollowers?: number
+  /** Owning competitor's manual level override, joined in by the route layer. */
+  competitorLevel?: CompetitorLevelOverride
 }
 
 export type CapturedPostListResponse = ListResponse<CapturedPostSummary>
@@ -319,4 +342,28 @@ export interface ApiErrorResponse {
   error:
     | string
     | { code: string; message: string; issues?: unknown[] }
+}
+
+/* ============================================================
+   Wire-shape error codes
+   ============================================================
+   Single source of truth for the `error.code` strings the backend
+   emits and the frontend parses. The Node-side packages can't be
+   imported by the renderer (they pull in better-sqlite3 etc.), so
+   both ends point at this constant instead of re-typing the literal.
+   ============================================================ */
+
+export const NO_CREDENTIALS_ERROR_CODE = 'no_credentials' as const
+export const AGENT_NOT_INSTALLED_ERROR_CODE = 'agent_not_installed' as const
+
+export interface NoCredentialsErrorPayload {
+  code: typeof NO_CREDENTIALS_ERROR_CODE
+  profileId: string
+  agent: AgentKind
+}
+
+export interface AgentNotInstalledErrorPayload {
+  code: typeof AGENT_NOT_INSTALLED_ERROR_CODE
+  agent: AgentKind
+  message?: string
 }

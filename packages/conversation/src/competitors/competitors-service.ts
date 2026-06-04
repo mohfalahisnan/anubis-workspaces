@@ -1,3 +1,4 @@
+import type { CompetitorLevelOverride } from '@anubis/shared'
 import { newId } from '../util/ids.js'
 import { nowMs } from '../util/time.js'
 import type { Competitor, CompetitorsRepo } from '../db/repositories/competitors-repo.js'
@@ -10,6 +11,8 @@ export interface CreateCompetitorInput {
   followers?: number
   avgLikes?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
 }
 
 export interface UpdateCompetitorInput {
@@ -20,6 +23,8 @@ export interface UpdateCompetitorInput {
   avgLikes?: number
   postCount?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride | null
 }
 
 /**
@@ -78,6 +83,8 @@ export class CompetitorsService {
       avgLikes: input.avgLikes,
       postCount: 0,
       notes: input.notes?.trim() || undefined,
+      bio: input.bio?.trim() || undefined,
+      level: input.level ?? undefined,
       addedAt: now,
       updatedAt: now,
     }
@@ -96,6 +103,8 @@ export class CompetitorsService {
       avgLikes: patch.avgLikes ?? existing.avgLikes,
       postCount: patch.postCount ?? existing.postCount,
       notes: patch.notes ?? existing.notes,
+      bio: patch.bio ?? existing.bio,
+      level: 'level' in patch ? (patch.level ?? undefined) : existing.level,
     })
     return next!
   }

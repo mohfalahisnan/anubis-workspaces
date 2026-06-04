@@ -128,6 +128,8 @@ export type { Conversation, Message, Artifact, AgentSession, ConversationExtra, 
 export type { Profile, ProfileConfig, ProfileOverride, ProfileSource, ResolvedProfile } from './profiles/types.js'
 export type { SkillDefinition, SkillIndex, SkillSource } from './skills/types.js'
 export { toIndex as toSkillIndex } from './skills/types.js'
+export { composeAppendSystemPrompt } from './skills/inject.js'
+export { computeInitialSkills } from './skills/snapshot.js'
 export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'
 export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-posts-repo.js'

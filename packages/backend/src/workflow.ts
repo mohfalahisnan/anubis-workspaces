@@ -58,6 +58,7 @@ workflowRoutes.get('/', (c) => {
       draftAhead: wf.publishedGraph != null && wf.draftGraph !== wf.publishedGraph,
       draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt,
       lastRun: lastRun ? { id: lastRun.id, status: lastRun.status, startedAt: lastRun.startedAt } : undefined,
+      previewGraph: wf.draftGraph,
     }
   })
   return c.json({ items })

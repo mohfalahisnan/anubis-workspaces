@@ -9,6 +9,7 @@ export interface WorkflowSummary {
   draftUpdatedAt: number
   publishedAt?: number
   lastRun?: { id: string; status: string; startedAt: number }
+  previewGraph: string
 }
 
 export interface WorkflowDetail {

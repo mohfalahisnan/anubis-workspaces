@@ -35,6 +35,8 @@ export interface ExecutorInput<TConfig> {
   nodeId: string
   config: TConfig
   upstream: Record<string, unknown>
+  /** Outgoing nodes — used by AI-aware executors to tailor their output. */
+  downstream: Array<{ nodeId: string; type: string }>
 }
 
 export interface Executor<TConfig = unknown> {

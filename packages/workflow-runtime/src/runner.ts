@@ -1,4 +1,4 @@
-import { topologicalSort, incomingEdges } from './graph.js'
+import { topologicalSort, incomingEdges, outgoingEdges } from './graph.js'
 import type {
   Executor, ExecutorContext, RunStatus, StepStatus, WorkflowGraph,
 } from './types.js'
@@ -35,13 +35,17 @@ export async function runWorkflow(
     const executor = registry[node.type]!
     const upstream: Record<string, unknown> = {}
     for (const src of incomingEdges(graph, nodeId)) upstream[src] = outputs[src]
+    const downstream = outgoingEdges(graph, nodeId).map((targetId) => {
+      const target = graph.nodes.find((n) => n.id === targetId)!
+      return { nodeId: targetId, type: target.type }
+    })
 
     stepStatuses[nodeId] = 'running'
     ctx.emit({ kind: 'node-started', nodeId, at: Date.now() })
 
     try {
       const output = await executor.run(
-        { nodeId, config: node.data as never, upstream },
+        { nodeId, config: node.data as never, upstream, downstream },
         ctx,
       )
       outputs[nodeId] = output

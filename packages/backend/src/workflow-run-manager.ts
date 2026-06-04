@@ -3,7 +3,11 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { ConversationStack } from '@anubis/conversation'
-import { ensureAgentHome, envFor, hasCredentials } from '@anubis/conversation'
+import {
+  ensureAgentHome, envFor, hasCredentials,
+  writeProfileInstructions, writeProfileSkills,
+  composeAppendSystemPrompt, computeInitialSkills,
+} from '@anubis/conversation'
 import {
   executorRegistry,
   runWorkflow,
@@ -175,11 +179,24 @@ export class WorkflowRunManager {
           const { path: profileHome } = ensureAgentHome(this.stack.agentHomeRoot, req.profileId, agentName)
           const profileEnv = envFor(agentName, profileHome)
 
-          // Forward all relevant profile fields. Without these the Claude CLI
-          // defaults to `--permission-mode plan`, which exits 1 with no stderr
-          // in -p (print) mode and breaks the run. The workflow node's
-          // reasoning overrides the profile's reasoningEffort; everything
-          // else (permissionMode, sandboxMode, etc.) comes from the profile.
+          // Sync profile instructions + skills into the home so the CLI picks
+          // them up. Matches what the chat/conversation path does for every
+          // turn — writes are idempotent, only touch disk when content has
+          // changed. Without this, a workflow against a profile would run
+          // with whatever CLAUDE.md the home already had (stale or empty).
+          const allSkills = this.stack.skills.discoverAll()
+          const activeSkillNames = new Set(computeInitialSkills(allSkills, resolved))
+          const skillDefs = allSkills.filter((s) => activeSkillNames.has(s.name))
+          const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
+          writeProfileInstructions(profileHome, profileInstructions)
+          writeProfileSkills(profileHome, skillDefs)
+
+          // Forward all relevant profile fields. The workflow node's reasoning
+          // overrides the profile's reasoningEffort; everything else
+          // (permissionMode, sandboxMode, etc.) comes from the profile.
+          // appendSystemPrompt is intentionally NOT forwarded: it now lives in
+          // the home's CLAUDE.md (via writeProfileInstructions above), so
+          // re-sending it as a -p arg would double up the instructions.
           const result = await this.stack.aiAgent.runAgent({
             agent: agentName,
             cwd,
@@ -190,7 +207,6 @@ export class WorkflowRunManager {
             permissionMode: resolved.permissionMode,
             allowedTools: resolved.allowedTools,
             disallowedTools: resolved.disallowedTools,
-            appendSystemPrompt: resolved.appendSystemPrompt,
             sandboxMode: resolved.sandboxMode,
             approvalPolicy: resolved.approvalPolicy,
             extraEnv: { ...profileEnv, ...(resolved.env ?? {}) },

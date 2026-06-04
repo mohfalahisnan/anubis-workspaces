@@ -45,3 +45,7 @@ export function topologicalSort(graph: WorkflowGraph): string[] {
 export function incomingEdges(graph: WorkflowGraph, nodeId: string): string[] {
   return graph.edges.filter((e) => e.target === nodeId).map((e) => e.source)
 }
+
+export function outgoingEdges(graph: WorkflowGraph, nodeId: string): string[] {
+  return graph.edges.filter((e) => e.source === nodeId).map((e) => e.target)
+}

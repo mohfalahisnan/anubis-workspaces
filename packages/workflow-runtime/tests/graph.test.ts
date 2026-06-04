@@ -1,6 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { topologicalSort, validateGraphStructure } from '../src/graph.js'
+import { topologicalSort, validateGraphStructure, outgoingEdges } from '../src/graph.js'
 import type { WorkflowGraph } from '../src/types.js'
+
+const G: WorkflowGraph = {
+  nodes: [
+    { id: 'a', type: 't', position: { x: 0, y: 0 }, data: {} },
+    { id: 'b', type: 't', position: { x: 0, y: 0 }, data: {} },
+    { id: 'c', type: 't', position: { x: 0, y: 0 }, data: {} },
+  ],
+  edges: [
+    { id: 'e1', source: 'a', target: 'b' },
+    { id: 'e2', source: 'a', target: 'c' },
+  ],
+}
+
+describe('outgoingEdges', () => {
+  it('returns target ids of edges sourced at the node', () => {
+    expect(outgoingEdges(G, 'a').sort()).toEqual(['b', 'c'])
+  })
+
+  it('returns [] for a leaf node', () => {
+    expect(outgoingEdges(G, 'b')).toEqual([])
+  })
+
+  it('returns [] for an unknown node', () => {
+    expect(outgoingEdges(G, 'missing')).toEqual([])
+  })
+})
 
 function g(nodes: string[], edges: Array<[string, string]>): WorkflowGraph {
   return {

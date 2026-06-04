@@ -156,10 +156,25 @@ export class WorkflowRunManager {
           const agentName: Agent = resolved.agent
           const cwd = join(this.dataDir, 'workflow-runs', active.runId, 'agent-cwd')
           await mkdir(cwd, { recursive: true })
+          // Forward all relevant profile fields. Without these the Claude CLI
+          // defaults to `--permission-mode plan`, which exits 1 with no stderr
+          // in -p (print) mode and breaks the run. The workflow node's
+          // reasoning overrides the profile's reasoningEffort; everything
+          // else (permissionMode, sandboxMode, etc.) comes from the profile.
           const result = await this.stack.aiAgent.runAgent({
-            agent: agentName, cwd, prompt: req.prompt,
-            model: resolved.model, reasoningEffort: req.reasoning,
+            agent: agentName,
+            cwd,
+            prompt: req.prompt,
+            model: resolved.model,
+            reasoningEffort: req.reasoning,
             claudeCliProfile: resolved.claudeCliProfile,
+            permissionMode: resolved.permissionMode,
+            allowedTools: resolved.allowedTools,
+            disallowedTools: resolved.disallowedTools,
+            appendSystemPrompt: resolved.appendSystemPrompt,
+            sandboxMode: resolved.sandboxMode,
+            approvalPolicy: resolved.approvalPolicy,
+            extraEnv: resolved.env,
           })
           return { text: result.text }
         }},

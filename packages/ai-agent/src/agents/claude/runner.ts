@@ -114,13 +114,27 @@ export class ClaudeAgent {
     const emitter = new TypedEmitter<AgentEventMap>()
 
     let stderrData = ''
+    let lastStdoutLine = ''
     child.stderr?.on('data', (chunk) => {
       stderrData += chunk.toString()
     })
+    // Capture the tail of stdout too — claude sometimes writes a plain-text
+    // error there (e.g. permission-mode incompatible with -p) before exiting
+    // with a non-zero code and no stderr. Without this, the run UI shows a
+    // useless "Stderr: none" message and the user has no way to diagnose.
+    child.stdout?.on('data', (chunk) => {
+      const text = chunk.toString() as string
+      const trimmed = text.trim()
+      if (trimmed) lastStdoutLine = trimmed.slice(-2000)
+    })
     child.on('close', (code) => {
       if (code !== 0 && code !== null) {
+        const stderr = stderrData.trim()
+        const detail =
+          stderr ||
+          (lastStdoutLine ? `(no stderr; last stdout: ${lastStdoutLine})` : 'none')
         emitter.emit('error', {
-          error: new Error(`Process exited with code ${code}. Stderr: ${stderrData.trim() || 'none'}`),
+          error: new Error(`Process exited with code ${code}. Stderr: ${detail}`),
         })
       }
     })

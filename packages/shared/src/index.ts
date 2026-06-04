@@ -191,6 +191,8 @@ export interface AppConfig {
   crawlerProfileRoot?: string
   /** Follower-count bands that drive the competitor level badge. */
   competitorLevels?: CompetitorLevelsConfig
+  /** Viral-multiplier thresholds (post likes ÷ avgLikes) per competitor level. */
+  levelMultipliers?: LevelMultipliersConfig
 }
 
 /* ============================================================
@@ -254,6 +256,80 @@ export function isValidCompetitorLevels(cfg: CompetitorLevelsConfig): boolean {
     cfg.greenMax < cfg.yellowMax &&
     cfg.yellowMax < cfg.maxActive
   )
+}
+
+/* ============================================================
+   Level multipliers
+   ============================================================
+   Rates an individual captured post by its "viral multiplier"
+   (post likes ÷ the owning competitor's avgLikes). The
+   competitor's effective level selects a threshold band; the
+   multiplier then buckets the post into green / yellow / red.
+   Posts that can't be scored (competitor not green/yellow/red,
+   or missing/zero avgLikes / missing likes) are 'unrated'.
+   ============================================================ */
+
+/** A threshold band: `min` is the yellow floor, `good` is the green floor. */
+export interface MultiplierBand {
+  min: number
+  good: number
+}
+
+export interface LevelMultipliersConfig {
+  green: MultiplierBand
+  yellow: MultiplierBand
+  red: MultiplierBand
+}
+
+export const DEFAULT_LEVEL_MULTIPLIERS: LevelMultipliersConfig = {
+  green: { min: 5, good: 10 },
+  yellow: { min: 10, good: 15 },
+  red: { min: 15, good: 20 },
+}
+
+export type MultiplierRating = 'green' | 'yellow' | 'red' | 'unrated'
+
+/** The competitor levels that carry a multiplier band. */
+type RatedLevel = 'green' | 'yellow' | 'red'
+
+function isRatedLevel(level: CompetitorLevel): level is RatedLevel {
+  return level === 'green' || level === 'yellow' || level === 'red'
+}
+
+/**
+ * Rate a post by post-likes ÷ competitor-avgLikes against the band
+ * for the competitor's (effective) level. Pass the effective level so
+ * a manual competitor override drives which band is used.
+ */
+export function multiplierRatingFor(
+  competitorLevel: CompetitorLevel,
+  postLikes: number | null | undefined,
+  avgLikes: number | null | undefined,
+  cfg: LevelMultipliersConfig = DEFAULT_LEVEL_MULTIPLIERS,
+): { rating: MultiplierRating; multiplier: number | null } {
+  if (!isRatedLevel(competitorLevel)) return { rating: 'unrated', multiplier: null }
+  if (postLikes == null || avgLikes == null || avgLikes <= 0) {
+    return { rating: 'unrated', multiplier: null }
+  }
+  const multiplier = postLikes / avgLikes
+  const band = cfg[competitorLevel]
+  if (multiplier >= band.good) return { rating: 'green', multiplier }
+  if (multiplier >= band.min) return { rating: 'yellow', multiplier }
+  return { rating: 'red', multiplier }
+}
+
+function isValidBand(band: MultiplierBand): boolean {
+  return (
+    Number.isFinite(band.min) &&
+    Number.isFinite(band.good) &&
+    band.min > 0 &&
+    band.good > 0 &&
+    band.min < band.good
+  )
+}
+
+export function isValidLevelMultipliers(cfg: LevelMultipliersConfig): boolean {
+  return isValidBand(cfg.green) && isValidBand(cfg.yellow) && isValidBand(cfg.red)
 }
 
 export interface DiscoveredCandidate {

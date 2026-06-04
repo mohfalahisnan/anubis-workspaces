@@ -1,3 +1,4 @@
+import type { CompetitorLevelOverride } from '@anubis/shared'
 import type { Db } from '../client.js'
 
 export interface Competitor {
@@ -11,6 +12,8 @@ export interface Competitor {
   postCount: number
   lastRefreshedAt?: number
   notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
   addedAt: number
   updatedAt: number
   deletedAt?: number
@@ -27,6 +30,8 @@ interface Row {
   post_count: number
   last_refreshed_at: number | null
   notes: string | null
+  bio: string | null
+  level: string | null
   added_at: number
   updated_at: number
   deleted_at: number | null
@@ -44,6 +49,8 @@ function toCompetitor(r: Row): Competitor {
     postCount: r.post_count,
     lastRefreshedAt: r.last_refreshed_at ?? undefined,
     notes: r.notes ?? undefined,
+    bio: r.bio ?? undefined,
+    level: (r.level as CompetitorLevelOverride | null) ?? undefined,
     addedAt: r.added_at,
     updatedAt: r.updated_at,
     deletedAt: r.deleted_at ?? undefined,
@@ -57,10 +64,10 @@ export class CompetitorsRepo {
     this.db.prepare(`
       INSERT INTO competitors (
         id, handle, display_name, niche, tint, followers, avg_likes,
-        post_count, last_refreshed_at, notes, added_at, updated_at, deleted_at
+        post_count, last_refreshed_at, notes, bio, level, added_at, updated_at, deleted_at
       ) VALUES (
         @id, @handle, @displayName, @niche, @tint, @followers, @avgLikes,
-        @postCount, @lastRefreshedAt, @notes, @addedAt, @updatedAt, @deletedAt
+        @postCount, @lastRefreshedAt, @notes, @bio, @level, @addedAt, @updatedAt, @deletedAt
       )
     `).run({
       id: c.id,
@@ -73,6 +80,8 @@ export class CompetitorsRepo {
       postCount: c.postCount,
       lastRefreshedAt: c.lastRefreshedAt ?? null,
       notes: c.notes ?? null,
+      bio: c.bio ?? null,
+      level: c.level ?? null,
       addedAt: c.addedAt,
       updatedAt: c.updatedAt,
       deletedAt: c.deletedAt ?? null,
@@ -114,7 +123,7 @@ export class CompetitorsRepo {
         UPDATE competitors SET
           display_name = ?, niche = ?, tint = ?, followers = ?,
           avg_likes = ?, post_count = ?, last_refreshed_at = ?, notes = ?,
-          updated_at = ?
+          bio = ?, level = ?, updated_at = ?
         WHERE id = ?
       `)
       .run(
@@ -126,6 +135,8 @@ export class CompetitorsRepo {
         next.postCount,
         next.lastRefreshedAt ?? null,
         next.notes ?? null,
+        next.bio ?? null,
+        next.level ?? null,
         next.updatedAt,
         id,
       )

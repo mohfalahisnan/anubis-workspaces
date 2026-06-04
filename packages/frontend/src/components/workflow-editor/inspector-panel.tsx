@@ -6,6 +6,7 @@ import { TransformerMediaConfigForm } from './inspector/config/transformer-media
 import { TransformerBriefConfigForm } from './inspector/config/transformer-brief-config'
 import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-config'
 import { TableConfigForm }            from './inspector/config/table-config'
+import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
 import { RunViewer } from './inspector/run-viewer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   transformerBrief: TransformerBriefConfigForm,
   ocrExtractor:     OcrExtractorConfigForm,
   table:            TableConfigForm,
+  imageVideo:       ImageVideoConfigForm,
 }
 
 export function InspectorPanel() {

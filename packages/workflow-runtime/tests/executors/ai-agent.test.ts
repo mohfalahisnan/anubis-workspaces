@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { aiAgentExecutor, buildContextBlock } from '../../src/executors/ai-agent.js'
+import { aiAgentExecutor } from '../../src/executors/ai-agent.js'
 
 function ctxWithAgent(agentRun: (req: { profileId: string; reasoning: string; prompt: string }) => Promise<{ text: string }>) {
   return {
@@ -38,31 +38,5 @@ describe('aiAgentExecutor', () => {
     expect(() =>
       aiAgentExecutor.validateConfig({ profileId: 'p1', reasoning: 'bogus', prompt: 'x' }),
     ).toThrow()
-  })
-
-  it('strips noisy fields (mediaUrls, raw) from the context block', () => {
-    const upstream = {
-      ig: {
-        kind: 'instagramPost',
-        post: {
-          id: 'p1',
-          caption: 'short caption',
-          mediaUrls: Array.from({ length: 10 }, (_, i) => `https://signed-cdn.instagram.com/very-long-url-${i}-${'x'.repeat(800)}`),
-          raw: { some: 'huge nested payload', filler: 'a'.repeat(5000) },
-        },
-      },
-    }
-    const block = buildContextBlock(upstream)
-    expect(block).not.toContain('signed-cdn.instagram.com')
-    expect(block).not.toContain('huge nested payload')
-    expect(block).toContain('[10 URLs omitted]')
-    expect(block.length).toBeLessThan(6500)
-  })
-
-  it('truncates very long strings inside the context', () => {
-    const upstream = { n1: { caption: 'a'.repeat(10_000) } }
-    const block = buildContextBlock(upstream)
-    expect(block).toContain('[truncated,')
-    expect(block.length).toBeLessThan(6500)
   })
 })

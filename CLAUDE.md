@@ -59,7 +59,7 @@ plus `vite build --mode=test` before tests run.
 1. `scripts/dev.mjs` reserves a free port, starts the frontend Vite server on it, builds `@anubis/research-crawler` then the Electron bundle, then launches Electron with `VITE_DEV_SERVER_URL` pointing at the renderer.
 2. `apps/desktop/electron/main/backend.ts` spawns the backend as a child process with `ANUBIS_BACKEND_PORT=0` (OS picks the port). In dev it runs `packages/backend/src/server.ts` via `tsx`; when packaged it runs `packages/backend/dist/server.js` with `ELECTRON_RUN_AS_NODE=1`.
 3. The backend prints a JSON line `{"type":"backend-ready","url",...}` on stdout; the main process parses it to learn the URL (15s timeout).
-4. The renderer gets the backend URL through the `anubis:get-backend-url` IPC channel, exposed via `contextBridge` as `window.anubis.backend.getBaseUrl()` (see `electron/preload/index.ts` and `packages/frontend/src/api.ts`). Outside Electron the frontend falls back to `VITE_API_BASE_URL` or `http://127.0.0.1:3000`.
+4. The renderer gets the backend URL through the `anubis:get-backend-url` IPC channel, exposed via `contextBridge` as `window.anubis.backend.getBaseUrl()` (see `electron/preload/index.ts` and `packages/frontend/src/api.ts`). Outside Electron the frontend falls back to `VITE_API_BASE_URL` or `http://127.0.0.1:4317`.
 
 Because the port is dynamic, never hardcode the backend URL in the renderer — always go
 through `getApiBaseUrl()`. CORS on the backend only allows localhost origins.

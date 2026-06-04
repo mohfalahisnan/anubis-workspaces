@@ -14,7 +14,7 @@ In this order:
 
 1. `$ANUBIS_BACKEND_URL` env var, if the user has set one.
 2. `$VITE_API_BASE_URL` env var.
-3. Probe `http://127.0.0.1:3000/health`; accept if `service === "anubis-backend"`.
+3. Probe `http://127.0.0.1:4317/health`; accept if `service === "anubis-backend"`.
 4. Scan listening localhost ports — use the right command for the platform:
 
    **Windows (PowerShell):**
@@ -77,8 +77,8 @@ Every route returns one of:
 All sub-file examples use `curl`, which ships with Windows 10+ (`curl.exe`), macOS, and every modern Linux. Set the URL once per session:
 
 ```bash
-export BASE=http://127.0.0.1:54321   # bash / zsh
-$env:BASE = 'http://127.0.0.1:54321'  # PowerShell
+export BASE=http://127.0.0.1:4317   # bash / zsh
+$env:BASE = 'http://127.0.0.1:4317'  # PowerShell
 ```
 
 Then:

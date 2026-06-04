@@ -1,6 +1,6 @@
 {
   "name": "anubis-workspaces",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "private": true,
   "description": "Anubis desktop app.",
   "license": "MIT",
@@ -16,6 +16,7 @@
   },
   "packageManager": "pnpm@10.12.4",
   "scripts": {
+    "predev": "node scripts/ensure-dev-sqlite.mjs",
     "dev": "node scripts/dev.mjs",
     "build": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-rebuild -f --only better-sqlite3 && electron-builder --config electron-builder.json",
     "preview": "pnpm --filter @anubis/frontend preview",
@@ -61,7 +62,9 @@
       "@types/react-dom": "^19.2.3"
     },
     "onlyBuiltDependencies": [
-      "better-sqlite3"
+      "better-sqlite3",
+      "electron",
+      "electron-winstaller"
     ]
   }
 }

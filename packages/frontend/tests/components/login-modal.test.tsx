@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { LoginModal } from '@/components/login-modal'
 
 vi.mock('@/api', () => ({
-  getApiBaseUrl: vi.fn().mockResolvedValue('http://127.0.0.1:3000'),
+  getApiBaseUrl: vi.fn().mockResolvedValue('http://127.0.0.1:4317'),
   NoCredentialsError: class extends Error {},
   openLoginTerminal: vi.fn().mockResolvedValue(undefined),
   getProfile: vi.fn().mockResolvedValue({

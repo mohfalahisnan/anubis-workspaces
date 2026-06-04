@@ -56,7 +56,7 @@ pnpm workspaces over `apps/*` and `packages/*`:
 1. `scripts/dev.mjs` reserves a free port, starts the frontend Vite server, builds `@anubis/research-crawler` and the Electron bundle, then launches Electron with `VITE_DEV_SERVER_URL` pointing at the renderer.
 2. The Electron main process spawns the backend as a child process with `ANUBIS_BACKEND_PORT=0`, so the OS picks the port. In dev it runs the backend via `tsx`; when packaged it runs the compiled `server.js` with `ELECTRON_RUN_AS_NODE=1`.
 3. The backend prints a `backend-ready` JSON line on stdout; the main process parses it to learn the URL.
-4. The renderer gets the backend URL through the `anubis:get-backend-url` IPC channel, exposed as `window.anubis.backend.getBaseUrl()`. Outside Electron it falls back to `VITE_API_BASE_URL` or `http://127.0.0.1:3000`.
+4. The renderer gets the backend URL through the `anubis:get-backend-url` IPC channel, exposed as `window.anubis.backend.getBaseUrl()`. Outside Electron it falls back to `VITE_API_BASE_URL` or `http://127.0.0.1:4317`.
 
 Because the port is dynamic, the renderer always resolves the backend URL through
 `getApiBaseUrl()` rather than hardcoding it. The backend's CORS only allows localhost origins.

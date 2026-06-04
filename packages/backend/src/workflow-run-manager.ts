@@ -1,7 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { ConversationStack } from '@anubis/conversation'
+import { ensureAgentHome, envFor, hasCredentials } from '@anubis/conversation'
 import {
   executorRegistry,
   runWorkflow,
@@ -156,6 +158,23 @@ export class WorkflowRunManager {
           const agentName: Agent = resolved.agent
           const cwd = join(this.dataDir, 'workflow-runs', active.runId, 'agent-cwd')
           await mkdir(cwd, { recursive: true })
+
+          // Point the agent at this profile's isolated home dir so it picks up
+          // the right credentials, MCP config, and CLAUDE.md instructions. If
+          // the profile's home doesn't yet have credentials, copy them from
+          // the user's system ~/.claude (same one-shot bootstrap the
+          // conversation service does for `claude-coding` on first launch).
+          // Without this, Claude exits 401 "Invalid authentication credentials".
+          if (agentName === 'claude' && !hasCredentials(req.profileId, 'claude', this.stack.agentHomeRoot)) {
+            this.stack.profiles.bootstrapDefaultClaudeProfile({
+              systemSource: join(homedir(), '.claude'),
+              agentHomeRoot: this.stack.agentHomeRoot,
+              profileId: req.profileId,
+            })
+          }
+          const { path: profileHome } = ensureAgentHome(this.stack.agentHomeRoot, req.profileId, agentName)
+          const profileEnv = envFor(agentName, profileHome)
+
           // Forward all relevant profile fields. Without these the Claude CLI
           // defaults to `--permission-mode plan`, which exits 1 with no stderr
           // in -p (print) mode and breaks the run. The workflow node's
@@ -174,7 +193,7 @@ export class WorkflowRunManager {
             appendSystemPrompt: resolved.appendSystemPrompt,
             sandboxMode: resolved.sandboxMode,
             approvalPolicy: resolved.approvalPolicy,
-            extraEnv: resolved.env,
+            extraEnv: { ...profileEnv, ...(resolved.env ?? {}) },
           })
           return { text: result.text }
         }},

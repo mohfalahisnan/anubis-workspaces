@@ -3,11 +3,14 @@ import { FileText } from 'lucide-react'
 import { NodeShell } from '@/components/workflow'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
+import { useNodeRunOutput } from './_use-run-output'
+import { JsonFallback } from './_json-fallback'
 
 export interface TransformerBriefNodeData { jsonTemplate?: string }
 
 export const TransformerBriefExecutableNode = memo(function TransformerBriefExecutableNode({ id, data }: { id: string; data: TransformerBriefNodeData }) {
   const runStatus = useNodeRunStatus(id)
+  const output = useNodeRunOutput(id) as { kind: 'json'; value: unknown } | undefined
   return (
     <NodeShell
       icon={FileText}
@@ -18,6 +21,7 @@ export const TransformerBriefExecutableNode = memo(function TransformerBriefExec
       footer={<RunStateBadge nodeId={id} />}
     >
       <pre className='text-[10px] text-zinc-300 whitespace-pre-wrap break-words'>{data.jsonTemplate ?? '<empty template>'}</pre>
+      {output?.kind === 'json' ? <JsonFallback value={output.value} /> : null}
     </NodeShell>
   )
 })

@@ -6,6 +6,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { WorkflowCardPreview } from './workflows/workflow-card-preview'
 
 export function WorkflowsPage() {
   const { navigate } = useNavigation()
@@ -59,19 +60,22 @@ export function WorkflowsPage() {
         {items.length === 0 ? (
           <p className='text-sm text-muted-foreground col-span-full'>No workflows yet. Click "New workflow" to get started.</p>
         ) : items.map((item) => (
-          <div key={item.id} className='rounded-2xl border border-border bg-card p-5 space-y-3'>
-            <div>
-              <p className='text-base font-medium'>{item.name}</p>
-              {item.description ? <p className='text-xs text-muted-foreground'>{item.description}</p> : null}
-              <p className='mt-2 text-[11px] uppercase tracking-wider text-muted-foreground'>{statusLabel(item)}</p>
-              <p className='text-xs text-muted-foreground'>
-                {item.lastRun ? `Last run: ${item.lastRun.status}` : 'Never run'}
-              </p>
-            </div>
-            <div className='flex flex-wrap gap-2'>
-              <Button size='sm' variant='secondary' onClick={() => navigate({ page: 'workflow-editor', workflowId: item.id })}>Open</Button>
-              <Button size='sm' disabled={!item.hasPublished} onClick={() => handleRun(item.id)}>Run</Button>
-              <Button size='sm' variant='ghost' onClick={() => handleDelete(item.id)}>Delete</Button>
+          <div key={item.id} className='flex flex-col overflow-hidden rounded-2xl border border-border bg-card'>
+            <WorkflowCardPreview graphJson={item.previewGraph} />
+            <div className='space-y-3 p-5'>
+              <div>
+                <p className='text-base font-medium'>{item.name}</p>
+                {item.description ? <p className='text-xs text-muted-foreground'>{item.description}</p> : null}
+                <p className='mt-2 text-[11px] uppercase tracking-wider text-muted-foreground'>{statusLabel(item)}</p>
+                <p className='text-xs text-muted-foreground'>
+                  {item.lastRun ? `Last run: ${item.lastRun.status}` : 'Never run'}
+                </p>
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <Button size='sm' variant='secondary' onClick={() => navigate({ page: 'workflow-editor', workflowId: item.id })}>Open</Button>
+                <Button size='sm' disabled={!item.hasPublished} onClick={() => handleRun(item.id)}>Run</Button>
+                <Button size='sm' variant='ghost' onClick={() => handleDelete(item.id)}>Delete</Button>
+              </div>
             </div>
           </div>
         ))}

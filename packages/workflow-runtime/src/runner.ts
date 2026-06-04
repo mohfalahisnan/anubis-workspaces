@@ -18,7 +18,7 @@ export async function runWorkflow(
   const order = topologicalSort(graph)
   for (const node of graph.nodes) {
     if (!registry[node.type]) throw new Error(`unknown node type: ${node.type}`)
-    registry[node.type]!.validateConfig(node.config)
+    registry[node.type]!.validateConfig(node.data)
   }
 
   const outputs: Record<string, unknown> = {}
@@ -41,7 +41,7 @@ export async function runWorkflow(
 
     try {
       const output = await executor.run(
-        { nodeId, config: node.config as never, upstream },
+        { nodeId, config: node.data as never, upstream },
         ctx,
       )
       outputs[nodeId] = output

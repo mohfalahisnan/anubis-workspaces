@@ -4,7 +4,7 @@ import type { WorkflowGraph } from '../src/types.js'
 
 function g(nodes: string[], edges: Array<[string, string]>): WorkflowGraph {
   return {
-    nodes: nodes.map((id) => ({ id, type: 'table', position: { x: 0, y: 0 }, config: {} })),
+    nodes: nodes.map((id) => ({ id, type: 'table', position: { x: 0, y: 0 }, data: {} })),
     edges: edges.map(([s, t], i) => ({ id: `e${i}`, source: s, target: t })),
   }
 }
@@ -37,8 +37,8 @@ describe('validateGraphStructure', () => {
   it('rejects duplicate node ids', () => {
     const bad: WorkflowGraph = {
       nodes: [
-        { id: 'a', type: 'table', position: { x: 0, y: 0 }, config: {} },
-        { id: 'a', type: 'table', position: { x: 0, y: 0 }, config: {} },
+        { id: 'a', type: 'table', position: { x: 0, y: 0 }, data: {} },
+        { id: 'a', type: 'table', position: { x: 0, y: 0 }, data: {} },
       ],
       edges: [],
     }

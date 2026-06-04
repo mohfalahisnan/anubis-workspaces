@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import {
   Background, Controls, MiniMap, ReactFlow,
   type Connection, type Edge, type Node, type OnConnect, type OnEdgesChange, type OnNodesChange,
-  applyEdgeChanges, applyNodeChanges, addEdge,
+  applyEdgeChanges, applyNodeChanges, addEdge, useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -36,6 +36,7 @@ export function EditorCanvas() {
   const setEdges = useEditorStore((s) => s.setEdges)
   const pushHistory = useEditorStore((s) => s.pushHistory)
   const setSelection = useEditorStore((s) => s.setSelection)
+  const { screenToFlowPosition } = useReactFlow()
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
     const next = applyNodeChanges(changes, nodes)
@@ -61,14 +62,16 @@ export function EditorCanvas() {
   const onDrop = useCallback((e: React.DragEvent) => {
     const type = e.dataTransfer.getData('application/x-anubis-node')
     if (!type) return
-    const bounds = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    e.preventDefault()
     pushHistory()
     const id = `n-${Date.now()}`
     const newNode: Node = {
-      id, type, position: { x: e.clientX - bounds.left, y: e.clientY - bounds.top }, data: {},
+      id, type,
+      position: screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+      data: {},
     }
     setNodes([...nodes, newNode])
-  }, [nodes, setNodes, pushHistory])
+  }, [nodes, setNodes, pushHistory, screenToFlowPosition])
 
   const routedEdges = applyVisualEdgeRouting(edges)
 

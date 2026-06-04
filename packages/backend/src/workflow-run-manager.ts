@@ -6,11 +6,14 @@ import {
   executorRegistry,
   runWorkflow,
   WorkflowGraphSchema,
+  type CapturedPost,
   type NodeRunEvent,
   type RunEvent,
   type RunStatus,
 } from '@anubis/workflow-runtime'
 import type { Agent } from '@anubis/ai-agent'
+import { captureInstagramData, silentReporter, type StandardCrawlerOutput } from '@anubis/research-crawler'
+import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 
 type Listener = (event: RunEvent) => void
 
@@ -147,16 +150,27 @@ export class WorkflowRunManager {
           })
           return { text: result.text }
         }},
-        crawler: { captureProfile: async (_url: string) => {
-          throw new Error('crawler.captureProfile not yet wired in v1 backend (planned for follow-up integration)')
+        crawler: { captureProfile: async (url: string): Promise<CapturedPost> => {
+          const cfg = this.stack.appConfig.get()
+          const input = withCrawlerProfileDefaults(
+            { url, reporter: silentReporter(), chromePath: cfg.chromePath },
+            'public', cfg, this.dataDir,
+          )
+          const result: StandardCrawlerOutput = await captureInstagramData(input)
+          return mapCrawlerOutputToCapturedPost(result, url)
         }},
         ocr: { extractFromImage: async (_path: string) => {
           throw new Error('ocr.extractFromImage not yet wired (anubis-extractor integration is follow-up)')
         }},
-        db: { getCapturedPost: async (id: string) => {
+        db: { getCapturedPost: async (id: string): Promise<CapturedPost> => {
           const post = this.stack.capturedPosts.findById(id)
           if (!post) throw new Error(`captured post ${id} not found`)
-          return { id: post.id, mediaUrls: (post as { mediaUrls?: string[] }).mediaUrls ?? [], caption: post.caption }
+          return {
+            id: post.id,
+            caption: post.caption,
+            mediaUrls: post.mediaUrl ? [post.mediaUrl] : [],
+            metrics: { likes: post.likes, comments: post.comments },
+          }
         }},
         fs: { writeRunArtifact: async (runId: string, nodeId: string, ext: string, data: Buffer) => {
           const dir = join(this.dataDir, 'workflow-runs', runId)
@@ -196,4 +210,25 @@ export class WorkflowRunManager {
     await writeFile(path, serialized)
     return { kind: 'file', path, mimeType: 'application/json', sizeBytes: serialized.length }
   }
+}
+
+function mapCrawlerOutputToCapturedPost(result: StandardCrawlerOutput, sourceUrl: string): CapturedPost {
+  const post = result.output.posts[0]
+  if (post) {
+    return {
+      id: post.postUrl ?? sourceUrl,
+      caption: post.caption,
+      mediaUrls: post.media?.urls ?? (post.media?.videoUrl ? [post.media.videoUrl] : []),
+      metrics: { likes: post.likes, comments: post.comments },
+    }
+  }
+  const profile = result.output.profiles[0]
+  if (profile) {
+    return {
+      id: (profile as { username?: string }).username ?? sourceUrl,
+      caption: (profile as { bio?: string }).bio,
+      mediaUrls: [],
+    }
+  }
+  throw new Error(`crawler returned no posts or profiles for url: ${sourceUrl}`)
 }

@@ -37,7 +37,7 @@ describe('workflow REST', () => {
     expect(wf.id).toBeTruthy()
 
     const draft = JSON.stringify({
-      nodes: [{ id: 'n1', type: 'table', position: { x: 0, y: 0 }, config: {} }],
+      nodes: [{ id: 'n1', type: 'table', position: { x: 0, y: 0 }, data: {} }],
       edges: [],
     })
     const saved = await app.request(`/workflows/${wf.id}/draft`, {

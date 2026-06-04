@@ -140,7 +140,7 @@ export class AiAgentService {
 
     const mode = input.yolo
       ? 'bypassPermissions'
-      : input.permissionMode ?? 'plan'
+      : input.permissionMode ?? 'default'
     const { emitter } = await this.claude.run({
       workspaceId,
       sessionId,

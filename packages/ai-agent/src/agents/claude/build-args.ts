@@ -1,6 +1,5 @@
 export interface BuildClaudeArgsOpts {
   cwd: string
-  prompt: string
   claudeResumeId?: string
   model?: string
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
@@ -10,9 +9,15 @@ export interface BuildClaudeArgsOpts {
 }
 
 export function buildClaudeArgs(opts: BuildClaudeArgsOpts): string[] {
+  // The prompt is written to stdin (see runner.ts), NOT passed as the
+  // value of -p. On Windows the CLI is invoked via cmd.exe, which:
+  //   - terminates the command line at the first literal newline, and
+  //   - rejects command lines longer than ~8K chars.
+  // Multi-line workflow prompts (XML <context> blocks, JSON, attached
+  // files lists) trivially trip the newline limit. Passing -p with no
+  // value tells Claude Code to read the prompt from stdin instead.
   const args: string[] = [
     '-p',
-    opts.prompt,
     '--output-format',
     'stream-json',
     '--verbose',

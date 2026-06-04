@@ -88,7 +88,6 @@ export class ClaudeAgent {
     const sessionId = opts.sessionId ?? ''
     const args = buildClaudeArgs({
       cwd: opts.cwd,
-      prompt: opts.prompt,
       claudeResumeId: opts.claudeResumeId,
       model: opts.model,
       permissionMode: opts.permissionMode,
@@ -109,7 +108,9 @@ export class ClaudeAgent {
     const child = spawnNpmShim(command, args, {
       env,
       cwd: opts.cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      // stdin is piped so we can feed the prompt that way and bypass the
+      // Windows cmd.exe command-line constraints (newlines, 8K cap).
+      stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     })
     const emitter = new TypedEmitter<AgentEventMap>()
@@ -121,6 +122,17 @@ export class ClaudeAgent {
     let terminalEmitted = false
     emitter.on('done', () => { terminalEmitted = true })
     emitter.on('error', () => { terminalEmitted = true })
+
+    // Write the prompt to stdin and close it so Claude Code reads it as
+    // the -p prompt (we pass -p without an argument in build-args.ts).
+    // Errors here are surfaced as runner errors.
+    if (child.stdin) {
+      child.stdin.on('error', (e) => {
+        if (terminalEmitted) return
+        emitter.emit('error', { error: e })
+      })
+      child.stdin.end(opts.prompt)
+    }
 
     let stderrData = ''
     let lastStdoutLine = ''

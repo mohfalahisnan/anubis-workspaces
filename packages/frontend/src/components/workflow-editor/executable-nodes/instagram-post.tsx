@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { NodeShell, StatusBadge } from '@/components/workflow'
 import { RunStateBadge } from './_run-state-badge'
+import { useNodeRunStatus } from './_use-run-status'
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -19,12 +20,14 @@ export interface InstagramPostNodeData {
 }
 
 export const InstagramPostExecutableNode = memo(function InstagramPostExecutableNode({ id, data }: { id: string; data: InstagramPostNodeData }) {
+  const runStatus = useNodeRunStatus(id)
   return (
     <NodeShell
       icon={InstagramIcon}
       title='Instagram Post'
       subtitle={data.source === 'url' ? data.url ?? 'No URL' : data.postId ? `Captured: ${data.postId}` : 'No source selected'}
       accent='from-[#fd551d] via-[#ff6b35] to-[#ff9b7a]'
+      runStatus={runStatus}
       footer={
         <div className='flex flex-wrap gap-2'>
           <StatusBadge tone='info'>{data.source ?? 'unset'}</StatusBadge>

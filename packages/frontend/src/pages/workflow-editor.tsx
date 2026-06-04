@@ -9,6 +9,7 @@ import { EditorCanvas } from '@/components/workflow-editor/editor-canvas'
 import { InspectorPanel } from '@/components/workflow-editor/inspector-panel'
 import { Button } from '@/components/ui/button'
 import { ReactFlowProvider } from '@xyflow/react'
+import { RunStatusBanner } from '@/components/workflow-editor/run-status-banner'
 
 export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
   const { navigate } = useNavigation()
@@ -62,6 +63,7 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
         </div>
       </div>
       {error ? <p className='px-6 py-2 text-xs text-red-300'>{error}</p> : null}
+      {activeRun ? <RunStatusBanner /> : null}
       <div className='flex min-h-0 flex-1'>
         <NodePalette />
         <div className='flex-1 min-w-0'>

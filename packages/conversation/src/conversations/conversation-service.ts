@@ -1,12 +1,13 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
+import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import type { Db } from '../db/client.js'
 import { newId } from '../util/ids.js'
 import { hasCredentials } from '../profiles/agent-home.js'
 
 export class NoCredentialsError extends Error {
-  readonly code = 'no_credentials' as const
+  readonly code = NO_CREDENTIALS_ERROR_CODE
   constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex') {
     super(`no credentials for profile ${profileId} (${agent})`)
     this.name = 'NoCredentialsError'

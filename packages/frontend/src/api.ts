@@ -1,33 +1,37 @@
-import type {
-  AgentAvailability,
-  ApiHealthResponse,
-  AppConfig,
-  CapturedPostListResponse,
-  CapturedPostSummary,
-  CaptureResultPayload,
-  CompetitorListResponse,
-  CompetitorSummary,
-  ConversationCreateResponse,
-  ConversationListResponse,
-  ConversationSummary,
-  CreateCompetitorInput,
-  CreateConversationInput,
-  CreateProfileInput,
-  CronJobListResponse,
-  CronJobSummary,
-  DiscoverCompetitorsInput,
-  DiscoveredCandidate,
-  MessageListResponse,
-  MessageSummary,
-  ProfileListResponse,
-  ProfileSummary,
-  SkillDetail,
-  SkillListResponse,
-  SkillSource,
-  SkillSummary,
-  UpdateCompetitorInput,
-  UpdateCapturedPostInput,
-  UpdateCronJobInput,
+import {
+  AGENT_NOT_INSTALLED_ERROR_CODE,
+  NO_CREDENTIALS_ERROR_CODE,
+  type AgentAvailability,
+  type AgentNotInstalledErrorPayload,
+  type ApiHealthResponse,
+  type AppConfig,
+  type CapturedPostListResponse,
+  type CapturedPostSummary,
+  type CaptureResultPayload,
+  type CompetitorListResponse,
+  type CompetitorSummary,
+  type ConversationCreateResponse,
+  type ConversationListResponse,
+  type ConversationSummary,
+  type CreateCompetitorInput,
+  type CreateConversationInput,
+  type CreateProfileInput,
+  type CronJobListResponse,
+  type CronJobSummary,
+  type DiscoverCompetitorsInput,
+  type DiscoveredCandidate,
+  type MessageListResponse,
+  type MessageSummary,
+  type NoCredentialsErrorPayload,
+  type ProfileListResponse,
+  type ProfileSummary,
+  type SkillDetail,
+  type SkillListResponse,
+  type SkillSource,
+  type SkillSummary,
+  type UpdateCompetitorInput,
+  type UpdateCapturedPostInput,
+  type UpdateCronJobInput,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -35,7 +39,7 @@ import type {
    ------------------------------------------------------------ */
 
 export class NoCredentialsError extends Error {
-  readonly code = 'no_credentials' as const
+  readonly code = NO_CREDENTIALS_ERROR_CODE
   constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex') {
     super(`no credentials for profile ${profileId} (${agent})`)
     this.name = 'NoCredentialsError'
@@ -43,7 +47,7 @@ export class NoCredentialsError extends Error {
 }
 
 export class AgentNotInstalledError extends Error {
-  readonly code = 'agent_not_installed' as const
+  readonly code = AGENT_NOT_INSTALLED_ERROR_CODE
   constructor(public readonly agent: 'claude' | 'codex', message?: string) {
     super(message ?? `${agent} CLI is not installed (not on PATH).`)
     this.name = 'AgentNotInstalledError'
@@ -78,12 +82,14 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const body = await response.clone().json() as { error?: unknown }
       if (response.status === 409 && body.error && typeof body.error === 'object') {
-        const err = body.error as { code?: string; profileId?: string; agent?: string; message?: string }
-        if (err.code === 'no_credentials' && err.profileId && err.agent) {
-          throw new NoCredentialsError(err.profileId, err.agent as 'claude' | 'codex')
+        const err = body.error as Partial<NoCredentialsErrorPayload> | Partial<AgentNotInstalledErrorPayload>
+        if (err.code === NO_CREDENTIALS_ERROR_CODE) {
+          const e = err as Partial<NoCredentialsErrorPayload>
+          if (e.profileId && e.agent) throw new NoCredentialsError(e.profileId, e.agent)
         }
-        if (err.code === 'agent_not_installed' && err.agent) {
-          throw new AgentNotInstalledError(err.agent as 'claude' | 'codex', err.message)
+        if (err.code === AGENT_NOT_INSTALLED_ERROR_CODE) {
+          const e = err as Partial<AgentNotInstalledErrorPayload>
+          if (e.agent) throw new AgentNotInstalledError(e.agent, e.message)
         }
       }
       if (body.error) {

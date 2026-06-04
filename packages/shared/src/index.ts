@@ -320,3 +320,27 @@ export interface ApiErrorResponse {
     | string
     | { code: string; message: string; issues?: unknown[] }
 }
+
+/* ============================================================
+   Wire-shape error codes
+   ============================================================
+   Single source of truth for the `error.code` strings the backend
+   emits and the frontend parses. The Node-side packages can't be
+   imported by the renderer (they pull in better-sqlite3 etc.), so
+   both ends point at this constant instead of re-typing the literal.
+   ============================================================ */
+
+export const NO_CREDENTIALS_ERROR_CODE = 'no_credentials' as const
+export const AGENT_NOT_INSTALLED_ERROR_CODE = 'agent_not_installed' as const
+
+export interface NoCredentialsErrorPayload {
+  code: typeof NO_CREDENTIALS_ERROR_CODE
+  profileId: string
+  agent: AgentKind
+}
+
+export interface AgentNotInstalledErrorPayload {
+  code: typeof AGENT_NOT_INSTALLED_ERROR_CODE
+  agent: AgentKind
+  message?: string
+}

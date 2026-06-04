@@ -1,4 +1,4 @@
-import type { PostData, ProfileData, StandardCrawlerOutput } from '../standard-output.js'
+import type { PostData } from '../standard-output.js'
 
 export type AvgLikesConfidence = 'ok' | 'low_sample'
 
@@ -13,63 +13,10 @@ export type AvgLikesSummary = {
   method: 'modal_cluster_mean'
 }
 
-export type AvgLikesOptions = {
-  minPosts?: number
-}
-
 const DEFAULT_MIN_POSTS = 20
 // Like counts within this ratio of their neighbour belong to the same cluster.
 // A jump larger than this (e.g. a viral post) starts a new cluster.
 const CLUSTER_RATIO = 2
-
-export function applyAvgLikesToOutput(output: StandardCrawlerOutput, options: AvgLikesOptions = {}): StandardCrawlerOutput {
-  const minPosts = normalizeMinPosts(options.minPosts)
-  const postsByUsername = groupPostsByUsername(output.output.posts)
-  const summaries: AvgLikesSummary[] = []
-  const warnings = [...(output.meta.warnings ?? [])]
-
-  const profiles = output.output.profiles.map((profile) => {
-    const username = normalizeUsername(profile.username)
-    const posts = postsByUsername.get(username) ?? []
-    const summary = calculateAvgLikesSummary(profile.username, posts, minPosts)
-    if (!summary) {
-      warnings.push(`No post likes found for @${profile.username}; avgLikes was not set.`)
-      return profile
-    }
-
-    summaries.push(summary)
-    if (summary.avgLikesConfidence === 'low_sample') {
-      warnings.push(`Only ${summary.avgLikesSampleSize} liked post(s) found for @${profile.username}; avgLikes prefers at least ${minPosts}.`)
-    }
-
-    return {
-      ...profile,
-      avgLikes: summary.avgLikes,
-      avgLikesRangeLow: summary.avgLikesRangeLow,
-      avgLikesRangeHigh: summary.avgLikesRangeHigh,
-      avgLikesSampleSize: summary.avgLikesSampleSize,
-      avgLikesMethod: summary.method,
-      avgLikesConfidence: summary.avgLikesConfidence
-    } satisfies ProfileData
-  })
-
-  return {
-    ...output,
-    output: {
-      ...output.output,
-      profiles
-    },
-    meta: {
-      ...output.meta,
-      warnings,
-      avgLikes: {
-        method: 'modal_cluster_mean',
-        minPosts,
-        perProfile: summaries
-      }
-    }
-  }
-}
 
 export function calculateAvgLikesSummary(username: string, posts: PostData[], minPosts = DEFAULT_MIN_POSTS): AvgLikesSummary | null {
   const likes = posts

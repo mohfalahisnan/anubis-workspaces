@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { type Profile, hasCredentials, ensureAgentHome, envFor } from '@anubis/conversation'
+import { AGENT_NOT_INSTALLED_ERROR_CODE } from '@anubis/shared'
 import { getStack } from './services.js'
 
 const ProfileConfig = z.object({
@@ -118,7 +119,7 @@ profileRoutes.post('/:id/login/terminal', async (c) => {
     return c.json(
       {
         ok: false,
-        error: { code: 'agent_not_installed', agent, message: `${agent} CLI is not on PATH. Install it first.` },
+        error: { code: AGENT_NOT_INSTALLED_ERROR_CODE, agent, message: `${agent} CLI is not on PATH. Install it first.` },
       },
       409,
     )

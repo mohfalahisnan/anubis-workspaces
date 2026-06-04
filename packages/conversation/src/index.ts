@@ -14,6 +14,8 @@ import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
 import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
 import { CompetitorsService } from './competitors/competitors-service.js'
 import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
+import { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
 import { AppConfigService } from './config/app-config.js'
 import { ProfileService } from './profiles/profile-service.js'
 import { SkillLoader, type SkillRoots } from './skills/loader.js'
@@ -35,6 +37,8 @@ export interface ConversationStack {
   profiles: ProfileService
   competitors: CompetitorsService
   capturedPosts: CapturedPostsRepo
+  workflows: WorkflowsRepo
+  workflowRuns: WorkflowRunsRepo
   appConfig: AppConfigService
   skills: SkillLoader
   sse: SseBroadcaster
@@ -76,6 +80,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   }
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
   const capturedPosts = new CapturedPostsRepo(db)
+  const workflowsRepo = new WorkflowsRepo(db)
+  const workflowRunsRepo = new WorkflowRunsRepo(db)
   const appConfig = new AppConfigService(opts.dataDir)
 
   const skills = new SkillLoader(opts.skillRoots)
@@ -105,7 +111,10 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   return {
-    conversation, profiles, competitors, capturedPosts, appConfig, skills, sse, cron, taskManager: tm, aiAgent,
+    conversation, profiles, competitors, capturedPosts,
+    workflows: workflowsRepo,
+    workflowRuns: workflowRunsRepo,
+    appConfig, skills, sse, cron, taskManager: tm, aiAgent,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()
@@ -123,6 +132,10 @@ export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'
 export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-posts-repo.js'
 export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+export type { Workflow } from './db/repositories/workflows-repo.js'
+export { WorkflowsRepo } from './db/repositories/workflows-repo.js'
+export type { WorkflowRun, WorkflowRunStep, RunStatus, StepStatus } from './db/repositories/workflow-runs-repo.js'
+export { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
 export type { AppConfig } from './config/app-config.js'
 export { AppConfigService } from './config/app-config.js'
 export { ConversationService, NoCredentialsError } from './conversations/conversation-service.js'

@@ -1,0 +1,106 @@
+import type { Db } from '../client.js'
+
+export interface WorkflowRow {
+  id: string
+  name: string
+  description: string | null
+  draft_graph: string
+  published_graph: string | null
+  draft_updated_at: number
+  published_at: number | null
+  created_at: number
+  updated_at: number
+}
+
+export interface Workflow {
+  id: string
+  name: string
+  description?: string
+  draftGraph: string
+  publishedGraph?: string
+  draftUpdatedAt: number
+  publishedAt?: number
+  createdAt: number
+  updatedAt: number
+}
+
+function toWorkflow(r: WorkflowRow): Workflow {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description ?? undefined,
+    draftGraph: r.draft_graph,
+    publishedGraph: r.published_graph ?? undefined,
+    draftUpdatedAt: r.draft_updated_at,
+    publishedAt: r.published_at ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }
+}
+
+const EMPTY_GRAPH = JSON.stringify({ nodes: [], edges: [] })
+
+export class WorkflowsRepo {
+  constructor(private db: Db) {}
+
+  create(input: { id: string; name: string; description?: string; now: number }): Workflow {
+    this.db
+      .prepare(
+        `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
+          draft_updated_at, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+      )
+      .run(input.id, input.name, input.description ?? null, EMPTY_GRAPH, input.now, input.now, input.now)
+    return this.getOrThrow(input.id)
+  }
+
+  list(): Workflow[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM workflows ORDER BY updated_at DESC`)
+      .all() as WorkflowRow[]
+    return rows.map(toWorkflow)
+  }
+
+  get(id: string): Workflow | null {
+    const row = this.db.prepare(`SELECT * FROM workflows WHERE id = ?`).get(id) as WorkflowRow | undefined
+    return row ? toWorkflow(row) : null
+  }
+
+  getOrThrow(id: string): Workflow {
+    const w = this.get(id)
+    if (!w) throw new Error(`workflow ${id} not found`)
+    return w
+  }
+
+  updateMeta(id: string, patch: { name?: string; description?: string | null }, now: number): Workflow {
+    const current = this.getOrThrow(id)
+    this.db
+      .prepare(`UPDATE workflows SET name = ?, description = ?, updated_at = ? WHERE id = ?`)
+      .run(
+        patch.name ?? current.name,
+        patch.description === undefined ? current.description ?? null : patch.description,
+        now,
+        id,
+      )
+    return this.getOrThrow(id)
+  }
+
+  writeDraft(id: string, draftGraph: string, now: number): Workflow {
+    this.db
+      .prepare(`UPDATE workflows SET draft_graph = ?, draft_updated_at = ?, updated_at = ? WHERE id = ?`)
+      .run(draftGraph, now, now, id)
+    return this.getOrThrow(id)
+  }
+
+  publish(id: string, now: number): Workflow {
+    const current = this.getOrThrow(id)
+    this.db
+      .prepare(`UPDATE workflows SET published_graph = ?, published_at = ?, updated_at = ? WHERE id = ?`)
+      .run(current.draftGraph, now, now, id)
+    return this.getOrThrow(id)
+  }
+
+  delete(id: string): void {
+    this.db.prepare(`DELETE FROM workflows WHERE id = ?`).run(id)
+  }
+}

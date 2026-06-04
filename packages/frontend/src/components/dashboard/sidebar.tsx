@@ -91,6 +91,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'scheduled' }
     case 'workflow-demo':
       return { page: 'workflow-demo' }
+    case 'workflows':
+      return { page: 'workflows' }
     case 'settings':
       return { page: 'settings' }
     default:

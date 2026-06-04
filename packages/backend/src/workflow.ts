@@ -1,0 +1,161 @@
+import { Hono } from 'hono'
+import { z, ZodError } from 'zod'
+import { randomUUID } from 'node:crypto'
+import { getStack, getDataDir } from './services.js'
+import { WorkflowGraphSchema } from '@anubis/workflow-runtime'
+import { WorkflowRunManager } from './workflow-run-manager.js'
+import type { ConversationStack } from '@anubis/conversation'
+
+let runManager: WorkflowRunManager | null = null
+function getRunManager(stack: ConversationStack): WorkflowRunManager {
+  if (!runManager) runManager = new WorkflowRunManager(stack, getDataDir())
+  return runManager
+}
+
+const CreateBody = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+})
+
+const PatchMetaBody = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+})
+
+const DraftBody = z.object({ draftGraph: z.string().min(2) })
+
+export const workflowRoutes = new Hono()
+
+workflowRoutes.post('/', async (c) => {
+  const body = CreateBody.parse(await c.req.json())
+  const stack = getStack()
+  const now = Date.now()
+  const wf = stack.workflows.create({ id: randomUUID(), name: body.name, description: body.description, now })
+  return c.json(wf, 201)
+})
+
+workflowRoutes.get('/', (c) => {
+  const stack = getStack()
+  const items = stack.workflows.list().map((wf) => {
+    const lastRun = stack.workflowRuns.listRunsForWorkflow(wf.id, 1)[0]
+    return {
+      id: wf.id, name: wf.name, description: wf.description,
+      hasPublished: wf.publishedGraph != null,
+      draftAhead: wf.publishedGraph != null && wf.draftGraph !== wf.publishedGraph,
+      draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt,
+      lastRun: lastRun ? { id: lastRun.id, status: lastRun.status, startedAt: lastRun.startedAt } : undefined,
+    }
+  })
+  return c.json({ items })
+})
+
+workflowRoutes.get('/:id', (c) => {
+  const stack = getStack()
+  const wf = stack.workflows.get(c.req.param('id'))
+  if (!wf) return c.json({ error: 'not_found' }, 404)
+  return c.json(wf)
+})
+
+workflowRoutes.patch('/:id', async (c) => {
+  const stack = getStack()
+  const body = PatchMetaBody.parse(await c.req.json())
+  const wf = stack.workflows.updateMeta(c.req.param('id'), body, Date.now())
+  return c.json(wf)
+})
+
+workflowRoutes.put('/:id/draft', async (c) => {
+  const stack = getStack()
+  const body = DraftBody.parse(await c.req.json())
+  WorkflowGraphSchema.parse(JSON.parse(body.draftGraph))
+  const wf = stack.workflows.writeDraft(c.req.param('id'), body.draftGraph, Date.now())
+  return c.json(wf)
+})
+
+workflowRoutes.post('/:id/publish', (c) => {
+  const stack = getStack()
+  const wf = stack.workflows.publish(c.req.param('id'), Date.now())
+  return c.json(wf)
+})
+
+workflowRoutes.delete('/:id', (c) => {
+  const stack = getStack()
+  stack.workflows.delete(c.req.param('id'))
+  return c.body(null, 204)
+})
+
+workflowRoutes.post('/:id/runs', async (c) => {
+  const stack = getStack()
+  const mgr = getRunManager(stack)
+  try {
+    const { runId } = await mgr.start(c.req.param('id'))
+    return c.json({ runId }, 201)
+  } catch (err) {
+    const code = (err as { code?: number }).code
+    const message = err instanceof Error ? err.message : String(err)
+    if (err instanceof ZodError) return c.json({ error: 'invalid_graph', issues: err.issues }, 400)
+    if (code === 409) return c.json({ error: 'already_running', message }, 409)
+    if (code === 400) return c.json({ error: 'bad_request', message }, 400)
+    return c.json({ error: 'internal', message }, 500)
+  }
+})
+
+workflowRoutes.get('/:id/runs', (c) => {
+  const stack = getStack()
+  const runs = stack.workflowRuns.listRunsForWorkflow(c.req.param('id'))
+  return c.json({ items: runs })
+})
+
+workflowRoutes.get('/runs/:runId', (c) => {
+  const stack = getStack()
+  const runId = c.req.param('runId')
+  const run = stack.workflowRuns.getRun(runId)
+  if (!run) return c.json({ error: 'not_found' }, 404)
+  const steps = stack.workflowRuns.listSteps(runId)
+  return c.json({ run, steps })
+})
+
+workflowRoutes.delete('/runs/:runId', (c) => {
+  const stack = getStack()
+  const mgr = getRunManager(stack)
+  const runId = c.req.param('runId')
+  if (mgr.isActive(runId)) {
+    mgr.cancel(runId)
+    return c.body(null, 204)
+  }
+  stack.workflowRuns.deleteRun(runId)
+  return c.body(null, 204)
+})
+
+workflowRoutes.get('/runs/:runId/events', (c) => {
+  const stack = getStack()
+  const mgr = getRunManager(stack)
+  const runId = c.req.param('runId')
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder()
+      const send = (event: unknown) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+      }
+      const sub = mgr.subscribe(runId, send)
+      for (const e of sub.replay) send(e)
+      if (!mgr.isActive(runId)) {
+        controller.close()
+        return
+      }
+      const close = () => {
+        sub.unsubscribe()
+        try { controller.close() } catch { /* already closed */ }
+      }
+      c.req.raw.signal.addEventListener('abort', close)
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+    },
+  })
+})

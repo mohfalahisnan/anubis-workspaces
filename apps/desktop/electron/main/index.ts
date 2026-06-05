@@ -108,7 +108,11 @@ app.whenReady().then(async () => {
     ? path.join(process.resourcesPath, 'app.asar.unpacked')
     : APP_ROOT
   const dataDir = path.join(app.getPath('userData'), 'anubis')
-  const backend = await startBackend(backendRoot, Boolean(VITE_DEV_SERVER_URL), dataDir)
+  // In the packaged app the vendored embedding model ships to resources/models
+  // (electron-builder extraResources). Forward that path so the backend child
+  // (ELECTRON_RUN_AS_NODE, no reliable process.resourcesPath) can load it offline.
+  const modelsDir = app.isPackaged ? path.join(process.resourcesPath, 'models') : undefined
+  const backend = await startBackend(backendRoot, Boolean(VITE_DEV_SERVER_URL), dataDir, modelsDir)
   backendUrl = backend.url
   stopBackend = backend.stop
 

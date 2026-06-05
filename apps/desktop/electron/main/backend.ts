@@ -15,7 +15,7 @@ interface BackendRuntime {
 
 let backendRuntime: Promise<BackendRuntime> | undefined
 
-export function startBackend(appRoot: string, isDev: boolean, dataDir?: string) {
+export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, modelsDir?: string) {
   backendRuntime ??= new Promise<BackendRuntime>((resolve, reject) => {
     const command = isDev ? nodeCommand() : process.execPath
     const args = isDev
@@ -32,6 +32,7 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string) 
       FORCE_COLOR: '0',
     }
     if (dataDir) backendEnv.ANUBIS_DATA_DIR = dataDir
+    if (modelsDir) backendEnv.ANUBIS_MODELS_DIR = modelsDir
 
     if (!isDev) {
       backendEnv.ELECTRON_RUN_AS_NODE = '1'

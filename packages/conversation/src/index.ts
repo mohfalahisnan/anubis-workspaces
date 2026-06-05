@@ -3,10 +3,15 @@ import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
 import {
+  ContentSimilarityItemsRepo,
   BrandWorkspacesRepo,
   BrandWorkspacesService,
   KnowledgeDocumentsRepo,
+  SimilarityIngestionService,
+  XenovaEmbedder,
+  bundledModelCacheDir,
 } from '@anubis/content-memory'
+import { CapturedPostsSimilarityIngestor } from './competitors/similarity-ingestor.js'
 import { openDatabase } from './db/client.js'
 import { runMigrations } from './db/migrate.js'
 import { MIGRATIONS } from './db/migrations/index.js'
@@ -56,6 +61,9 @@ export interface ConversationStack {
   knownWorkspaces: KnownWorkspacesRepo
   brandWorkspaces: BrandWorkspacesService
   knowledgeDocuments: KnowledgeDocumentsRepo
+  similarityItems: ContentSimilarityItemsRepo
+  similarityIngestion: SimilarityIngestionService
+  capturedPostsSimilarity: CapturedPostsSimilarityIngestor
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -79,6 +87,16 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
   const brandWorkspaces = new BrandWorkspacesService(new BrandWorkspacesRepo(db))
   const knowledgeDocuments = new KnowledgeDocumentsRepo(db)
+  // Offline-first: load the bundled model, never hit the network. In the
+  // packaged app, swap cacheDir for join(process.resourcesPath, 'models')
+  // (design §9 open item).
+  const contentEmbedder = new XenovaEmbedder({
+    cacheDir: bundledModelCacheDir(),
+    allowRemoteModels: false,
+  })
+  const similarityItems = new ContentSimilarityItemsRepo(db)
+  const similarityIngestion = new SimilarityIngestionService(similarityItems, contentEmbedder)
+  const capturedPostsSimilarity = new CapturedPostsSimilarityIngestor(db, similarityIngestion)
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -135,6 +153,9 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     knownWorkspaces: knownWorkspacesRepo,
     brandWorkspaces,
     knowledgeDocuments,
+    similarityItems,
+    similarityIngestion,
+    capturedPostsSimilarity,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()

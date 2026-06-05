@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import {
   GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
-  FolderIcon, FolderOpenIcon, PencilIcon,
+  FolderIcon, FolderOpenIcon,
 } from 'lucide-react'
 
 import type { AgentAvailability, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary } from '@anubis/shared'
@@ -355,20 +355,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     }
   }, [ensure, conversationId, navigate, pushOptimisticUser, clearStreamError, refetchWorkspaces])
 
-  const onChangeWorkdir = useCallback(async () => {
-    if (!conversationId || !conv) return
-    const next = window.prompt('Working directory for this conversation:', conv.workspacePath)
-    if (next === null) return
-    const trimmed = next.trim()
-    if (!trimmed || trimmed === conv.workspacePath) return
-    try {
-      const updated = await updateConversation(conversationId, { workspacePath: trimmed })
-      setConv(updated)
-    } catch (e) {
-      setSendError(e instanceof Error ? e.message : String(e))
-    }
-  }, [conversationId, conv])
-
   const onOpenWorkdir = useCallback(async () => {
     if (!conv?.workspacePath || !window.anubis) return
     const err = await window.anubis.shell.openPath(conv.workspacePath)
@@ -394,14 +380,15 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
                 >
                   <FolderIcon className='size-[12px] shrink-0 text-[var(--anubis-gold)]' strokeWidth={2} />
                   <span className='truncate'>{conv.workspacePath}</span>
-                  <button
-                    type='button'
-                    onClick={() => void onChangeWorkdir()}
-                    aria-label='Change working directory'
-                    className='ml-0.5 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
-                  >
-                    <PencilIcon className='size-[11px]' strokeWidth={2} />
-                  </button>
+                  <span className='ml-0.5 shrink-0'>
+                    <WorkdirPicker
+                      value={conv.workspacePath}
+                      onChange={(p) => void onWorkdirChange(p)}
+                      workspaces={workspaces}
+                      onRemove={(p) => void removeWorkspace(p)}
+                      onBrowsed={refetchWorkspaces}
+                    />
+                  </span>
                   {!!window.anubis && (
                     <button
                       type='button'

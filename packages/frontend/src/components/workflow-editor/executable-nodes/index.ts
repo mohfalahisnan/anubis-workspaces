@@ -6,6 +6,8 @@ import { OcrExtractorExecutableNode }           from './ocr-extractor'
 import { TableExecutableNode }                  from './table'
 import { ImageVideoExecutableNode }             from './image-video'
 import { AiAgentConversationExecutableNode }    from './ai-agent-conversation'
+import { MarkdownDisplayExecutableNode }        from './markdown-display'
+import { MediaDisplayExecutableNode }           from './media-display'
 
 export const executableNodeTypes: NodeTypes = {
   instagramPost:       InstagramPostExecutableNode as never,
@@ -15,6 +17,8 @@ export const executableNodeTypes: NodeTypes = {
   table:               TableExecutableNode as never,
   imageVideo:          ImageVideoExecutableNode as never,
   aiAgentConversation: AiAgentConversationExecutableNode as never,
+  markdownDisplay:     MarkdownDisplayExecutableNode as never,
+  mediaDisplay:        MediaDisplayExecutableNode as never,
 }
 
 /**
@@ -50,4 +54,6 @@ export const NODE_PALETTE = [
   { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
   { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
   { type: 'table',               label: 'Table',                  category: 'output'    },
+  { type: 'markdownDisplay',     label: 'Markdown',               category: 'output'    },
+  { type: 'mediaDisplay',        label: 'Media',                  category: 'output'    },
 ] as const satisfies ReadonlyArray<{ type: string; label: string; category: NodeCategory }>

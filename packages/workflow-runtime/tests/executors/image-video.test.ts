@@ -66,6 +66,76 @@ describe('imageVideoExecutor', () => {
     }
   })
 
+  it('accepts an upstream array of URLs', async () => {
+    const writeArtifact = vi
+      .fn()
+      .mockResolvedValueOnce('/tmp/r1/n1-0.png')
+      .mockResolvedValueOnce('/tmp/r1/n1-1.png')
+
+    const out = await imageVideoExecutor.run(
+      {
+        nodeId: 'n1',
+        config: { source: 'upstream' },
+        upstream: {
+          media: [
+            'https://example.com/a.png',
+            'https://example.com/b.png',
+          ],
+        },
+      },
+      ctx(writeArtifact),
+    )
+
+    expect(writeArtifact).toHaveBeenCalledTimes(2)
+    expect(out).toEqual({
+      kind: 'files',
+      files: [
+        { kind: 'file', path: '/tmp/r1/n1-0.png', mimeType: 'image/png', sizeBytes: 9, origin: 'url' },
+        { kind: 'file', path: '/tmp/r1/n1-1.png', mimeType: 'image/png', sizeBytes: 9, origin: 'url' },
+      ],
+    })
+  })
+
+  it('accepts an upstream JSON transformer envelope with local file paths', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'iv-test-'))
+    const firstPath = join(tmp, 'first.jpg')
+    const secondPath = join(tmp, 'second.png')
+    await writeFile(firstPath, Buffer.from([0xff, 0xd8, 0xff, 0xe0]))
+    await writeFile(secondPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+    try {
+      const writeArtifact = vi.fn()
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+      const out = await imageVideoExecutor.run(
+        {
+          nodeId: 'n1',
+          config: { source: 'upstream' },
+          upstream: {
+            media: {
+              kind: 'json',
+              value: [firstPath, secondPath],
+            },
+          },
+        },
+        ctx(writeArtifact as never),
+      )
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(writeArtifact).not.toHaveBeenCalled()
+      expect(out).toMatchObject({
+        kind: 'files',
+        files: [
+          { kind: 'file', path: firstPath, origin: 'local', sizeBytes: 4 },
+          { kind: 'file', path: secondPath, origin: 'local', sizeBytes: 4 },
+        ],
+      })
+    } finally {
+      await rm(tmp, { recursive: true, force: true })
+    }
+  })
+
   it('throws a clear error when the local path does not exist', async () => {
     await expect(
       imageVideoExecutor.run(

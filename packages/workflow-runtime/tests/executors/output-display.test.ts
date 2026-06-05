@@ -36,6 +36,26 @@ describe('mediaDisplayExecutor', () => {
     expect(out).toEqual({ kind: 'file', path: '/a/b.png', mimeType: 'image/png' })
   })
 
+  it('uses the first file from an upstream files bundle', async () => {
+    const out = await mediaDisplayExecutor.run(
+      {
+        ...base,
+        config: {},
+        upstream: {
+          up: {
+            kind: 'files',
+            files: [
+              { kind: 'file', path: '/a/first.png', mimeType: 'image/png' },
+              { kind: 'file', path: '/a/second.png', mimeType: 'image/png' },
+            ],
+          },
+        },
+      },
+      ctx,
+    )
+    expect(out).toEqual({ kind: 'file', path: '/a/first.png', mimeType: 'image/png' })
+  })
+
   it('throws when no file is found upstream', async () => {
     await expect(
       mediaDisplayExecutor.run({ ...base, config: {}, upstream: { up: { text: 'nope' } } }, ctx),

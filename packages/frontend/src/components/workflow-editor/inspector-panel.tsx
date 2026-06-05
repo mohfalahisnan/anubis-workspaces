@@ -3,6 +3,7 @@ import { useEditorStore } from './editor-store'
 import { InstagramPostConfigForm }    from './inspector/config/instagram-post-config'
 import { TransformerMediaConfigForm } from './inspector/config/transformer-media-config'
 import { TransformerBriefConfigForm } from './inspector/config/transformer-brief-config'
+import { JsonTransformerConfigForm } from './inspector/config/json-transformer-config'
 import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-config'
 import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
@@ -18,6 +19,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   instagramPost:       InstagramPostConfigForm,
   transformerMedia:    TransformerMediaConfigForm,
   transformerBrief:    TransformerBriefConfigForm,
+  jsonTransformer:     JsonTransformerConfigForm,
   ocrExtractor:        OcrExtractorConfigForm,
   table:               TableConfigForm,
   imageVideo:          ImageVideoConfigForm,

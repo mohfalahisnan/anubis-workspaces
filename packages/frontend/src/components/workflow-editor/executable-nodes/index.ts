@@ -2,6 +2,7 @@ import type { NodeTypes } from '@xyflow/react'
 import { InstagramPostExecutableNode }          from './instagram-post'
 import { TransformerMediaExecutableNode }       from './transformer-media'
 import { TransformerBriefExecutableNode }       from './transformer-brief'
+import { JsonTransformerExecutableNode }        from './json-transformer'
 import { OcrExtractorExecutableNode }           from './ocr-extractor'
 import { TableExecutableNode }                  from './table'
 import { ImageVideoExecutableNode }             from './image-video'
@@ -15,6 +16,7 @@ export const executableNodeTypes: NodeTypes = {
   instagramPost:       InstagramPostExecutableNode as never,
   transformerMedia:    TransformerMediaExecutableNode as never,
   transformerBrief:    TransformerBriefExecutableNode as never,
+  jsonTransformer:     JsonTransformerExecutableNode as never,
   ocrExtractor:        OcrExtractorExecutableNode as never,
   table:               TableExecutableNode as never,
   imageVideo:          ImageVideoExecutableNode as never,
@@ -57,6 +59,7 @@ export const NODE_PALETTE = [
   { type: 'transformerMedia',    label: 'Transformer · Media',    category: 'source'    },
   { type: 'instagramPost',       label: 'Instagram Post',         category: 'webSearch' },
   { type: 'transformerBrief',    label: 'Transformer · Brief',    category: 'tools'     },
+  { type: 'jsonTransformer',     label: 'JSON Transformer',       category: 'tools'     },
   { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
   { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
   { type: 'table',               label: 'Table',                  category: 'output'    },

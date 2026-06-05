@@ -21,6 +21,32 @@ describe('tableExecutor', () => {
     expect(out).toEqual({ kind: 'table', rows: [{ a: 1 }] })
   })
 
+  it('unwraps JSON transformer arrays as table rows', async () => {
+    const out = await tableExecutor.run(
+      {
+        nodeId: 'n1',
+        config: {},
+        upstream: {
+          transformed: {
+            kind: 'json',
+            value: [
+              { label: 'example', value: 'value 1' },
+              { label: 'second', value: 'value 2' },
+            ],
+          },
+        },
+      },
+      stubCtx,
+    )
+    expect(out).toEqual({
+      kind: 'table',
+      rows: [
+        { label: 'example', value: 'value 1' },
+        { label: 'second', value: 'value 2' },
+      ],
+    })
+  })
+
   it('falls back to staticData when upstream is empty', async () => {
     const out = await tableExecutor.run(
       { nodeId: 'n1', config: { staticData: [{ a: 1 }, { a: 2 }] }, upstream: {} },

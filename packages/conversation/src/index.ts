@@ -3,7 +3,10 @@ import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
 import {
+  ContentContextPacksRepo,
+  ContentMemoryService,
   ContentSimilarityItemsRepo,
+  ContextPackService,
   BrandWorkspacesRepo,
   BrandWorkspacesService,
   KnowledgeDocumentsRepo,
@@ -64,6 +67,7 @@ export interface ConversationStack {
   similarityItems: ContentSimilarityItemsRepo
   similarityIngestion: SimilarityIngestionService
   capturedPostsSimilarity: CapturedPostsSimilarityIngestor
+  contentMemory: ContentMemoryService
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -97,6 +101,16 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const similarityItems = new ContentSimilarityItemsRepo(db)
   const similarityIngestion = new SimilarityIngestionService(similarityItems, contentEmbedder)
   const capturedPostsSimilarity = new CapturedPostsSimilarityIngestor(db, similarityIngestion)
+  const contextPack = new ContextPackService({
+    brands: new BrandWorkspacesRepo(db),
+    docs: knowledgeDocuments,
+    items: similarityItems,
+    embedder: contentEmbedder,
+  })
+  const contentMemory = new ContentMemoryService({
+    contextPack,
+    packs: new ContentContextPacksRepo(db),
+  })
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -156,6 +170,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     similarityItems,
     similarityIngestion,
     capturedPostsSimilarity,
+    contentMemory,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()

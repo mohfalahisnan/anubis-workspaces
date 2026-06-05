@@ -4,7 +4,7 @@ import {
   FolderIcon, FolderOpenIcon, PencilIcon,
 } from 'lucide-react'
 
-import type { AgentAvailability, ConversationSummary, MessageSummary, ProfileSummary } from '@anubis/shared'
+import type { AgentAvailability, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary } from '@anubis/shared'
 
 import {
   NoCredentialsError,
@@ -29,8 +29,10 @@ import {
 import { useCatalog } from '@/lib/use-catalog'
 import { useDefaultProfile } from '@/lib/use-default-profile'
 import { useEnsureConversation } from '@/lib/use-ensure-conversation'
+import { useWorkspaces } from '@/lib/use-workspaces'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
+import { WorkdirPicker } from '@/components/composer/workdir-picker'
 
 function useProfiles() {
   const [profiles, setProfiles] = useState<ProfileSummary[]>([])
@@ -64,6 +66,8 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const [defaultProfile, setDefaultProfile] = useDefaultProfile(profiles)
   const [pickedProfile, setPickedProfile] = useState<ProfileSummary | null>(null)
   const [pickedEffort, setPickedEffort] = useState<ReasoningEffort | null>(null)
+  const { workspaces, refetch: refetchWorkspaces, remove: removeWorkspace } = useWorkspaces()
+  const [pickedWorkdir, setPickedWorkdir] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
   const [forceStopped, setForceStopped] = useState(false)
@@ -248,8 +252,37 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const tokens = Math.round(partialChars / 4)
   const isLive = !!streaming && !forceStopped
 
+  // For a brand-new conversation, default the working directory to the most
+  // recently used saved folder once the list loads. Seed only once (while the
+  // picked value is still null) so the user's later choice isn't overwritten.
+  useEffect(() => {
+    if (conversationId) return
+    if (pickedWorkdir !== null) return
+    if (workspaces.length > 0) setPickedWorkdir(workspaces[0]!.path)
+  }, [conversationId, workspaces, pickedWorkdir])
+
+  // The value the workdir picker shows. For an existing conversation it is the
+  // conversation's folder; for a new one it is the local picked value.
+  const selectedWorkdir: string | null = conversationId
+    ? conv?.workspacePath ?? null
+    : pickedWorkdir
+
+  const onWorkdirChange = useCallback(async (path: string | null) => {
+    if (!conversationId) { setPickedWorkdir(path); return }
+    // Existing conversation: "new temp folder" (null) is not meaningful — only
+    // persist a concrete folder.
+    if (!path) return
+    try {
+      const updated = await updateConversation(conversationId, { workspacePath: path })
+      setConv(updated)
+      refetchWorkspaces()
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : String(e))
+    }
+  }, [conversationId, refetchWorkspaces])
+
   const { ensure } = useEnsureConversation(
-    conversationId, selectedProfile, effectiveEffort, profileDefaultEffort,
+    conversationId, selectedProfile, effectiveEffort, profileDefaultEffort, selectedWorkdir,
   )
 
   const onProfileChange = useCallback(async (next: ProfileSummary) => {
@@ -309,7 +342,10 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     try {
       const id = await ensure(content)
       await apiSendMessage(id, content)
-      if (id !== conversationId) navigate({ page: 'active-conversation', conversationId: id })
+      if (id !== conversationId) {
+        refetchWorkspaces()
+        navigate({ page: 'active-conversation', conversationId: id })
+      }
     } catch (e) {
       if (e instanceof NoCredentialsError) {
         setLoginFor({ profileId: e.profileId, pendingContent: content })
@@ -317,7 +353,7 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       }
       setSendError(e instanceof Error ? e.message : String(e))
     }
-  }, [ensure, conversationId, navigate, pushOptimisticUser, clearStreamError])
+  }, [ensure, conversationId, navigate, pushOptimisticUser, clearStreamError, refetchWorkspaces])
 
   const onChangeWorkdir = useCallback(async () => {
     if (!conversationId || !conv) return
@@ -431,6 +467,11 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
         efforts={catalog?.reasoningEfforts ?? (['minimal', 'low', 'medium', 'high'] as const)}
         onEffortChange={(e) => void onEffortChange(e)}
         availability={catalog?.agentAvailability}
+        workspaces={workspaces}
+        selectedWorkdir={selectedWorkdir}
+        onWorkdirChange={(p) => void onWorkdirChange(p)}
+        onWorkdirRemove={(p) => void removeWorkspace(p)}
+        onWorkdirBrowsed={refetchWorkspaces}
         pendingQuote={pendingQuote}
         onConsumeQuote={() => setPendingQuote(null)}
         conversationId={conversationId ?? ''}
@@ -755,6 +796,11 @@ function Composer({
   efforts,
   onEffortChange,
   availability,
+  workspaces,
+  selectedWorkdir,
+  onWorkdirChange,
+  onWorkdirRemove,
+  onWorkdirBrowsed,
   pendingQuote,
   onConsumeQuote,
   conversationId,
@@ -771,6 +817,11 @@ function Composer({
   efforts: readonly ReasoningEffort[]
   onEffortChange: (next: ReasoningEffort) => void
   availability?: Record<'claude' | 'codex', AgentAvailability>
+  workspaces: WorkspaceSummary[]
+  selectedWorkdir: string | null
+  onWorkdirChange: (path: string | null) => void
+  onWorkdirRemove: (path: string) => void
+  onWorkdirBrowsed: () => void
   pendingQuote?: string | null
   onConsumeQuote?: () => void
   conversationId: string
@@ -903,6 +954,14 @@ function Composer({
             value={effort}
             isOverride={effortIsOverride}
             onChange={onEffortChange}
+            disabled={streaming}
+          />
+          <WorkdirPicker
+            value={selectedWorkdir}
+            onChange={onWorkdirChange}
+            workspaces={workspaces}
+            onRemove={onWorkdirRemove}
+            onBrowsed={onWorkdirBrowsed}
             disabled={streaming}
           />
         </div>

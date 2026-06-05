@@ -38,6 +38,6 @@ export class XenovaEmbedder implements Embedder {
   async embed(text: string): Promise<Float32Array> {
     const extractor = await this.load()
     const output = await extractor(text, { pooling: 'mean', normalize: true })
-    return Float32Array.from(output.data as Iterable<number>)
+    return Float32Array.from(output.data)
   }
 }

@@ -9,9 +9,9 @@ import { getCatalog } from '@/api'
 import { useCatalog, __resetCatalogCacheForTests } from '@/lib/use-catalog'
 
 const CATALOG = {
-  agents: ['claude', 'codex'] as const,
-  models: { claude: [], codex: [] },
-  defaultModel: { claude: 'claude-sonnet-4-6', codex: 'gpt-5.4' },
+  agents: ['claude', 'codex', 'antigravity'] as const,
+  models: { claude: [], codex: [], antigravity: [] },
+  defaultModel: { claude: 'claude-sonnet-4-6', codex: 'gpt-5.4', antigravity: 'gemini-3.1-pro' },
   reasoningEfforts: ['minimal', 'low', 'medium', 'high'] as const,
   defaultReasoningEffort: 'medium' as const,
 }

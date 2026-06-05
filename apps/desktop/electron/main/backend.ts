@@ -58,20 +58,32 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string) 
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk
 
-      for (const line of stdout.split(/\r?\n/).slice(0, -1)) {
+      // Process whole lines; keep any trailing partial line buffered.
+      const lines = stdout.split(/\r?\n/)
+      stdout = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.trim()) continue
+
         const message = parseReadyMessage(line)
-        if (!message || settled) continue
+        if (message) {
+          if (!settled) {
+            settled = true
+            clearTimeout(timeout)
+            resolve({
+              process: child,
+              url: message.url,
+              stop: () => child.kill(),
+            })
+          }
+          // Don't also print the ready handshake JSON.
+          continue
+        }
 
-        settled = true
-        clearTimeout(timeout)
-        resolve({
-          process: child,
-          url: message.url,
-          stop: () => child.kill(),
-        })
+        // Forward everything else (request logs, console.log) to the console
+        // so backend activity is visible alongside stderr.
+        console.log(`[backend] ${line}`)
       }
-
-      stdout = stdout.includes('\n') ? stdout.split(/\r?\n/).at(-1) ?? '' : stdout
     })
 
     child.stderr.setEncoding('utf8')

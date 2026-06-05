@@ -491,11 +491,17 @@ function SourceBadge({ source }: { source: ProfileSummary['source'] }) {
   )
 }
 
+const AGENT_LABEL: Record<ProfileSummary['config']['agent'], string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  antigravity: 'Antigravity',
+}
+
 function AgentChip({ agent }: { agent: ProfileSummary['config']['agent'] }) {
   return (
     <span className='inline-flex h-[22px] items-center gap-1.5 rounded-md border border-border bg-background px-2 font-mono text-[11px] text-foreground'>
       <span className='inline-block size-1.5 rounded-full bg-[var(--anubis-gold)]' />
-      {agent === 'claude' ? 'Claude' : 'Codex'}
+      {AGENT_LABEL[agent]}
     </span>
   )
 }

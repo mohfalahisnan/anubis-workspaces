@@ -18,7 +18,7 @@ export interface StreamRelayOpts {
   sessions: AgentSessionsRepo
   sse: SseBroadcaster
   cronHandler: (cmd: CronCommand, conversationId: string) => Promise<string>
-  agent?: 'claude' | 'codex'
+  agent?: 'claude' | 'codex' | 'antigravity'
   flushEvery?: number
 }
 

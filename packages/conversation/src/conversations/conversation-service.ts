@@ -8,7 +8,7 @@ import { hasCredentials } from '../profiles/agent-home.js'
 
 export class NoCredentialsError extends Error {
   readonly code = NO_CREDENTIALS_ERROR_CODE
-  constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex') {
+  constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex' | 'antigravity') {
     super(`no credentials for profile ${profileId} (${agent})`)
     this.name = 'NoCredentialsError'
   }
@@ -43,7 +43,7 @@ export interface CreateConversationInput {
   profileId?: string
   override?: ProfileOverride
   workspacePath?: string
-  agent?: 'claude' | 'codex'
+  agent?: 'claude' | 'codex' | 'antigravity'
 }
 
 export interface SendMessageInput {
@@ -347,7 +347,7 @@ export class ConversationService {
    * Returns the on-disk path to a profile's isolated agent home,
    * regardless of whether it has been created yet.
    */
-  agentHomePath(profileId: string, agent: 'claude' | 'codex'): string {
+  agentHomePath(profileId: string, agent: 'claude' | 'codex' | 'antigravity'): string {
     return homePathFor(this.deps.agentHomeRoot, profileId, agent)
   }
 
@@ -356,14 +356,14 @@ export class ConversationService {
    * uses this profile will create a fresh one — auth tokens, MCP
    * config, and session history all reset.
    */
-  resetProfileHome(profileId: string, agent: 'claude' | 'codex'): { existed: boolean } {
+  resetProfileHome(profileId: string, agent: 'claude' | 'codex' | 'antigravity'): { existed: boolean } {
     return resetProfileHome(this.deps.agentHomeRoot, profileId, agent)
   }
 
   private resolveOrThrow(
     profileId: string | null,
     override: ProfileOverride | undefined,
-    agentHint: 'claude' | 'codex' | undefined,
+    agentHint: 'claude' | 'codex' | 'antigravity' | undefined,
   ): ResolvedProfile {
     const finalOverride: ProfileOverride = { ...(override ?? {}) }
     if (agentHint && !profileId && !finalOverride.agent) finalOverride.agent = agentHint

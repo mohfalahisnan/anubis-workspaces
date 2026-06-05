@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import type { AgentKind } from '@anubis/shared'
 import { AgentNotInstalledError, getProfile, openLoginTerminal } from '@/api'
 import { Loader2Icon, TerminalIcon } from 'lucide-react'
 
@@ -10,12 +11,28 @@ interface LoginModalProps {
   onSuccess: () => void
 }
 
+/** Per-agent install guidance shown when the CLI isn't on PATH. */
+const NOT_INSTALLED_COPY: Record<AgentKind, { title: string; body: string }> = {
+  claude: {
+    title: 'Claude Code CLI',
+    body: 'Install Claude Code (https://docs.claude.com/claude-code) and make sure `claude` is on your PATH, then close and reopen this app.',
+  },
+  codex: {
+    title: 'Codex CLI',
+    body: 'Install the Codex CLI (npm i -g @openai/codex) and make sure `codex` is on your PATH, then close and reopen this app.',
+  },
+  antigravity: {
+    title: 'Antigravity CLI',
+    body: 'Install the Antigravity CLI (https://antigravity.google/docs/cli-overview) and make sure `agy` is on your PATH, then close and reopen this app.',
+  },
+}
+
 type Status =
   | { kind: 'connecting'; message?: string }
   | { kind: 'running' }
   | { kind: 'logged-in' }
   | { kind: 'failed'; message: string }
-  | { kind: 'not-installed'; agent: 'claude' | 'codex'; message: string }
+  | { kind: 'not-installed'; agent: AgentKind; message: string }
 
 export function LoginModal({ profileId, open, onClose, onSuccess }: LoginModalProps) {
   const [status, setStatus] = useState<Status>({ kind: 'connecting' })
@@ -106,12 +123,10 @@ export function LoginModal({ profileId, open, onClose, onSuccess }: LoginModalPr
           {status.kind === 'not-installed' ? (
             <>
               <h3 className='mt-4 text-[16px] font-semibold text-foreground'>
-                {status.agent === 'codex' ? 'Codex CLI' : 'Claude Code CLI'} not installed
+                {NOT_INSTALLED_COPY[status.agent].title} not installed
               </h3>
               <p className='mt-2.5 max-w-[380px] text-[13.5px] leading-relaxed text-muted-foreground'>
-                {status.agent === 'codex'
-                  ? 'Install the Codex CLI (npm i -g @openai/codex) and make sure `codex` is on your PATH, then close and reopen this app.'
-                  : 'Install Claude Code (https://docs.claude.com/claude-code) and make sure `claude` is on your PATH, then close and reopen this app.'}
+                {NOT_INSTALLED_COPY[status.agent].body}
               </p>
             </>
           ) : (

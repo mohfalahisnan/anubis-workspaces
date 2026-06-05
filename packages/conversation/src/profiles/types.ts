@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-export const AgentSchema = z.enum(['claude', 'codex'])
+export const AgentSchema = z.enum(['claude', 'codex', 'antigravity'])
+export type AgentKind = z.infer<typeof AgentSchema>
 export const ReasoningEffortSchema = z.enum(['minimal', 'low', 'medium', 'high'])
 export const SandboxModeSchema = z.enum(['read-only', 'workspace-write', 'danger-full-access'])
 export const ApprovalPolicySchema = z.enum(['untrusted', 'on-request', 'on-failure', 'never'])

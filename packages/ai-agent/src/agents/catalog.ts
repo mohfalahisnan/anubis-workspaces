@@ -1,6 +1,6 @@
-export type Agent = 'codex' | 'claude'
+export type Agent = 'codex' | 'claude' | 'antigravity'
 
-export const AGENTS: readonly Agent[] = ['codex', 'claude']
+export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity']
 
 export type ModelCategory =
   | 'recommended'
@@ -63,6 +63,33 @@ export const MODELS: Record<Agent, ModelInfo[]> = {
       description: 'Haiku 4.5 for fast, lightweight tasks and subagents.',
     },
   ],
+  antigravity: [
+    {
+      id: 'gemini-3.1-pro',
+      category: 'recommended',
+      description: 'Gemini 3.1 Pro for complex reasoning and multi-file agentic coding in the Antigravity CLI.',
+    },
+    {
+      id: 'gemini-3.5-flash',
+      category: 'recommended',
+      description: 'Gemini 3.5 Flash for fast, low-latency coding iteration.',
+    },
+    {
+      id: 'claude-opus',
+      category: 'alternative',
+      description: 'Anthropic Claude Opus served through Antigravity for deep reasoning tasks.',
+    },
+    {
+      id: 'claude-sonnet',
+      category: 'alternative',
+      description: 'Anthropic Claude Sonnet served through Antigravity for balanced cost and quality.',
+    },
+    {
+      id: 'gpt-oss-120b',
+      category: 'alternative',
+      description: 'Open-weight GPT-OSS 120B model available through Antigravity.',
+    },
+  ],
 }
 
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
@@ -71,6 +98,7 @@ export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
 export const DEFAULT_MODEL: Record<Agent, string> = {
   codex: 'gpt-5.5',
   claude: 'claude-sonnet-4-6',
+  antigravity: 'gemini-3.1-pro',
 }
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium'

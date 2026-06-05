@@ -13,7 +13,7 @@ describe('BUILTIN_PROFILES', () => {
 
   it('contains the documented seed ids', () => {
     const ids = new Set(BUILTIN_PROFILES.map(p => p.id))
-    for (const id of ['claude-coding', 'claude-yolo', 'claude-research', 'codex-coding', 'codex-yolo']) {
+    for (const id of ['claude-coding', 'claude-yolo', 'claude-research', 'codex-coding', 'codex-yolo', 'antigravity-coding', 'antigravity-yolo']) {
       expect(ids.has(id), `missing builtin profile ${id}`).toBe(true)
     }
   })

@@ -6,6 +6,7 @@ import {
   hasCredentials,
   copyHomeFromSystem,
   copyProfileHome,
+  envFor,
   writeProfileInstructions,
   writeProfileSkills,
   CREDENTIAL_FILE,
@@ -40,6 +41,19 @@ describe('hasCredentials', () => {
     mkdirSync(home, { recursive: true })
     writeFileSync(join(home, CREDENTIAL_FILE.codex), '{}')
     expect(hasCredentials('p1', 'codex', root)).toBe(true)
+  })
+
+  it('always reports antigravity as authed (creds live in the OS keyring, not a file)', () => {
+    // No file is planted and the home does not exist — agy auth is global.
+    expect(hasCredentials('p1', 'antigravity', root)).toBe(true)
+  })
+})
+
+describe('envFor', () => {
+  it('injects the per-agent config-dir env var', () => {
+    expect(envFor('claude', '/home/p')).toEqual({ CLAUDE_CONFIG_DIR: '/home/p' })
+    expect(envFor('codex', '/home/p')).toEqual({ CODEX_HOME: '/home/p' })
+    expect(envFor('antigravity', '/home/p')).toEqual({ GEMINI_DIR: '/home/p' })
   })
 })
 
@@ -116,15 +130,18 @@ describe('copyProfileHome', () => {
 })
 
 describe('writeProfileInstructions', () => {
-  it('writes CLAUDE.md with the content and AGENTS.md as a pointer', () => {
+  it('writes CLAUDE.md + GEMINI.md with the content and AGENTS.md as a pointer', () => {
     const home = join(root, 'p1', 'claude')
     const wrote = writeProfileInstructions(home, 'Be terse. Always cite sources.')
     expect(wrote).toBe(true)
 
     const claude = readFileSync(join(home, 'CLAUDE.md'), 'utf8')
     const agents = readFileSync(join(home, 'AGENTS.md'), 'utf8')
+    const gemini = readFileSync(join(home, 'GEMINI.md'), 'utf8')
 
     expect(claude).toContain('Be terse. Always cite sources.')
+    // agy reads GEMINI.md, so it carries the full content (like CLAUDE.md).
+    expect(gemini).toContain('Be terse. Always cite sources.')
     // AGENTS.md must NOT duplicate the instructions; it just points to CLAUDE.md
     expect(agents).not.toContain('Be terse')
     expect(agents.toLowerCase()).toContain('claude.md')

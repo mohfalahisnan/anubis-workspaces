@@ -5,7 +5,7 @@ import type { ResolvedProfile } from '../profiles/types.js'
 
 export interface AgentTask {
   conversationId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'antigravity'
   status: 'pending' | 'running' | 'finished' | 'error'
   agentSessionId?: string
   lastActivityAt: number
@@ -16,7 +16,7 @@ export interface AgentTask {
 
 export interface ConversationLite {
   id: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'antigravity'
   workspacePath: string
 }
 

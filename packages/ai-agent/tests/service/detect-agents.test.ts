@@ -6,6 +6,7 @@ const ORIG_ENV = { ...process.env }
 beforeEach(() => {
   delete process.env.ANUBIS_CLAUDE_COMMAND
   delete process.env.ANUBIS_CODEX_COMMAND
+  delete process.env.ANUBIS_ANTIGRAVITY_COMMAND
 })
 
 afterEach(() => {
@@ -30,12 +31,24 @@ describe('detectAgents', () => {
     expect(r.codex.available).toBe(true)
   })
 
-  it('returns a well-formed result for both agents when no env override is set', () => {
+  it('reports env-override source when ANUBIS_ANTIGRAVITY_COMMAND is set', () => {
+    process.env.ANUBIS_ANTIGRAVITY_COMMAND = '/custom/path/agy'
+    const r = detectAgents()
+    expect(r.antigravity).toEqual({
+      available: true,
+      path: '/custom/path/agy',
+      source: 'env-override',
+    })
+  })
+
+  it('returns a well-formed result for all agents when no env override is set', () => {
     const r = detectAgents()
     expect(r.claude.source).toBe('detected')
     expect(r.codex.source).toBe('detected')
+    expect(r.antigravity.source).toBe('detected')
     expect(typeof r.claude.available).toBe('boolean')
     expect(typeof r.codex.available).toBe('boolean')
+    expect(typeof r.antigravity.available).toBe('boolean')
   })
 })
 

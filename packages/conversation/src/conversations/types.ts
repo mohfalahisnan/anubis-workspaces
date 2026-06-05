@@ -17,7 +17,7 @@ export type ConversationExtra = z.infer<typeof ConversationExtraSchema>
 export interface Conversation {
   id: string
   title: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'antigravity'
   status: ConversationStatus
   profileId?: string
   workspacePath: string
@@ -53,7 +53,7 @@ export interface Artifact {
 
 export interface AgentSession {
   conversationId: string
-  agent: 'claude' | 'codex'
+  agent: 'claude' | 'codex' | 'antigravity'
   agentSessionId: string
   model?: string
   updatedAt: number

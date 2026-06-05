@@ -12,13 +12,17 @@ describe('backend smoke — profiles + conversation create', () => {
     await shutdownStack()
   })
 
-  it('GET /profiles lists the 5 builtin profiles', async () => {
+  it('GET /profiles lists the builtin profiles', async () => {
     const { default: app } = await import('../src/app.js')
     const res = await app.request('/profiles')
     expect(res.status).toBe(200)
     const body = (await res.json()) as { items: { id: string }[] }
     const ids = body.items.map(p => p.id)
-    for (const id of ['claude-coding', 'claude-yolo', 'claude-research', 'codex-coding', 'codex-yolo']) {
+    for (const id of [
+      'claude-coding', 'claude-yolo', 'claude-research',
+      'codex-coding', 'codex-yolo',
+      'antigravity-coding', 'antigravity-yolo',
+    ]) {
       expect(ids).toContain(id)
     }
   })

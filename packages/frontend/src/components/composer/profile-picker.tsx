@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { Popover } from 'radix-ui'
-import type { AgentAvailability, ProfileSummary } from '@anubis/shared'
+import type { AgentAvailability, AgentKind, ProfileSummary } from '@anubis/shared'
 import { cn } from '@/lib/utils'
 
 interface ProfilePickerProps {
@@ -11,7 +11,7 @@ interface ProfilePickerProps {
   disabled?: boolean
   /** Per-agent availability. When the selected profile's agent is
    *  unavailable the picker dims the corresponding rows. */
-  availability?: Record<'claude' | 'codex', AgentAvailability>
+  availability?: Record<AgentKind, AgentAvailability>
 }
 
 export function ProfilePicker({ profiles, value, onChange, disabled, availability }: ProfilePickerProps) {
@@ -90,7 +90,7 @@ function Group({
   profiles: ProfileSummary[]
   valueId: string | undefined
   onPick: (p: ProfileSummary) => void
-  availability?: Record<'claude' | 'codex', AgentAvailability>
+  availability?: Record<AgentKind, AgentAvailability>
 }) {
   return (
     <div className='py-1'>
@@ -100,7 +100,7 @@ function Group({
       {profiles.map((p) => {
         const model = typeof p.config.model === 'string' ? p.config.model : ''
         const selected = p.id === valueId
-        const agent = p.config.agent as 'claude' | 'codex'
+        const agent = p.config.agent as AgentKind
         const unavailable = availability ? !availability[agent].available : false
         return (
           <button

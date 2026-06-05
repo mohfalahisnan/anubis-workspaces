@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { platform } from 'node:os'
-import { extname } from 'node:path'
+import { existsSync } from 'node:fs'
+import { homedir, platform } from 'node:os'
+import { extname, join } from 'node:path'
 
 export interface AgentAvailability {
   available: boolean
@@ -54,9 +55,39 @@ function lookup(binary: string): AgentAvailability {
   return { available: false, source: 'detected' }
 }
 
-export function detectAgents(): Record<'claude' | 'codex', AgentAvailability> {
+/**
+ * Well-known `agy` install locations to probe when it isn't on PATH. The
+ * Antigravity installer drops the binary here but does not always add it to
+ * PATH (the user must run `agy install`), so a bare `where agy` / `which agy`
+ * misses it. Checked only as a fallback after the PATH lookup.
+ */
+function antigravityFallbackPaths(): string[] {
+  const home = homedir()
+  if (IS_WIN) {
+    const localAppData = process.env.LOCALAPPDATA ?? join(home, 'AppData', 'Local')
+    return [join(localAppData, 'agy', 'bin', 'agy.exe')]
+  }
+  return [
+    join(home, '.local', 'bin', 'agy'),
+    join(home, '.agy', 'bin', 'agy'),
+    '/usr/local/bin/agy',
+    '/opt/homebrew/bin/agy',
+  ]
+}
+
+function lookupAntigravity(): AgentAvailability {
+  const onPath = lookup('agy')
+  if (onPath.available) return onPath
+  for (const p of antigravityFallbackPaths()) {
+    if (existsSync(p)) return { available: true, path: p, source: 'detected' }
+  }
+  return { available: false, source: 'detected' }
+}
+
+export function detectAgents(): Record<'claude' | 'codex' | 'antigravity', AgentAvailability> {
   const claudeCmd = process.env.ANUBIS_CLAUDE_COMMAND
   const codexCmd = process.env.ANUBIS_CODEX_COMMAND
+  const antigravityCmd = process.env.ANUBIS_ANTIGRAVITY_COMMAND
   return {
     claude: claudeCmd
       ? { available: true, path: claudeCmd, source: 'env-override' }
@@ -64,5 +95,8 @@ export function detectAgents(): Record<'claude' | 'codex', AgentAvailability> {
     codex: codexCmd
       ? { available: true, path: codexCmd, source: 'env-override' }
       : lookup('codex'),
+    antigravity: antigravityCmd
+      ? { available: true, path: antigravityCmd, source: 'env-override' }
+      : lookupAntigravity(),
   }
 }

@@ -68,11 +68,35 @@ function extractClaudeUsage(ev: any): ExtractedUsage {
   }
 }
 
+function extractAntigravityUsage(raw: any): ExtractedUsage {
+  // `agy` serves Gemini, Claude and GPT-OSS models, so usage keys vary. Read
+  // the common aliases defensively; `raw` is whatever the `done` event carried
+  // (the parsed `usage` object, or the whole result object as a fallback).
+  const u = raw?.usage ?? raw ?? {}
+  const input = n(u.input_tokens ?? u.prompt_tokens ?? u.inputTokens ?? u.promptTokenCount)
+  const cached = n(u.cached_input_tokens ?? u.cache_read_input_tokens ?? u.cachedContentTokenCount ?? 0)
+  const output = n(u.output_tokens ?? u.completion_tokens ?? u.outputTokens ?? u.candidatesTokenCount)
+  const reasoning = n(u.reasoning_tokens ?? u.thinking_tokens ?? u.thoughtsTokenCount ?? 0)
+  const total = n(u.total_tokens ?? u.totalTokenCount ?? input + cached + output + reasoning)
+
+  return {
+    model: raw?.model ?? u.model,
+    inputTokens: input,
+    cachedInputTokens: cached,
+    outputTokens: output,
+    reasoningTokens: reasoning,
+    totalTokens: total,
+    raw: { usage: u },
+  }
+}
+
 export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
   switch (agent) {
     case 'codex':
       return extractCodexUsage(raw)
     case 'claude':
       return extractClaudeUsage(raw)
+    case 'antigravity':
+      return extractAntigravityUsage(raw)
   }
 }

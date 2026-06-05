@@ -118,8 +118,11 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
       ...form,
       agent,
       model: known ? form.model : defaultModel,
-      // Reset runtime knobs that don't apply to the new agent
-      permissionMode: agent === 'claude' ? form.permissionMode : '',
+      // Reset runtime knobs that don't apply to the new agent. Permission mode
+      // applies to claude and antigravity (agy maps bypassPermissions onto
+      // --dangerously-skip-permissions); sandbox/approval are codex-only;
+      // the Claude CLI profile is claude-only.
+      permissionMode: agent === 'claude' || agent === 'antigravity' ? form.permissionMode : '',
       sandboxMode: agent === 'codex' ? form.sandboxMode : '',
       approvalPolicy: agent === 'codex' ? form.approvalPolicy : '',
       claudeCliProfile: agent === 'claude' ? form.claudeCliProfile : '',
@@ -193,6 +196,9 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
   const isBuiltin = profile.source === 'builtin'
   const models = catalog.models[form.agent]
   const isClaude = form.agent === 'claude'
+  const isCodex = form.agent === 'codex'
+  // claude and antigravity both expose a permission-mode knob.
+  const hasPermissionMode = isClaude || form.agent === 'antigravity'
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -318,6 +324,7 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
               options={[
                 { value: 'claude', label: 'Claude' },
                 { value: 'codex', label: 'Codex' },
+                { value: 'antigravity', label: 'Antigravity' },
               ]}
             />
           </Field>
@@ -348,9 +355,17 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
 
         {/* Runtime — agent-conditional */}
         <Section title='Runtime'>
-          {isClaude ? (
+          {!isCodex ? (
             <>
-              <Field label='Permission mode' htmlFor='profile-perm' hint='How Claude treats edits and shell calls.'>
+              <Field
+                label='Permission mode'
+                htmlFor='profile-perm'
+                hint={
+                  isClaude
+                    ? 'How Claude treats edits and shell calls.'
+                    : 'bypassPermissions auto-approves all tool calls (agy --dangerously-skip-permissions). Other modes prompt as usual.'
+                }
+              >
                 <select
                   id='profile-perm'
                   value={form.permissionMode}
@@ -364,20 +379,22 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
                 </select>
               </Field>
 
-              <Field
-                label='Claude CLI profile'
-                htmlFor='profile-cliprofile'
-                hint='Optional: a named profile from your Claude CLI config (passed to --profile).'
-              >
-                <input
-                  id='profile-cliprofile'
-                  type='text'
-                  value={form.claudeCliProfile}
-                  onChange={(e) => update('claudeCliProfile', e.target.value)}
-                  placeholder='leave empty to use the default'
-                  className={textInput}
-                />
-              </Field>
+              {isClaude && (
+                <Field
+                  label='Claude CLI profile'
+                  htmlFor='profile-cliprofile'
+                  hint='Optional: a named profile from your Claude CLI config (passed to --profile).'
+                >
+                  <input
+                    id='profile-cliprofile'
+                    type='text'
+                    value={form.claudeCliProfile}
+                    onChange={(e) => update('claudeCliProfile', e.target.value)}
+                    placeholder='leave empty to use the default'
+                    className={textInput}
+                  />
+                </Field>
+              )}
             </>
           ) : (
             <>
@@ -470,7 +487,7 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
           hint={
             isClaude
               ? 'Passed to Claude as --allowedTools / --disallowedTools. One pattern per line (e.g. Bash, Edit, mcp__github__*).'
-              : 'Codex does not honour these directly yet; left here for parity with Claude profiles.'
+              : 'Only Claude honours these directly today; stored for parity with Claude profiles.'
           }
         >
           <Field
@@ -585,12 +602,15 @@ function buildConfigPatch(form: FormState): Record<string, unknown> {
     model: form.model,
     reasoningEffort: form.reasoningEffort,
   }
-  if (form.agent === 'claude') {
-    if (form.permissionMode) out.permissionMode = form.permissionMode
-    if (form.claudeCliProfile.trim()) out.claudeCliProfile = form.claudeCliProfile.trim()
-  } else {
+  if (form.agent === 'codex') {
     if (form.sandboxMode) out.sandboxMode = form.sandboxMode
     if (form.approvalPolicy) out.approvalPolicy = form.approvalPolicy
+  } else {
+    // claude + antigravity both carry a permission mode.
+    if (form.permissionMode) out.permissionMode = form.permissionMode
+    if (form.agent === 'claude' && form.claudeCliProfile.trim()) {
+      out.claudeCliProfile = form.claudeCliProfile.trim()
+    }
   }
   if (form.appendSystemPrompt.trim()) {
     out.appendSystemPrompt = form.appendSystemPrompt

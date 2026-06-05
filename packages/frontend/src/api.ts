@@ -2,6 +2,7 @@ import {
   AGENT_NOT_INSTALLED_ERROR_CODE,
   NO_CREDENTIALS_ERROR_CODE,
   type AgentAvailability,
+  type AgentKind,
   type AgentNotInstalledErrorPayload,
   type ApiHealthResponse,
   type AppConfig,
@@ -41,7 +42,7 @@ import {
 
 export class NoCredentialsError extends Error {
   readonly code = NO_CREDENTIALS_ERROR_CODE
-  constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex') {
+  constructor(public readonly profileId: string, public readonly agent: AgentKind) {
     super(`no credentials for profile ${profileId} (${agent})`)
     this.name = 'NoCredentialsError'
   }
@@ -49,7 +50,7 @@ export class NoCredentialsError extends Error {
 
 export class AgentNotInstalledError extends Error {
   readonly code = AGENT_NOT_INSTALLED_ERROR_CODE
-  constructor(public readonly agent: 'claude' | 'codex', message?: string) {
+  constructor(public readonly agent: AgentKind, message?: string) {
     super(message ?? `${agent} CLI is not installed (not on PATH).`)
     this.name = 'AgentNotInstalledError'
   }
@@ -229,12 +230,12 @@ export interface ModelInfo {
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
 export interface AgentCatalog {
-  agents: readonly ('claude' | 'codex')[]
-  models: Record<'claude' | 'codex', ModelInfo[]>
-  defaultModel: Record<'claude' | 'codex', string>
+  agents: readonly AgentKind[]
+  models: Record<AgentKind, ModelInfo[]>
+  defaultModel: Record<AgentKind, string>
   reasoningEfforts: readonly ReasoningEffort[]
   defaultReasoningEffort: ReasoningEffort
-  agentAvailability: Record<'claude' | 'codex', AgentAvailability>
+  agentAvailability: Record<AgentKind, AgentAvailability>
 }
 
 export async function getCatalog(): Promise<AgentCatalog> {

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { logger } from 'hono/logger'
 import { ZodError } from 'zod'
 import type { ApiHealthResponse } from '@anubis/shared'
 import { researchCrawlerRoutes } from './research-crawler.js'
@@ -16,6 +17,12 @@ import { workflowRoutes } from './workflow.js'
 import { workspaceRoutes } from './workspaces.js'
 
 const app = new Hono()
+
+// Request logging — prints "--> METHOD /path" and "<-- status (ms)" for every
+// request. In the desktop app these land in the Electron main console (the
+// terminal running `pnpm dev`) because the main process forwards backend
+// stdout; see apps/desktop/electron/main/backend.ts.
+app.use('*', logger())
 
 app.use('*', cors({
   origin: (origin) => {
@@ -55,6 +62,7 @@ app.route('/workspaces', workspaceRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {
+    console.warn(`[backend] 400 ${c.req.method} ${c.req.path} — invalid request body`)
     return c.json({
       ok: false,
       error: {
@@ -65,6 +73,7 @@ app.onError((error, c) => {
     }, 400)
   }
 
+  console.error(`[backend] 500 ${c.req.method} ${c.req.path} —`, error)
   return c.json({
     ok: false,
     error: {

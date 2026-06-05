@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { createAiAgentService } from '@anubis/ai-agent'
 
-const agentSchema = z.enum(['codex', 'claude'])
+const agentSchema = z.enum(['codex', 'claude', 'antigravity'])
 const reasoningEffortSchema = z.enum(['minimal', 'low', 'medium', 'high'])
 const sandboxModeSchema = z.enum(['read-only', 'workspace-write', 'danger-full-access'])
 const approvalPolicySchema = z.enum(['untrusted', 'on-request', 'on-failure', 'never'])

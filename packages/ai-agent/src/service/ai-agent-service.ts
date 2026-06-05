@@ -5,12 +5,14 @@ import { extractUsage, type ExtractedUsage } from '../agents/usage.js'
 import { CodexAgent } from '../agents/codex/run.js'
 import { CodexPool } from '../agents/codex/pool.js'
 import { ClaudeAgent } from '../agents/claude/runner.js'
+import { AntigravityAgent } from '../agents/antigravity/runner.js'
 import type { AgentEventMap, AgentStream } from '../events/stream.js'
 import { detectAgents, type AgentAvailability } from './detect-agents.js'
 
 export interface AiAgentServiceOptions {
   codexCommand?: string
   claudeCommand?: string
+  antigravityCommand?: string
   codexIdleMs?: number
   env?: NodeJS.ProcessEnv
 }
@@ -57,7 +59,8 @@ export interface RunAgentResult {
 export class AiAgentService {
   private codex: CodexAgent
   private claude: ClaudeAgent
-  private availability: Record<'claude' | 'codex', AgentAvailability>
+  private antigravity: AntigravityAgent
+  private availability: Record<'claude' | 'codex' | 'antigravity', AgentAvailability>
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
@@ -74,6 +77,10 @@ export class AiAgentService {
       opts.claudeCommand
       ?? process.env.ANUBIS_CLAUDE_COMMAND
       ?? this.availability.claude.path
+    const antigravityCommand =
+      opts.antigravityCommand
+      ?? process.env.ANUBIS_ANTIGRAVITY_COMMAND
+      ?? this.availability.antigravity.path
 
     const pool = new CodexPool({
       idleMs: opts.codexIdleMs ?? 10 * 60 * 1000,
@@ -88,6 +95,10 @@ export class AiAgentService {
     this.codex = new CodexAgent(pool)
     this.claude = new ClaudeAgent({
       command: claudeCommand,
+      env,
+    })
+    this.antigravity = new AntigravityAgent({
+      command: antigravityCommand,
       env,
     })
   }
@@ -138,6 +149,30 @@ export class AiAgentService {
         agentSessionId,
         stream,
         cancel: () => this.codex.cancel({ workspaceId, sessionId }),
+      }
+    }
+
+    if (input.agent === 'antigravity') {
+      // agy exposes a single `--dangerously-skip-permissions` flag, so both the
+      // direct `yolo` toggle and a profile's `bypassPermissions` mode map to it.
+      const skipPermissions = input.yolo === true || input.permissionMode === 'bypassPermissions'
+      const { emitter, cancel } = await this.antigravity.run({
+        workspaceId,
+        sessionId,
+        conversationId: input.prevAgentSessionId,
+        cwd: input.cwd,
+        prompt: input.prompt,
+        model: input.model,
+        yolo: skipPermissions,
+        appendSystemPrompt: input.appendSystemPrompt,
+        extraEnv: input.extraEnv,
+      })
+
+      return {
+        workspaceId,
+        sessionId,
+        stream: emitter,
+        cancel,
       }
     }
 

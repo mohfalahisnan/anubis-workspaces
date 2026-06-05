@@ -4,7 +4,7 @@ import {
   FolderIcon, FolderOpenIcon,
 } from 'lucide-react'
 
-import type { AgentAvailability, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary } from '@anubis/shared'
+import type { AgentAvailability, AgentKind, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary } from '@anubis/shared'
 
 import {
   NoCredentialsError,
@@ -33,6 +33,13 @@ import { useWorkspaces } from '@/lib/use-workspaces'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
+
+/** Friendly install target per agent, used in the composer's "not on PATH" hint. */
+const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex CLI',
+  antigravity: 'the Antigravity CLI',
+}
 
 function useProfiles() {
   const [profiles, setProfiles] = useState<ProfileSummary[]>([])
@@ -803,7 +810,7 @@ function Composer({
   effortIsOverride: boolean
   efforts: readonly ReasoningEffort[]
   onEffortChange: (next: ReasoningEffort) => void
-  availability?: Record<'claude' | 'codex', AgentAvailability>
+  availability?: Record<AgentKind, AgentAvailability>
   workspaces: WorkspaceSummary[]
   selectedWorkdir: string | null
   onWorkdirChange: (path: string | null) => void
@@ -863,12 +870,12 @@ function Composer({
     commit()
   }
 
-  const agent = profile?.config.agent as 'claude' | 'codex' | undefined
+  const agent = profile?.config.agent as AgentKind | undefined
   const agentUnavailable =
     availability && agent ? !availability[agent].available : false
   const installHint =
     agentUnavailable && agent
-      ? `\`${agent}\` not found on PATH. Install ${agent === 'claude' ? 'Claude Code' : 'Codex CLI'} first.`
+      ? `\`${agent}\` not found on PATH. Install ${AGENT_INSTALL_LABEL[agent]} first.`
       : null
 
   const hasContent = value.trim().length > 0 || quotes.length > 0

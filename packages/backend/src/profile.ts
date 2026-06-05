@@ -7,7 +7,7 @@ import { AGENT_NOT_INSTALLED_ERROR_CODE } from '@anubis/shared'
 import { getStack } from './services.js'
 
 const ProfileConfig = z.object({
-  agent: z.enum(['claude', 'codex']),
+  agent: z.enum(['claude', 'codex', 'antigravity']),
 }).passthrough()
 
 const CreateBody = z.object({
@@ -126,15 +126,27 @@ profileRoutes.post('/:id/login/terminal', async (c) => {
   }
 
   const home = ensureAgentHome(stack.agentHomeRoot, profileId, agent).path
-  const env = { ...process.env, ...envFor(agent, home) } as Record<string, string>
+  const homeEnv = envFor(agent, home)
+  const env = { ...process.env, ...homeEnv } as Record<string, string>
+  // The single config-dir env var this agent uses (CLAUDE_CONFIG_DIR /
+  // CODEX_HOME / GEMINI_CONFIG_DIR), so the *nix terminal lines can export it
+  // without re-deriving per agent.
+  const [envVar] = Object.keys(homeEnv)
 
   // Prefer the absolute path resolved by detectAgents() (handles Windows
-  // .cmd shims) over a bare 'codex' / 'claude' name.
-  const command = (agent === 'claude'
-    ? process.env.ANUBIS_CLAUDE_COMMAND
-    : process.env.ANUBIS_CODEX_COMMAND)
-    ?? availability.path
-    ?? agent
+  // .cmd shims) over the bare binary name.
+  const FALLBACK_BINARY: Record<typeof agent, string> = {
+    claude: 'claude',
+    codex: 'codex',
+    antigravity: 'agy',
+  }
+  const commandOverride =
+    agent === 'claude' ? process.env.ANUBIS_CLAUDE_COMMAND
+    : agent === 'codex' ? process.env.ANUBIS_CODEX_COMMAND
+    : process.env.ANUBIS_ANTIGRAVITY_COMMAND
+  const command = commandOverride ?? availability.path ?? FALLBACK_BINARY[agent]
+  // codex needs an explicit `login` subcommand; claude and agy trigger their
+  // OAuth flow on first interactive launch.
   const args = agent === 'codex' ? ['login'] : []
 
   if (process.platform === 'win32') {
@@ -146,13 +158,12 @@ profileRoutes.post('/:id/login/terminal', async (c) => {
       stdio: 'ignore',
     }).unref()
   } else if (process.platform === 'darwin') {
-    const cmdStr = `cd ${JSON.stringify(home)} && ${envFor(agent, home)[agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME']}=${JSON.stringify(home)} ${command} ${args.join(' ')}`
+    const cmdStr = `cd ${JSON.stringify(home)} && ${envVar}=${JSON.stringify(home)} ${command} ${args.join(' ')}`
     spawn('osascript', ['-e', `tell application "Terminal" to do script ${JSON.stringify(cmdStr)}`], {
       detached: true,
       stdio: 'ignore',
     }).unref()
   } else {
-    const envVar = agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME'
     spawn('x-terminal-emulator', ['-e', 'sh', '-c', `cd ${JSON.stringify(home)} && ${envVar}=${JSON.stringify(home)} ${command} ${args.join(' ')}`], {
       detached: true,
       stdio: 'ignore',

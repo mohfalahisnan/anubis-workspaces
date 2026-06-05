@@ -158,6 +158,19 @@ Inside the preview you get:
 - `anubis.setHeight(px)` — explicit height override (auto-resize is on by
   default; you rarely need this).
 
+> **Plain JSX only** — the sandbox transpiles with Babel presets `react` +
+> `env`, **not** TypeScript. No type annotations, `interface`, `as const`, or
+> generics. No `import`/`export`, no npm packages, no shadcn/ui, no Tailwind —
+> only React + ReactDOM. Style with inline `style={{...}}` objects.
+
+**For anything more than a single component** — a stateful dashboard, tabs/views,
+reusable primitives, multiple components, or live-fetched data — read the
+**`web-artifacts-builder`** skill (`skills/web-artifacts-builder/SKILL.md`). It
+documents the full `<ReactPreview>` runtime contract, ready-to-reuse primitives
+(Card/Stat/Pill), a `useApi` fetch hook, and a worked multi-tab example, plus
+when to drop to `<HtmlPreview>` for CDN charting libraries (Chart.js, D3) or
+Tailwind utility classes.
+
 ## How `anubis.fetch` works
 
 Both previews can hit the Anubis backend. Because the iframe is sandboxed
@@ -187,6 +200,8 @@ Routes are documented in the `anubis-core` skill folder
 | Multi-panel dashboard, KPIs + chart + table | `<HtmlPreview />` (see `templates/dashboard.md`) |
 | Workflow / pipeline / DAG diagram, possibly live | `<HtmlPreview />` (see `templates/workflow.md`) |
 | Interactive React component, hooks, state | `<ReactPreview />` |
+| Complex/multi-component React: tabs, views, reusable primitives, live fetch | `<ReactPreview />` → see `web-artifacts-builder` skill |
+| Needs a CDN lib (Chart.js, D3) or Tailwind classes | `<HtmlPreview />` → see `web-artifacts-builder` skill |
 | Free-form explanation, prose, code | plain markdown |
 
 ## Templates — call the script, don't copy

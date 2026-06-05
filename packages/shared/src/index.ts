@@ -10,7 +10,7 @@ export interface ApiHealthResponse {
   time: string
 }
 
-export type AgentKind = 'claude' | 'codex'
+export type AgentKind = 'claude' | 'codex' | 'antigravity'
 export type ProfileSource = 'builtin' | 'user'
 export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'

@@ -76,4 +76,31 @@ export const BUILTIN_PROFILES: Profile[] = [
     createdAt: NOW,
     updatedAt: NOW,
   },
+  {
+    id: 'antigravity-coding',
+    name: 'Antigravity — Coding',
+    description: 'Antigravity CLI (agy) on Gemini 3.1 Pro with default permissions.',
+    source: 'builtin',
+    config: {
+      agent: 'antigravity',
+      model: 'gemini-3.1-pro',
+    },
+    sortOrder: 60,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: 'antigravity-yolo',
+    name: 'Antigravity — Yolo',
+    description: 'Antigravity CLI (agy) on Gemini 3.1 Pro auto-approving all tool calls. Scratch workspaces only.',
+    source: 'builtin',
+    config: {
+      agent: 'antigravity',
+      model: 'gemini-3.1-pro',
+      permissionMode: 'bypassPermissions',
+    },
+    sortOrder: 70,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
 ]

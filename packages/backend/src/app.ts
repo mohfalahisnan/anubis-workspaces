@@ -13,6 +13,7 @@ import { captureRoutes, postRoutes } from './captures.js'
 import { configRoutes } from './config.js'
 import { systemRoutes } from './system.js'
 import { workflowRoutes } from './workflow.js'
+import { workspaceRoutes } from './workspaces.js'
 
 const app = new Hono()
 
@@ -50,6 +51,7 @@ app.route('/posts', postRoutes)
 app.route('/config', configRoutes)
 app.route('/system', systemRoutes)
 app.route('/workflows', workflowRoutes)
+app.route('/workspaces', workspaceRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

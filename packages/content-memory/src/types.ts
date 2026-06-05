@@ -43,3 +43,26 @@ export type SourceType =
   | 'transcript'
   | 'ocr'
   | 'file'
+
+export type ContentType =
+  | 'competitor_post'
+  | 'own_post'
+  | 'approved_post'
+  | 'rejected_post'
+  | 'generated_draft'
+
+export const CONTENT_TYPES: readonly ContentType[] = [
+  'competitor_post',
+  'own_post',
+  'approved_post',
+  'rejected_post',
+  'generated_draft',
+]
+
+export type ApprovalStatus = 'approved' | 'rejected' | 'needs_review'
+
+export const APPROVAL_STATUSES: readonly ApprovalStatus[] = [
+  'approved',
+  'rejected',
+  'needs_review',
+]

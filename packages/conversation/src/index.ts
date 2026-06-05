@@ -2,6 +2,11 @@ import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
+import {
+  BrandWorkspacesRepo,
+  BrandWorkspacesService,
+  KnowledgeDocumentsRepo,
+} from '@anubis/content-memory'
 import { openDatabase } from './db/client.js'
 import { runMigrations } from './db/migrate.js'
 import { MIGRATIONS } from './db/migrations/index.js'
@@ -49,6 +54,8 @@ export interface ConversationStack {
   taskManager: TaskManager
   aiAgent: AiAgentService
   knownWorkspaces: KnownWorkspacesRepo
+  brandWorkspaces: BrandWorkspacesService
+  knowledgeDocuments: KnowledgeDocumentsRepo
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -70,6 +77,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const sessionsRepo = new AgentSessionsRepo(db)
   const cronRepo = new CronJobsRepo(db)
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
+  const brandWorkspaces = new BrandWorkspacesService(new BrandWorkspacesRepo(db))
+  const knowledgeDocuments = new KnowledgeDocumentsRepo(db)
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -124,6 +133,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     workflowTriggers: workflowTriggersRepo,
     appConfig, skills, sse, cron, taskManager: tm, aiAgent,
     knownWorkspaces: knownWorkspacesRepo,
+    brandWorkspaces,
+    knowledgeDocuments,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()
@@ -172,3 +183,5 @@ export type { ImportSkillOpts, ImportSkillResult, SkillCategory } from './skills
 export { CronService } from './cron/cron-service.js'
 export { SseBroadcaster } from './sse/broadcaster.js'
 export type { SseEvent } from './sse/broadcaster.js'
+export type { BrandWorkspace, KnowledgeDocument, ScoredDocument } from '@anubis/content-memory'
+export { DEFAULT_WORKSPACE_ID } from '@anubis/content-memory'

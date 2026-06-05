@@ -14,6 +14,7 @@ export interface Competitor {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  workspaceId?: string
   addedAt: number
   updatedAt: number
   deletedAt?: number
@@ -32,6 +33,7 @@ interface Row {
   notes: string | null
   bio: string | null
   level: string | null
+  workspace_id: string | null
   added_at: number
   updated_at: number
   deleted_at: number | null
@@ -51,6 +53,7 @@ function toCompetitor(r: Row): Competitor {
     notes: r.notes ?? undefined,
     bio: r.bio ?? undefined,
     level: (r.level as CompetitorLevelOverride | null) ?? undefined,
+    workspaceId: r.workspace_id ?? undefined,
     addedAt: r.added_at,
     updatedAt: r.updated_at,
     deletedAt: r.deleted_at ?? undefined,
@@ -64,10 +67,12 @@ export class CompetitorsRepo {
     this.db.prepare(`
       INSERT INTO competitors (
         id, handle, display_name, niche, tint, followers, avg_likes,
-        post_count, last_refreshed_at, notes, bio, level, added_at, updated_at, deleted_at
+        post_count, last_refreshed_at, notes, bio, level, workspace_id,
+        added_at, updated_at, deleted_at
       ) VALUES (
         @id, @handle, @displayName, @niche, @tint, @followers, @avgLikes,
-        @postCount, @lastRefreshedAt, @notes, @bio, @level, @addedAt, @updatedAt, @deletedAt
+        @postCount, @lastRefreshedAt, @notes, @bio, @level, @workspaceId,
+        @addedAt, @updatedAt, @deletedAt
       )
     `).run({
       id: c.id,
@@ -82,6 +87,7 @@ export class CompetitorsRepo {
       notes: c.notes ?? null,
       bio: c.bio ?? null,
       level: c.level ?? null,
+      workspaceId: c.workspaceId ?? 'default-workspace',
       addedAt: c.addedAt,
       updatedAt: c.updatedAt,
       deletedAt: c.deletedAt ?? null,

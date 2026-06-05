@@ -5,6 +5,7 @@ import type {
   ContentSimilarityItemsRepo,
   ScoredSimilarityItem,
 } from '../db/repositories/content-similarity-items-repo.js'
+import type { ExperienceIndexService } from '../experience/experience-index-service.js'
 import type {
   BuildContentContextInput,
   Citation,
@@ -17,6 +18,7 @@ export interface ContextPackDeps {
   docs: KnowledgeDocumentsRepo
   items: ContentSimilarityItemsRepo
   embedder: Embedder
+  experience?: ExperienceIndexService
 }
 
 function toSimilar(it: ScoredSimilarityItem): SimilarContent {
@@ -88,6 +90,28 @@ export class ContextPackService {
 
     const summarize = (d: ScoredDocument) => d.summary ?? d.title
 
+    // --- Experience memories: recall active/reinforced for this brand+platform ---
+    const memories = this.deps.experience
+      ? this.deps.experience.recallActive({ workspaceId: input.workspaceId, platform: input.platform, limit: 10 })
+      : []
+    for (const m of memories) {
+      citations.push({
+        sourceId: m.id, sourceType: 'experience_memory',
+        title: m.title, excerpt: m.correction.slice(0, 160),
+      })
+    }
+    const experienceMemory = {
+      previousMistakes: memories
+        .filter((m) => m.type === 'mistake' || m.type === 'anti_pattern')
+        .map((m) => `${m.title}: ${m.problem} → ${m.correction}`),
+      reviewerFeedback: memories
+        .filter((m) => m.type === 'correction' || m.type === 'preference' || m.type === 'lesson')
+        .map((m) => `${m.title}: ${m.correction}`),
+      validationRules: memories
+        .filter((m) => m.type === 'validation_rule' || m.type === 'workflow_rule')
+        .map((m) => m.preventionRule ?? m.correction),
+    }
+
     const pack: ContentContextPack = {
       workspaceId: input.workspaceId,
       platform: input.platform,
@@ -122,11 +146,7 @@ export class ContextPackService {
         mustAvoid: brand.constraints,
         clientPreferences: [],
       },
-      experienceMemory: {
-        previousMistakes: [],   // populated in Phase 4
-        reviewerFeedback: [],
-        validationRules: [],
-      },
+      experienceMemory,
       citations,
       finalInstruction: this.finalInstruction(input, brand.constraints),
     }

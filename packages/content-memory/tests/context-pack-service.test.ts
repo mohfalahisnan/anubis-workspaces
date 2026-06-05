@@ -9,6 +9,8 @@ import { KnowledgeDocumentsRepo } from '../src/db/repositories/knowledge-documen
 import { ContentSimilarityItemsRepo } from '../src/db/repositories/content-similarity-items-repo.js'
 import { SimilarityIngestionService } from '../src/similarity/similarity-ingestion-service.js'
 import { ContextPackService } from '../src/context-pack/context-pack-service.js'
+import { ExperienceMemoriesRepo } from '../src/db/repositories/experience-memories-repo.js'
+import { ExperienceIndexService } from '../src/experience/experience-index-service.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const sqlFor = (f: string) => readFileSync(join(here, '../src/db/migrations', f), 'utf8')
@@ -17,6 +19,7 @@ const migrations = [
   { version: 9, sql: sqlFor('009_knowledge_documents.sql') },
   { version: 11, sql: sqlFor('011_content_similarity_items.sql') },
   { version: 12, sql: sqlFor('012_knowledge_documents_embedding.sql') },
+  { version: 14, sql: sqlFor('014_experience_memories.sql') },
 ]
 
 async function setup() {
@@ -84,5 +87,35 @@ describe('ContextPackService.buildContentContextPack', () => {
       workspaceId: 'nope', platform: 'instagram',
       taskType: 'generate_content', query: 'x', objective: 'y',
     })).rejects.toThrow(/workspace/i)
+  })
+})
+
+describe('ContextPackService experience recall', () => {
+  it('fills experienceMemory.previousMistakes from active memories', async () => {
+    const db = freshDb(migrations)
+    const brands = new BrandWorkspacesRepo(db)
+    brands.insert({
+      id: 'workspace-a', name: 'A', brandSummary: 'B', toneOfVoice: [], audience: [],
+      offers: [], constraints: [], status: 'active', createdAt: 100, updatedAt: 100,
+    })
+    const experienceRepo = new ExperienceMemoriesRepo(db)
+    const experience = new ExperienceIndexService(experienceRepo)
+    const m = experience.recordCandidate({
+      workspaceId: 'workspace-a', type: 'mistake',
+      title: 'Fear hook', problem: 'used a fear hook', correction: 'use a soft hook',
+    })
+    experience.promote(m.id)
+
+    const svc = new ContextPackService({
+      brands, docs: new KnowledgeDocumentsRepo(db),
+      items: new ContentSimilarityItemsRepo(db), embedder: new FakeEmbedder(),
+      experience,
+    })
+    const pack = await svc.buildContentContextPack({
+      workspaceId: 'workspace-a', platform: 'instagram',
+      taskType: 'generate_content', query: 'skincare', objective: 'Generate',
+    })
+    expect(pack.experienceMemory.previousMistakes.join(' ')).toContain('Fear hook')
+    expect(pack.citations.some((ci) => ci.sourceType === 'experience_memory')).toBe(true)
   })
 })

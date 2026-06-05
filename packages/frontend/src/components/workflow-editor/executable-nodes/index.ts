@@ -8,6 +8,8 @@ import { ImageVideoExecutableNode }             from './image-video'
 import { AiAgentConversationExecutableNode }    from './ai-agent-conversation'
 import { MarkdownDisplayExecutableNode }        from './markdown-display'
 import { MediaDisplayExecutableNode }           from './media-display'
+import { ScheduleTriggerExecutableNode }        from './schedule-trigger'
+import { FileWatchTriggerExecutableNode }       from './file-watch-trigger'
 
 export const executableNodeTypes: NodeTypes = {
   instagramPost:       InstagramPostExecutableNode as never,
@@ -19,6 +21,8 @@ export const executableNodeTypes: NodeTypes = {
   aiAgentConversation: AiAgentConversationExecutableNode as never,
   markdownDisplay:     MarkdownDisplayExecutableNode as never,
   mediaDisplay:        MediaDisplayExecutableNode as never,
+  scheduleTrigger:     ScheduleTriggerExecutableNode as never,
+  fileWatchTrigger:    FileWatchTriggerExecutableNode as never,
 }
 
 /**
@@ -47,6 +51,8 @@ export const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
 }
 
 export const NODE_PALETTE = [
+  { type: 'scheduleTrigger',     label: 'Schedule',               category: 'trigger'   },
+  { type: 'fileWatchTrigger',    label: 'File watcher',           category: 'trigger'   },
   { type: 'imageVideo',          label: 'Image / Video',          category: 'source'    },
   { type: 'transformerMedia',    label: 'Transformer · Media',    category: 'source'    },
   { type: 'instagramPost',       label: 'Instagram Post',         category: 'webSearch' },

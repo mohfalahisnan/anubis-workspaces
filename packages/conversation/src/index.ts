@@ -9,6 +9,8 @@ import {
   ContextPackService,
   BrandWorkspacesRepo,
   BrandWorkspacesService,
+  ExperienceIndexService,
+  ExperienceMemoriesRepo,
   KnowledgeDocumentsRepo,
   SimilarityIngestionService,
   XenovaEmbedder,
@@ -68,6 +70,7 @@ export interface ConversationStack {
   similarityIngestion: SimilarityIngestionService
   capturedPostsSimilarity: CapturedPostsSimilarityIngestor
   contentMemory: ContentMemoryService
+  experience: ExperienceIndexService
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -101,11 +104,13 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const similarityItems = new ContentSimilarityItemsRepo(db)
   const similarityIngestion = new SimilarityIngestionService(similarityItems, contentEmbedder)
   const capturedPostsSimilarity = new CapturedPostsSimilarityIngestor(db, similarityIngestion)
+  const experience = new ExperienceIndexService(new ExperienceMemoriesRepo(db))
   const contextPack = new ContextPackService({
     brands: new BrandWorkspacesRepo(db),
     docs: knowledgeDocuments,
     items: similarityItems,
     embedder: contentEmbedder,
+    experience,
   })
   const contentMemory = new ContentMemoryService({
     contextPack,
@@ -171,6 +176,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     similarityIngestion,
     capturedPostsSimilarity,
     contentMemory,
+    experience,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()

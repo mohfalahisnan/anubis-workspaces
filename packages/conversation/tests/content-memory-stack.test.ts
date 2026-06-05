@@ -32,4 +32,26 @@ describe('content-memory wired onto the stack', () => {
     expect(pack.workspaceId).toBe('default-workspace')
     expect(typeof packId).toBe('string')
   })
+
+  it('exposes experience and records + promotes a memory', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'anubis-cm-'))
+    const builtin = getBuiltinSkillRoots()
+    stack = createConversationService({
+      dataDir: dir,
+      skillRoots: {
+        autoInject: builtin.autoInject, optIn: builtin.optIn,
+        user: join(dir, 'skills'), userAutoInject: join(dir, 'skills', 'auto-inject'),
+        userOptIn: join(dir, 'skills', 'opt-in'),
+      },
+    })
+    const m = stack.experience.recordCandidate({
+      workspaceId: 'default-workspace', type: 'mistake',
+      title: 't', problem: 'p', correction: 'c',
+    })
+    stack.experience.promote(m.id)
+    const active = stack.experience.recallActive({
+      workspaceId: 'default-workspace', platform: 'instagram',
+    })
+    expect(active.map((x) => x.id)).toContain(m.id)
+  })
 })

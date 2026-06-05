@@ -7,6 +7,9 @@ import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-con
 import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
 import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conversation-config'
+import { MarkdownDisplayConfigForm } from './inspector/config/markdown-display-config'
+import { ScheduleTriggerConfigForm } from './inspector/config/schedule-trigger-config'
+import { FileWatchTriggerConfigForm } from './inspector/config/file-watch-trigger-config'
 import { RunViewer } from './inspector/run-viewer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +22,9 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   table:               TableConfigForm,
   imageVideo:          ImageVideoConfigForm,
   aiAgentConversation: AiAgentConversationConfigForm,
+  markdownDisplay:     MarkdownDisplayConfigForm,
+  scheduleTrigger:     ScheduleTriggerConfigForm,
+  fileWatchTrigger:    FileWatchTriggerConfigForm,
 }
 
 export function InspectorPanel() {

@@ -291,6 +291,32 @@ export class CodexAgent {
     this.activeEmitters.get(k)?.emit(event, data)
   }
 
+  /**
+   * Stop the in-flight turn for a conversation (the user hit Stop). We tear
+   * down the app-server child rather than leaving it running; the next turn
+   * re-spawns and resumes the thread via its persisted id — exactly what the
+   * pool's idle eviction already relies on. A clean `done` is emitted so the
+   * stream relay resolves and the UI clears its streaming state.
+   */
+  cancel(opts: { workspaceId: string; sessionId: string }): void {
+    const k = this.key(opts)
+    const emitter = this.activeEmitters.get(k)
+    // Drop the emitter first so any final notifications from the dying child
+    // are ignored and we don't double-fire a terminal event.
+    this.activeEmitters.delete(k)
+    // The JSON-RPC client and init handshake are bound to the child we're
+    // about to kill; clear them so the next turn rebuilds against a fresh one.
+    // threadIds is kept — the logical thread persists and is resumed by id.
+    this.clients.delete(k)
+    this.initialized.delete(k)
+    try {
+      this.pool.evict({ workspaceId: opts.workspaceId, sessionId: opts.sessionId })
+    } catch {
+      // best-effort: the process may already be gone
+    }
+    emitter?.emit('done', { finishReason: 'cancelled' })
+  }
+
   static spawnCodex(opts: SpawnCodexOpts): ChildProcessWithoutNullStreams {
     const args: string[] = []
     for (const kv of opts.configOverrides ?? []) {

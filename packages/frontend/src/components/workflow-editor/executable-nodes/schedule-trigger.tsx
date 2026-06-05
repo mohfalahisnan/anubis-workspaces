@@ -1,0 +1,33 @@
+import { memo } from 'react'
+import { Clock } from 'lucide-react'
+import { NodeShell, StatusBadge } from '@/components/workflow'
+import { RunStateBadge } from './_run-state-badge'
+import { useNodeRunStatus } from './_use-run-status'
+
+export interface ScheduleTriggerNodeData {
+  everyValue?: number
+  everyUnit?: 'minute' | 'hour'
+  cron?: string
+}
+
+export const ScheduleTriggerExecutableNode = memo(function ScheduleTriggerExecutableNode(
+  { id, data }: { id: string; data: ScheduleTriggerNodeData },
+) {
+  const runStatus = useNodeRunStatus(id)
+  const subtitle = data.cron && data.cron.trim()
+    ? `cron: ${data.cron}`
+    : `every ${data.everyValue ?? 1} ${data.everyUnit ?? 'hour'}`
+  return (
+    <NodeShell
+      icon={Clock}
+      title='Schedule'
+      subtitle={subtitle}
+      accent='from-[#fd551d] to-[#eab308]'
+      handles='out'
+      runStatus={runStatus}
+      footer={<div className='flex flex-wrap gap-2'><StatusBadge tone='info'>trigger</StatusBadge><RunStateBadge nodeId={id} /></div>}
+    >
+      <p className='text-xs text-zinc-300'>Fires the workflow on a timer while armed.</p>
+    </NodeShell>
+  )
+})

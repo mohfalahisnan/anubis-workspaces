@@ -6,6 +6,10 @@ import { OcrExtractorExecutableNode }           from './ocr-extractor'
 import { TableExecutableNode }                  from './table'
 import { ImageVideoExecutableNode }             from './image-video'
 import { AiAgentConversationExecutableNode }    from './ai-agent-conversation'
+import { MarkdownDisplayExecutableNode }        from './markdown-display'
+import { MediaDisplayExecutableNode }           from './media-display'
+import { ScheduleTriggerExecutableNode }        from './schedule-trigger'
+import { FileWatchTriggerExecutableNode }       from './file-watch-trigger'
 
 export const executableNodeTypes: NodeTypes = {
   instagramPost:       InstagramPostExecutableNode as never,
@@ -15,14 +19,47 @@ export const executableNodeTypes: NodeTypes = {
   table:               TableExecutableNode as never,
   imageVideo:          ImageVideoExecutableNode as never,
   aiAgentConversation: AiAgentConversationExecutableNode as never,
+  markdownDisplay:     MarkdownDisplayExecutableNode as never,
+  mediaDisplay:        MediaDisplayExecutableNode as never,
+  scheduleTrigger:     ScheduleTriggerExecutableNode as never,
+  fileWatchTrigger:    FileWatchTriggerExecutableNode as never,
+}
+
+/**
+ * Palette categories, ordered as they appear in the sidebar. Nodes are grouped
+ * by capability: where data comes from (Trigger, Source, Web Search), what
+ * transforms it (Tools, Agent), and where it ends up (Output).
+ */
+export const NODE_CATEGORIES = [
+  'trigger',
+  'source',
+  'webSearch',
+  'tools',
+  'agent',
+  'output',
+] as const
+
+export type NodeCategory = (typeof NODE_CATEGORIES)[number]
+
+export const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
+  trigger:   'Trigger',
+  source:    'Source',
+  webSearch: 'Web Search',
+  tools:     'Tools',
+  agent:     'Agent',
+  output:    'Output',
 }
 
 export const NODE_PALETTE = [
-  { type: 'instagramPost',       label: 'Instagram Post' },
-  { type: 'imageVideo',          label: 'Image / Video' },
-  { type: 'transformerMedia',    label: 'Transformer · Media' },
-  { type: 'transformerBrief',    label: 'Transformer · Brief' },
-  { type: 'ocrExtractor',        label: 'OCR Extractor' },
-  { type: 'table',               label: 'Table' },
-  { type: 'aiAgentConversation', label: 'AI Agent · Conversation' },
-] as const
+  { type: 'scheduleTrigger',     label: 'Schedule',               category: 'trigger'   },
+  { type: 'fileWatchTrigger',    label: 'File watcher',           category: 'trigger'   },
+  { type: 'imageVideo',          label: 'Image / Video',          category: 'source'    },
+  { type: 'transformerMedia',    label: 'Transformer · Media',    category: 'source'    },
+  { type: 'instagramPost',       label: 'Instagram Post',         category: 'webSearch' },
+  { type: 'transformerBrief',    label: 'Transformer · Brief',    category: 'tools'     },
+  { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
+  { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
+  { type: 'table',               label: 'Table',                  category: 'output'    },
+  { type: 'markdownDisplay',     label: 'Markdown',               category: 'output'    },
+  { type: 'mediaDisplay',        label: 'Media',                  category: 'output'    },
+] as const satisfies ReadonlyArray<{ type: string; label: string; category: NodeCategory }>

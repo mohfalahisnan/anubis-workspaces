@@ -84,7 +84,7 @@ export class ClaudeAgent {
 
   async run(
     opts: ClaudeRunOpts,
-  ): Promise<{ emitter: TypedEmitter<AgentEventMap>; sessionId: string }> {
+  ): Promise<{ emitter: TypedEmitter<AgentEventMap>; sessionId: string; cancel: () => void }> {
     const sessionId = opts.sessionId ?? ''
     const args = buildClaudeArgs({
       cwd: opts.cwd,
@@ -123,6 +123,19 @@ export class ClaudeAgent {
     emitter.on('done', () => { terminalEmitted = true })
     emitter.on('error', () => { terminalEmitted = true })
 
+    // When the user hits Stop we kill the child. Flag it so the `close`
+    // handler reports a clean `done` (cancelled turn) instead of a scary
+    // "exited without a result" error, and so consumers can stop streaming.
+    let cancelled = false
+    const cancel = () => {
+      if (cancelled) return
+      cancelled = true
+      try { child.stdin?.end() } catch { /* already closed */ }
+      // SIGTERM lets the CLI tear down its session cleanly; the `close`
+      // handler below emits the terminal `done`.
+      child.kill()
+    }
+
     // Write the prompt to stdin and close it so Claude Code reads it as
     // the -p prompt (we pass -p without an argument in build-args.ts).
     // Errors here are surfaced as runner errors.
@@ -150,6 +163,13 @@ export class ClaudeAgent {
     })
     child.on('close', (code) => {
       if (terminalEmitted) return
+      // Intentionally cancelled (Stop): the child was killed, so report a
+      // clean terminal instead of an error. This unblocks anything awaiting
+      // the run and lets the UI clear the streaming state.
+      if (cancelled) {
+        emitter.emit('done', { finishReason: 'cancelled' })
+        return
+      }
       if (code !== 0 && code !== null) {
         const stderr = stderrData.trim()
         const detail =
@@ -180,6 +200,6 @@ export class ClaudeAgent {
       emitter.emit('error', { error: e as Error })
     })
 
-    return { emitter, sessionId }
+    return { emitter, sessionId, cancel }
   }
 }

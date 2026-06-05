@@ -23,9 +23,10 @@ import {
   updateCompetitor,
 } from '@/api'
 import { FindCompetitorsDialog } from './competitor-dialogs'
-import { CompetitorLevelDot } from '@/components/competitor-level-dot'
 import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
+import { ViewToggle, type ViewMode } from '@/components/view-toggle'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { levelTint, levelTip, resolveLevel } from '@/lib/competitor-level'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -61,6 +62,7 @@ export function CompetitorsPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const [view, setView] = useState<ViewMode>('grid')
   const { config: levelsCfg } = useCompetitorLevels()
 
   const visibleItems = items?.filter((c) =>
@@ -71,6 +73,7 @@ export function CompetitorsPage() {
     try {
       setItems(await listCompetitors())
     } catch (e) {
+      setItems([])
       setBanner({
         kind: 'error',
         message: e instanceof Error ? e.message : 'Failed to load competitors.',
@@ -287,8 +290,9 @@ export function CompetitorsPage() {
         )}
 
         {items && items.length > 0 && (
-          <div className='mt-5'>
+          <div className='mt-5 flex flex-wrap items-center gap-x-4 gap-y-2'>
             <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+            <ViewToggle view={view} onChange={setView} className='ml-auto' />
           </div>
         )}
 
@@ -312,7 +316,7 @@ export function CompetitorsPage() {
           <div className='mt-10 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center text-[13px] text-muted-foreground'>
             No competitors match this level filter.
           </div>
-        ) : (
+        ) : view === 'grid' ? (
           <div className='mt-7 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
             {visibleItems!.map((c) => (
               <CompetitorCard
@@ -329,6 +333,18 @@ export function CompetitorsPage() {
               />
             ))}
           </div>
+        ) : (
+          <CompetitorTable
+            competitors={visibleItems!}
+            levelsCfg={levelsCfg}
+            capturing={capturing}
+            onCapture={(c) => void handleCapture(c)}
+            onEdit={(c) => setEditing(c)}
+            onDelete={(c) => handleDelete(c)}
+            selectMode={selectMode}
+            selected={selected}
+            onToggleSelect={toggleSelected}
+          />
         )}
 
         {/* Footnote on capture mechanics */}
@@ -512,12 +528,16 @@ function CompetitorCard({
   const tint = competitor.tint ?? '#565B63'
   const followersLabel = formatBigNumber(competitor.followers)
   const avgLikesLabel = formatBigNumber(competitor.avgLikes)
+  const level = resolveLevel(competitor.followers, competitor.level, levelsCfg)
+  const levelTooltip = levelTip(competitor.followers, competitor.level, levelsCfg)
 
   return (
     <article
       role={selectMode ? 'button' : undefined}
       aria-pressed={selectMode ? selected : undefined}
       onClick={selectMode ? onToggleSelect : undefined}
+      title={levelTooltip}
+      style={{ background: levelTint(level, 'card') }}
       className={cn(
         'group relative flex flex-col gap-3 overflow-hidden rounded-md border border-border bg-card transition-colors',
         selectMode
@@ -550,7 +570,6 @@ function CompetitorCard({
         </span>
         <div className='min-w-0 flex-1'>
           <h3 className='flex items-center gap-1.5 truncate font-mono text-[13.5px] font-semibold text-foreground'>
-            <CompetitorLevelDot followers={competitor.followers} levelOverride={competitor.level} config={levelsCfg} />
             {competitor.handle}
           </h3>
           {competitor.displayName && (
@@ -651,6 +670,148 @@ function Stat({ label, value }: { label: string; value: string }) {
       <span className='font-mono text-[9.5px] uppercase tracking-[0.1em] text-muted-foreground'>
         {label}
       </span>
+    </div>
+  )
+}
+
+/* ---------- Table ---------- */
+
+const tableActionBtn =
+  'inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+
+function CompetitorTable({
+  competitors,
+  levelsCfg,
+  capturing,
+  onCapture,
+  onEdit,
+  onDelete,
+  selectMode,
+  selected,
+  onToggleSelect,
+}: {
+  competitors: CompetitorSummary[]
+  levelsCfg: CompetitorLevelsConfig
+  capturing: Set<string>
+  onCapture: (c: CompetitorSummary) => void
+  onEdit: (c: CompetitorSummary) => void
+  onDelete: (c: CompetitorSummary) => void
+  selectMode: boolean
+  selected: Set<string>
+  onToggleSelect: (id: string) => void
+}) {
+  return (
+    <div className='mt-7 overflow-hidden rounded-md border border-border bg-card'>
+      <div className='overflow-x-auto'>
+        <table className='w-full min-w-[820px] border-collapse text-left text-[13px]'>
+          <thead className='border-b border-border bg-background/50 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground'>
+            <tr>
+              {selectMode && <th className='w-8 px-3 py-2.5 font-medium' />}
+              <th className='px-3 py-2.5 font-medium'>Competitor</th>
+              <th className='px-3 py-2.5 font-medium'>Niche</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Followers</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Avg likes</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Posts</th>
+              <th className='px-3 py-2.5 font-medium'>Last refresh</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {competitors.map((c) => {
+              const isSelected = selected.has(c.id)
+              const isCapturing = capturing.has(c.id)
+              const level = resolveLevel(c.followers, c.level, levelsCfg)
+              return (
+                <tr
+                  key={c.id}
+                  onClick={selectMode ? () => onToggleSelect(c.id) : undefined}
+                  title={levelTip(c.followers, c.level, levelsCfg)}
+                  style={{
+                    background: isSelected
+                      ? 'color-mix(in oklab, var(--anubis-gold) 8%, transparent)'
+                      : levelTint(level, 'row'),
+                  }}
+                  className={cn(
+                    'border-b border-border/70 last:border-0',
+                    selectMode && 'cursor-pointer',
+                  )}
+                >
+                  {selectMode && (
+                    <td className='px-3 py-3'>
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'flex size-4 items-center justify-center rounded border transition-colors',
+                          isSelected
+                            ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
+                            : 'border-border bg-card text-transparent',
+                        )}
+                      >
+                        <CheckIcon className='size-3' strokeWidth={3} />
+                      </span>
+                    </td>
+                  )}
+                  <td className='px-3 py-3'>
+                    <div className='flex items-center gap-2.5'>
+                      <span
+                        aria-hidden
+                        className='flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border'
+                        style={{ background: c.tint ?? '#565B63' }}
+                      >
+                        <UserRoundIcon className='size-4 text-white/80' strokeWidth={1.5} />
+                      </span>
+                      <div className='min-w-0'>
+                        <div className='truncate font-mono text-[12px] font-semibold text-foreground'>{c.handle}</div>
+                        {c.displayName && (
+                          <div className='truncate text-[11px] text-muted-foreground'>{c.displayName}</div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className='px-3 py-3 text-muted-foreground'>{c.niche ?? '—'}</td>
+                  <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{formatBigNumber(c.followers)}</td>
+                  <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{formatBigNumber(c.avgLikes)}</td>
+                  <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{c.postCount.toLocaleString()}</td>
+                  <td className='px-3 py-3 font-mono text-[11.5px] text-muted-foreground'>
+                    {isCapturing ? 'Capturing…' : c.lastRefreshedAt ? relativeTime(c.lastRefreshedAt) : 'Never'}
+                  </td>
+                  <td className='px-3 py-3' onClick={(e) => e.stopPropagation()}>
+                    <div className='flex justify-end gap-1'>
+                      <button
+                        type='button'
+                        onClick={() => onCapture(c)}
+                        disabled={isCapturing || selectMode}
+                        aria-label={`Refresh ${c.handle}`}
+                        className={cn(tableActionBtn, isCapturing && 'text-[var(--anubis-gold)]')}
+                      >
+                        <DownloadCloudIcon className={cn('size-3.5', isCapturing && 'animate-pulse')} strokeWidth={2} />
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() => onEdit(c)}
+                        disabled={isCapturing || selectMode}
+                        aria-label={`Edit ${c.handle}`}
+                        className={tableActionBtn}
+                      >
+                        <Edit3Icon className='size-3.5' strokeWidth={2} />
+                      </button>
+                      <button
+                        type='button'
+                        onClick={() => onDelete(c)}
+                        disabled={isCapturing || selectMode}
+                        aria-label={`Stop tracking ${c.handle}`}
+                        className={cn(tableActionBtn, 'hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive')}
+                      >
+                        <Trash2Icon className='size-3.5' strokeWidth={2} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

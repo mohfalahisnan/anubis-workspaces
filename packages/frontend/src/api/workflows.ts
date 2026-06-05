@@ -10,6 +10,8 @@ export interface WorkflowSummary {
   publishedAt?: number
   lastRun?: { id: string; status: string; startedAt: number }
   previewGraph: string
+  hasTrigger?: boolean
+  armed?: boolean
 }
 
 export interface WorkflowDetail {
@@ -22,6 +24,8 @@ export interface WorkflowDetail {
   publishedAt?: number
   createdAt: number
   updatedAt: number
+  hasTrigger?: boolean
+  armed?: boolean
 }
 
 export type NodeRunEvent =
@@ -63,6 +67,8 @@ export const workflowsApi = {
                 jsonFetch<{ run: { id: string; status: string; startedAt: number; finishedAt?: number; error?: string },
                             steps: Array<{ id: string; nodeId: string; status: string; output?: string; error?: string }> }>(`/workflows/runs/${runId}`),
   cancelRun:   (runId: string) => jsonFetch<void>(`/workflows/runs/${runId}`, { method: 'DELETE' }),
+  arm:         (id: string) => jsonFetch<{ armed: boolean }>(`/workflows/${id}/arm`, { method: 'POST' }),
+  disarm:      (id: string) => jsonFetch<{ armed: boolean }>(`/workflows/${id}/disarm`, { method: 'POST' }),
 }
 
 export async function openRunEventStream(

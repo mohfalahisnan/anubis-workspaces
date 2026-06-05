@@ -17,6 +17,7 @@ import { CompetitorsService } from './competitors/competitors-service.js'
 import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
 import { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
+import { WorkflowTriggersRepo } from './db/repositories/workflow-triggers-repo.js'
 import { AppConfigService } from './config/app-config.js'
 import { ProfileService } from './profiles/profile-service.js'
 import { SkillLoader, type SkillRoots } from './skills/loader.js'
@@ -40,6 +41,7 @@ export interface ConversationStack {
   capturedPosts: CapturedPostsRepo
   workflows: WorkflowsRepo
   workflowRuns: WorkflowRunsRepo
+  workflowTriggers: WorkflowTriggersRepo
   appConfig: AppConfigService
   skills: SkillLoader
   sse: SseBroadcaster
@@ -85,6 +87,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const capturedPosts = new CapturedPostsRepo(db)
   const workflowsRepo = new WorkflowsRepo(db)
   const workflowRunsRepo = new WorkflowRunsRepo(db)
+  const workflowTriggersRepo = new WorkflowTriggersRepo(db)
   const appConfig = new AppConfigService(opts.dataDir)
 
   const skills = new SkillLoader(opts.skillRoots)
@@ -118,6 +121,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     conversation, profiles, competitors, capturedPosts,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
+    workflowTriggers: workflowTriggersRepo,
     appConfig, skills, sse, cron, taskManager: tm, aiAgent,
     knownWorkspaces: knownWorkspacesRepo,
     agentHomeRoot,
@@ -145,6 +149,8 @@ export type { Workflow } from './db/repositories/workflows-repo.js'
 export { WorkflowsRepo } from './db/repositories/workflows-repo.js'
 export type { WorkflowRun, WorkflowRunStep, RunStatus, StepStatus } from './db/repositories/workflow-runs-repo.js'
 export { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
+export type { WorkflowTriggerState } from './db/repositories/workflow-triggers-repo.js'
+export { WorkflowTriggersRepo } from './db/repositories/workflow-triggers-repo.js'
 export type { AppConfig } from './config/app-config.js'
 export { AppConfigService } from './config/app-config.js'
 export { ConversationService, NoCredentialsError } from './conversations/conversation-service.js'

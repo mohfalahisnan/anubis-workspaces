@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { motion } from 'motion/react'
 
 import { ACCENT_GRADIENTS } from './theme'
-import { NodeDirectionalHandles } from './handles'
+import { NodeDirectionalHandles, type HandleVariant } from './handles'
 
 export type NodeRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
 
@@ -21,6 +21,8 @@ export interface NodeShellProps {
   disableMotion?: boolean
   /** Run lifecycle status — drives the glow ring around the node. */
   runStatus?: NodeRunStatus
+  /** Which connection handles to render. Defaults to both. */
+  handles?: HandleVariant
 }
 
 const SHELL_BASE =
@@ -45,12 +47,13 @@ export function NodeShell({
   className,
   disableMotion = false,
   runStatus,
+  handles = 'both',
 }: NodeShellProps) {
   const runClass = runStatus ? RUN_STATUS_BORDER[runStatus] : 'border-[#fd551d]/20'
 
   const inner = (
     <div className={cn(SHELL_BASE, runClass, className)}>
-      <NodeDirectionalHandles />
+      <NodeDirectionalHandles variant={handles} />
       <div className='overflow-hidden rounded-2xl'>
         <div className={cn('h-1 bg-gradient-to-r', accent)} />
         <div className='p-4'>

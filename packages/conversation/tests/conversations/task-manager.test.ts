@@ -4,12 +4,15 @@ import { TaskManager } from '../../src/conversations/task-manager.js'
 
 function makeFakeService() {
   const emitters: TypedEmitter<AgentEventMap>[] = []
+  const cancels: Array<ReturnType<typeof vi.fn>> = []
   const streamAgent = vi.fn(async () => {
     const emitter = new TypedEmitter<AgentEventMap>()
     emitters.push(emitter)
-    return { stream: emitter, workspaceId: 'w', sessionId: 's', agentSessionId: 'asid-1' }
+    const cancel = vi.fn(async () => {})
+    cancels.push(cancel)
+    return { stream: emitter, workspaceId: 'w', sessionId: 's', agentSessionId: 'asid-1', cancel }
   })
-  return { svc: { streamAgent }, emitters }
+  return { svc: { streamAgent }, emitters, cancels }
 }
 
 describe('TaskManager', () => {
@@ -73,6 +76,20 @@ describe('TaskManager', () => {
     await tm.getOrBuild(conv, profile, { prompt: 'hi', msgId: 'm1' })
     await tm.kill('c1', 'user')
     expect(tm.subscribe('c1')).toBeNull()
+    await tm.shutdown()
+  })
+
+  it('kill terminates the underlying agent run, not just the bookkeeping', async () => {
+    const { svc, cancels } = makeFakeService()
+    const tm = new TaskManager(svc as never, { idleMs: 10_000 })
+    const conv = { id: 'c1', agent: 'claude' as const, workspacePath: '/tmp' }
+    const profile = { agent: 'claude' as const }
+    await tm.getOrBuild(conv, profile, { prompt: 'hi', msgId: 'm1' })
+    await tm.kill('c1', 'user')
+    // The whole point of Stop: the spawned agent process must actually be
+    // cancelled. Deleting the map entry without killing the process leaves a
+    // zombie that blocks the next turn from resuming the same session.
+    expect(cancels[0]).toHaveBeenCalledTimes(1)
     await tm.shutdown()
   })
 })

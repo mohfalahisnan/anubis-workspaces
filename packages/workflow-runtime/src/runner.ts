@@ -14,6 +14,7 @@ export async function runWorkflow(
   graph: WorkflowGraph,
   registry: Record<string, Executor<unknown>>,
   ctx: ExecutorContext,
+  opts?: { seed?: Record<string, unknown> },
 ): Promise<RunResult> {
   const order = topologicalSort(graph)
   for (const node of graph.nodes) {
@@ -29,6 +30,15 @@ export async function runWorkflow(
     if (ctx.signal.aborted) {
       for (const id of order) if (stepStatuses[id] === 'pending') stepStatuses[id] = 'skipped'
       return { status: 'cancelled', outputs, stepStatuses }
+    }
+
+    if (opts?.seed && Object.prototype.hasOwnProperty.call(opts.seed, nodeId)) {
+      const seeded = opts.seed[nodeId]
+      outputs[nodeId] = seeded
+      stepStatuses[nodeId] = 'succeeded'
+      ctx.emit({ kind: 'node-started', nodeId, at: Date.now() })
+      ctx.emit({ kind: 'node-succeeded', nodeId, at: Date.now(), output: seeded })
+      continue
     }
 
     const node = graph.nodes.find((n) => n.id === nodeId)!

@@ -9,6 +9,7 @@ export {
   WORKFLOW_SOURCE_HANDLE,
   WORKFLOW_TARGET_HANDLE,
 } from './handles'
+export type { HandleVariant } from './handles'
 
 export { NodeShell } from './node-shell'
 export type { NodeShellProps, NodeRunStatus } from './node-shell'

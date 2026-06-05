@@ -32,6 +32,7 @@ import {
   type UpdateCompetitorInput,
   type UpdateCapturedPostInput,
   type UpdateCronJobInput,
+  type WorkspaceSummary,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -312,6 +313,18 @@ export async function cancelConversation(conversationId: string): Promise<void> 
     `/conversations/${encodeURIComponent(conversationId)}/cancel`,
     { method: 'POST' },
   )
+}
+
+export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
+  const r = await api<{ ok: true; items: WorkspaceSummary[] }>('/workspaces')
+  return r.items
+}
+
+export async function removeWorkspace(path: string): Promise<void> {
+  await api<{ ok: true }>('/workspaces', {
+    method: 'DELETE',
+    body: JSON.stringify({ path }),
+  })
 }
 
 export async function deleteConversation(conversationId: string): Promise<void> {

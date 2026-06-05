@@ -4,7 +4,7 @@
 
 **Goal:** Stand up a new `@anubis/content-memory` package with a first-class Brand/Workspace entity, scope the existing competitors to it, and prove cross-workspace isolation on a scoped knowledge store — the guarantee everything else in the spec depends on.
 
-**Architecture:** A new logical package (`@anubis/content-memory`) owns its types, repos, and SQL migrations for new tables (`content_workspaces`, `knowledge_documents`) and exports them as `CONTENT_MEMORY_MIGRATIONS`. `@anubis/conversation` depends on it **one-way**: it registers those migrations into its existing runner, instantiates the new repos against the shared `anubis.db` handle, exposes them on `ConversationStack`, and owns the single `ALTER competitors ADD workspace_id` migration (which runs *after* `content_workspaces` exists). Embeddings, chunks, similarity items, context-pack, experience, and validators are **out of scope for this phase** — they get their own plans.
+**Architecture:** A new logical package (`@anubis/content-memory`) owns its types, repos, and SQL migrations for new tables (`brand_workspaces`, `knowledge_documents`) and exports them as `CONTENT_MEMORY_MIGRATIONS`. `@anubis/conversation` depends on it **one-way**: it registers those migrations into its existing runner, instantiates the new repos against the shared `anubis.db` handle, exposes them on `ConversationStack`, and owns the single `ALTER competitors ADD workspace_id` migration (which runs *after* `brand_workspaces` exists). Embeddings, chunks, similarity items, context-pack, experience, and validators are **out of scope for this phase** — they get their own plans.
 
 **Tech Stack:** TypeScript (ESM, NodeNext), better-sqlite3 (raw SQL, repo pattern), Vitest, pnpm workspaces.
 
@@ -18,7 +18,7 @@ In scope (maps to design §8 Phase 1):
 
 - New `@anubis/content-memory` package skeleton, wired into the monorepo build order.
 - Core types + constants (`Scope`, `Platform`, `PLATFORMS`, `DEFAULT_WORKSPACE_ID`).
-- `content_workspaces` table + `ContentWorkspacesRepo` + `ContentWorkspacesService`.
+- `brand_workspaces` table + `BrandWorkspacesRepo` + `BrandWorkspacesService`.
 - `knowledge_documents` table + `KnowledgeDocumentsRepo` with **scope-before-rank** lexical search.
 - `competitors.workspace_id` column + default-brand backfill migration (owned by conversation).
 - Cross-workspace isolation, global-knowledge, and platform-filter tests (original spec §22.1–§22.3, adapted to documents).
@@ -44,17 +44,17 @@ packages/content-memory/
 │   │   ├── types.ts                     # Db, Migration (local, structural)
 │   │   ├── migrations/
 │   │   │   ├── index.ts                 # CONTENT_MEMORY_MIGRATIONS
-│   │   │   ├── 008_content_workspaces.sql
+│   │   │   ├── 008_brand_workspaces.sql
 │   │   │   └── 009_knowledge_documents.sql
 │   │   └── repositories/
-│   │       ├── content-workspaces-repo.ts
+│   │       ├── brand-workspaces-repo.ts
 │   │       └── knowledge-documents-repo.ts
 │   └── workspaces/
-│       └── content-workspaces-service.ts
+│       └── brand-workspaces-service.ts
 └── tests/
     ├── helpers/db.ts                     # in-memory DB + apply migrations
-    ├── content-workspaces-repo.test.ts
-    ├── content-workspaces-service.test.ts
+    ├── brand-workspaces-repo.test.ts
+    ├── brand-workspaces-service.test.ts
     └── knowledge-documents-repo.test.ts
 ```
 
@@ -192,7 +192,7 @@ git commit -m "chore(content-memory): scaffold @anubis/content-memory package"
 **Files:**
 - Create: `packages/content-memory/src/types.ts`
 - Create: `packages/content-memory/src/db/types.ts`
-- Test: `packages/content-memory/tests/content-workspaces-repo.test.ts` (constants asserted indirectly later; a focused constants check goes here)
+- Test: `packages/content-memory/tests/brand-workspaces-repo.test.ts` (constants asserted indirectly later; a focused constants check goes here)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -296,13 +296,13 @@ git commit -m "feat(content-memory): core types and constants"
 
 ---
 
-## Task 3: `content_workspaces` migration + repo
+## Task 3: `brand_workspaces` migration + repo
 
 **Files:**
-- Create: `packages/content-memory/src/db/migrations/008_content_workspaces.sql`
-- Create: `packages/content-memory/src/db/repositories/content-workspaces-repo.ts`
+- Create: `packages/content-memory/src/db/migrations/008_brand_workspaces.sql`
+- Create: `packages/content-memory/src/db/repositories/brand-workspaces-repo.ts`
 - Create: `packages/content-memory/tests/helpers/db.ts`
-- Test: `packages/content-memory/tests/content-workspaces-repo.test.ts`
+- Test: `packages/content-memory/tests/brand-workspaces-repo.test.ts`
 
 - [ ] **Step 1: Create the test helper**
 
@@ -325,7 +325,7 @@ export function freshDb(migrations: Migration[]): Db {
 
 - [ ] **Step 2: Write the failing test**
 
-Create `packages/content-memory/tests/content-workspaces-repo.test.ts`:
+Create `packages/content-memory/tests/brand-workspaces-repo.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -333,25 +333,25 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { freshDb } from './helpers/db.js'
-import { ContentWorkspacesRepo } from '../src/db/repositories/content-workspaces-repo.js'
+import { BrandWorkspacesRepo } from '../src/db/repositories/brand-workspaces-repo.js'
 import { DEFAULT_WORKSPACE_ID } from '../src/types.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const sql = readFileSync(
-  join(here, '../src/db/migrations/008_content_workspaces.sql'),
+  join(here, '../src/db/migrations/008_brand_workspaces.sql'),
   'utf8',
 )
 const migrations = [{ version: 8, sql }]
 
-describe('ContentWorkspacesRepo', () => {
+describe('BrandWorkspacesRepo', () => {
   it('seeds a default workspace via the migration', () => {
-    const repo = new ContentWorkspacesRepo(freshDb(migrations))
+    const repo = new BrandWorkspacesRepo(freshDb(migrations))
     const def = repo.findById(DEFAULT_WORKSPACE_ID)
     expect(def?.name).toBe('Default Workspace')
   })
 
   it('inserts and reads a brand with array fields round-tripped', () => {
-    const repo = new ContentWorkspacesRepo(freshDb(migrations))
+    const repo = new BrandWorkspacesRepo(freshDb(migrations))
     repo.insert({
       id: 'ws-a',
       name: 'Skincare A',
@@ -370,7 +370,7 @@ describe('ContentWorkspacesRepo', () => {
   })
 
   it('lists active workspaces', () => {
-    const repo = new ContentWorkspacesRepo(freshDb(migrations))
+    const repo = new BrandWorkspacesRepo(freshDb(migrations))
     repo.insert({
       id: 'ws-a', name: 'A', brandSummary: null,
       toneOfVoice: [], audience: [], offers: [], constraints: [],
@@ -385,16 +385,16 @@ describe('ContentWorkspacesRepo', () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm vitest run packages/content-memory/tests/content-workspaces-repo.test.ts`
+Run: `pnpm vitest run packages/content-memory/tests/brand-workspaces-repo.test.ts`
 Expected: FAIL — cannot resolve the migration SQL file / repo module.
 
 - [ ] **Step 4: Create the migration SQL**
 
-Create `packages/content-memory/src/db/migrations/008_content_workspaces.sql`:
+Create `packages/content-memory/src/db/migrations/008_brand_workspaces.sql`:
 
 ```sql
 -- The first-class Brand/Workspace entity. Source for the context pack's brandContext.
-CREATE TABLE content_workspaces (
+CREATE TABLE brand_workspaces (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   brand_summary TEXT,
@@ -408,7 +408,7 @@ CREATE TABLE content_workspaces (
 );
 
 -- Auto-create the default brand that legacy competitors are backfilled to (migration 010).
-INSERT OR IGNORE INTO content_workspaces
+INSERT OR IGNORE INTO brand_workspaces
   (id, name, brand_summary, tone_of_voice, audience, offers, constraints, status, created_at, updated_at)
 VALUES
   ('default-workspace', 'Default Workspace', NULL, '[]', '[]', '[]', '[]', 'active', 0, 0);
@@ -416,13 +416,13 @@ VALUES
 
 - [ ] **Step 5: Create the repo**
 
-Create `packages/content-memory/src/db/repositories/content-workspaces-repo.ts`:
+Create `packages/content-memory/src/db/repositories/brand-workspaces-repo.ts`:
 
 ```ts
 import type { Db } from '../types.js'
-import type { ContentWorkspaceStatus } from '../../types.js'
+import type { BrandWorkspaceStatus } from '../../types.js'
 
-export interface ContentWorkspace {
+export interface BrandWorkspace {
   id: string
   name: string
   brandSummary: string | null
@@ -430,7 +430,7 @@ export interface ContentWorkspace {
   audience: string[]
   offers: string[]
   constraints: string[]
-  status: ContentWorkspaceStatus
+  status: BrandWorkspaceStatus
   createdAt: number
   updatedAt: number
 }
@@ -457,7 +457,7 @@ function parseArr(s: string): string[] {
   }
 }
 
-function toWorkspace(r: Row): ContentWorkspace {
+function toWorkspace(r: Row): BrandWorkspace {
   return {
     id: r.id,
     name: r.name,
@@ -466,18 +466,18 @@ function toWorkspace(r: Row): ContentWorkspace {
     audience: parseArr(r.audience),
     offers: parseArr(r.offers),
     constraints: parseArr(r.constraints),
-    status: r.status as ContentWorkspaceStatus,
+    status: r.status as BrandWorkspaceStatus,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
 }
 
-export class ContentWorkspacesRepo {
+export class BrandWorkspacesRepo {
   constructor(private db: Db) {}
 
-  insert(w: ContentWorkspace): void {
+  insert(w: BrandWorkspace): void {
     this.db.prepare(`
-      INSERT INTO content_workspaces (
+      INSERT INTO brand_workspaces (
         id, name, brand_summary, tone_of_voice, audience, offers, constraints,
         status, created_at, updated_at
       ) VALUES (
@@ -498,40 +498,40 @@ export class ContentWorkspacesRepo {
     })
   }
 
-  findById(id: string): ContentWorkspace | null {
+  findById(id: string): BrandWorkspace | null {
     const r = this.db
-      .prepare('SELECT * FROM content_workspaces WHERE id = ?')
+      .prepare('SELECT * FROM brand_workspaces WHERE id = ?')
       .get(id) as Row | undefined
     return r ? toWorkspace(r) : null
   }
 
-  list(): ContentWorkspace[] {
+  list(): BrandWorkspace[] {
     const rows = this.db
-      .prepare("SELECT * FROM content_workspaces WHERE status = 'active' ORDER BY created_at DESC, name ASC")
+      .prepare("SELECT * FROM brand_workspaces WHERE status = 'active' ORDER BY created_at DESC, name ASC")
       .all() as Row[]
     return rows.map(toWorkspace)
   }
 }
 ```
 
-- [ ] **Step 6: Add the `ContentWorkspaceStatus` type to `src/types.ts`**
+- [ ] **Step 6: Add the `BrandWorkspaceStatus` type to `src/types.ts`**
 
 Add to `packages/content-memory/src/types.ts`:
 
 ```ts
-export type ContentWorkspaceStatus = 'active' | 'archived'
+export type BrandWorkspaceStatus = 'active' | 'archived'
 ```
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `pnpm vitest run packages/content-memory/tests/content-workspaces-repo.test.ts`
+Run: `pnpm vitest run packages/content-memory/tests/brand-workspaces-repo.test.ts`
 Expected: PASS (3 tests).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/content-memory/src/db/migrations/008_content_workspaces.sql packages/content-memory/src/db/repositories/content-workspaces-repo.ts packages/content-memory/src/types.ts packages/content-memory/tests/helpers/db.ts packages/content-memory/tests/content-workspaces-repo.test.ts
-git commit -m "feat(content-memory): content_workspaces table and repo"
+git add packages/content-memory/src/db/migrations/008_brand_workspaces.sql packages/content-memory/src/db/repositories/brand-workspaces-repo.ts packages/content-memory/src/types.ts packages/content-memory/tests/helpers/db.ts packages/content-memory/tests/brand-workspaces-repo.test.ts
+git commit -m "feat(content-memory): brand_workspaces table and repo"
 ```
 
 ---
@@ -555,7 +555,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { freshDb } from './helpers/db.js'
-import { ContentWorkspacesRepo } from '../src/db/repositories/content-workspaces-repo.js'
+import { BrandWorkspacesRepo } from '../src/db/repositories/brand-workspaces-repo.js'
 import {
   KnowledgeDocumentsRepo,
   type NewKnowledgeDocument,
@@ -566,13 +566,13 @@ function sqlFor(file: string): string {
   return readFileSync(join(here, '../src/db/migrations', file), 'utf8')
 }
 const migrations = [
-  { version: 8, sql: sqlFor('008_content_workspaces.sql') },
+  { version: 8, sql: sqlFor('008_brand_workspaces.sql') },
   { version: 9, sql: sqlFor('009_knowledge_documents.sql') },
 ]
 
 function setup() {
   const db = freshDb(migrations)
-  const workspaces = new ContentWorkspacesRepo(db)
+  const workspaces = new BrandWorkspacesRepo(db)
   for (const id of ['workspace-a', 'workspace-b']) {
     workspaces.insert({
       id, name: id, brandSummary: null,
@@ -690,7 +690,7 @@ Create `packages/content-memory/src/db/migrations/009_knowledge_documents.sql`:
 CREATE TABLE knowledge_documents (
   id             TEXT PRIMARY KEY,
   scope          TEXT NOT NULL CHECK (scope IN ('global', 'workspace')),
-  workspace_id   TEXT REFERENCES content_workspaces(id),
+  workspace_id   TEXT REFERENCES brand_workspaces(id),
   platform       TEXT,                       -- NULL = applies to all platforms
   source_type    TEXT NOT NULL,
   title          TEXT NOT NULL,
@@ -898,15 +898,15 @@ git commit -m "feat(content-memory): scoped knowledge_documents store with isola
 
 ---
 
-## Task 5: `ContentWorkspacesService` (id generation + create)
+## Task 5: `BrandWorkspacesService` (id generation + create)
 
 **Files:**
-- Create: `packages/content-memory/src/workspaces/content-workspaces-service.ts`
-- Test: `packages/content-memory/tests/content-workspaces-service.test.ts`
+- Create: `packages/content-memory/src/workspaces/brand-workspaces-service.ts`
+- Test: `packages/content-memory/tests/brand-workspaces-service.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `packages/content-memory/tests/content-workspaces-service.test.ts`:
+Create `packages/content-memory/tests/brand-workspaces-service.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -914,20 +914,20 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { freshDb } from './helpers/db.js'
-import { ContentWorkspacesRepo } from '../src/db/repositories/content-workspaces-repo.js'
-import { ContentWorkspacesService } from '../src/workspaces/content-workspaces-service.js'
+import { BrandWorkspacesRepo } from '../src/db/repositories/brand-workspaces-repo.js'
+import { BrandWorkspacesService } from '../src/workspaces/brand-workspaces-service.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const migrations = [{
   version: 8,
-  sql: readFileSync(join(here, '../src/db/migrations/008_content_workspaces.sql'), 'utf8'),
+  sql: readFileSync(join(here, '../src/db/migrations/008_brand_workspaces.sql'), 'utf8'),
 }]
 
 function service() {
-  return new ContentWorkspacesService(new ContentWorkspacesRepo(freshDb(migrations)))
+  return new BrandWorkspacesService(new BrandWorkspacesRepo(freshDb(migrations)))
 }
 
-describe('ContentWorkspacesService', () => {
+describe('BrandWorkspacesService', () => {
   it('creates a workspace with a generated id and defaults', () => {
     const svc = service()
     const ws = svc.create({ name: 'Skincare A' })
@@ -951,21 +951,21 @@ describe('ContentWorkspacesService', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm vitest run packages/content-memory/tests/content-workspaces-service.test.ts`
+Run: `pnpm vitest run packages/content-memory/tests/brand-workspaces-service.test.ts`
 Expected: FAIL — cannot resolve the service module.
 
 - [ ] **Step 3: Create the service**
 
-Create `packages/content-memory/src/workspaces/content-workspaces-service.ts`:
+Create `packages/content-memory/src/workspaces/brand-workspaces-service.ts`:
 
 ```ts
 import { randomUUID } from 'node:crypto'
 import type {
-  ContentWorkspace,
-  ContentWorkspacesRepo,
-} from '../db/repositories/content-workspaces-repo.js'
+  BrandWorkspace,
+  BrandWorkspacesRepo,
+} from '../db/repositories/brand-workspaces-repo.js'
 
-export interface CreateContentWorkspaceInput {
+export interface CreateBrandWorkspaceInput {
   name: string
   brandSummary?: string | null
   toneOfVoice?: string[]
@@ -974,11 +974,11 @@ export interface CreateContentWorkspaceInput {
   constraints?: string[]
 }
 
-export class ContentWorkspacesService {
-  constructor(private repo: ContentWorkspacesRepo) {}
+export class BrandWorkspacesService {
+  constructor(private repo: BrandWorkspacesRepo) {}
 
-  create(input: CreateContentWorkspaceInput, now: number = Date.now()): ContentWorkspace {
-    const ws: ContentWorkspace = {
+  create(input: CreateBrandWorkspaceInput, now: number = Date.now()): BrandWorkspace {
+    const ws: BrandWorkspace = {
       id: randomUUID(),
       name: input.name,
       brandSummary: input.brandSummary ?? null,
@@ -994,11 +994,11 @@ export class ContentWorkspacesService {
     return ws
   }
 
-  get(id: string): ContentWorkspace | null {
+  get(id: string): BrandWorkspace | null {
     return this.repo.findById(id)
   }
 
-  list(): ContentWorkspace[] {
+  list(): BrandWorkspace[] {
     return this.repo.list()
   }
 }
@@ -1008,14 +1008,14 @@ Note: `randomUUID` from `node:crypto` avoids adding `uuid` as a runtime call her
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm vitest run packages/content-memory/tests/content-workspaces-service.test.ts`
+Run: `pnpm vitest run packages/content-memory/tests/brand-workspaces-service.test.ts`
 Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/content-memory/src/workspaces/content-workspaces-service.ts packages/content-memory/tests/content-workspaces-service.test.ts
-git commit -m "feat(content-memory): ContentWorkspacesService with id generation"
+git add packages/content-memory/src/workspaces/brand-workspaces-service.ts packages/content-memory/tests/brand-workspaces-service.test.ts
+git commit -m "feat(content-memory): BrandWorkspacesService with id generation"
 ```
 
 ---
@@ -1069,7 +1069,7 @@ function load(version: number, file: string): Migration {
 
 /** Migrations owned by content-memory. Conversation splices these into its runner. */
 export const CONTENT_MEMORY_MIGRATIONS: Migration[] = [
-  load(8, '008_content_workspaces.sql'),
+  load(8, '008_brand_workspaces.sql'),
   load(9, '009_knowledge_documents.sql'),
 ]
 ```
@@ -1084,15 +1084,15 @@ export type {
   Platform,
   DocumentStatus,
   SourceType,
-  ContentWorkspaceStatus,
+  BrandWorkspaceStatus,
 } from './types.js'
 export { PLATFORMS, DEFAULT_WORKSPACE_ID } from './types.js'
 
 export type { Db, Migration } from './db/types.js'
 export { CONTENT_MEMORY_MIGRATIONS } from './db/migrations/index.js'
 
-export type { ContentWorkspace } from './db/repositories/content-workspaces-repo.js'
-export { ContentWorkspacesRepo } from './db/repositories/content-workspaces-repo.js'
+export type { BrandWorkspace } from './db/repositories/brand-workspaces-repo.js'
+export { BrandWorkspacesRepo } from './db/repositories/brand-workspaces-repo.js'
 
 export type {
   KnowledgeDocument,
@@ -1102,8 +1102,8 @@ export type {
 } from './db/repositories/knowledge-documents-repo.js'
 export { KnowledgeDocumentsRepo } from './db/repositories/knowledge-documents-repo.js'
 
-export type { CreateContentWorkspaceInput } from './workspaces/content-workspaces-service.js'
-export { ContentWorkspacesService } from './workspaces/content-workspaces-service.js'
+export type { CreateBrandWorkspaceInput } from './workspaces/brand-workspaces-service.js'
+export { BrandWorkspacesService } from './workspaces/brand-workspaces-service.js'
 ```
 
 - [ ] **Step 5: Run test + typecheck + build**
@@ -1253,7 +1253,7 @@ Create `packages/conversation/src/db/migrations/010_competitors_workspace.sql`:
 -- Brand owns its competitor set. Added nullable with a NULL default so SQLite
 -- permits the REFERENCES clause under foreign_keys=ON; then backfill legacy rows.
 ALTER TABLE competitors
-  ADD COLUMN workspace_id TEXT REFERENCES content_workspaces(id) DEFAULT NULL;
+  ADD COLUMN workspace_id TEXT REFERENCES brand_workspaces(id) DEFAULT NULL;
 
 UPDATE competitors
   SET workspace_id = 'default-workspace'
@@ -1288,9 +1288,9 @@ export const MIGRATIONS: Migration[] = [
   load(5, '005_competitors_bio_level.sql'),
   load(6, '006_workflow_triggers.sql'),
   load(7, '007_known_workspaces.sql'),
-  // content-memory owns 8–9 (content_workspaces, knowledge_documents).
+  // content-memory owns 8–9 (brand_workspaces, knowledge_documents).
   ...CONTENT_MEMORY_MIGRATIONS,
-  // 010 alters competitors and depends on content_workspaces existing (8).
+  // 010 alters competitors and depends on brand_workspaces existing (8).
   load(10, '010_competitors_workspace.sql'),
 ]
 ```
@@ -1364,8 +1364,8 @@ Add imports near the other `@anubis/*` imports (top of file):
 
 ```ts
 import {
-  ContentWorkspacesRepo,
-  ContentWorkspacesService,
+  BrandWorkspacesRepo,
+  BrandWorkspacesService,
   KnowledgeDocumentsRepo,
 } from '@anubis/content-memory'
 ```
@@ -1373,28 +1373,28 @@ import {
 Add to the `ConversationStack` interface (after `knownWorkspaces: KnownWorkspacesRepo`):
 
 ```ts
-  contentWorkspaces: ContentWorkspacesService
+  brandWorkspaces: BrandWorkspacesService
   knowledgeDocuments: KnowledgeDocumentsRepo
 ```
 
 In `createConversationService`, after `const knownWorkspacesRepo = new KnownWorkspacesRepo(db)`:
 
 ```ts
-  const contentWorkspaces = new ContentWorkspacesService(new ContentWorkspacesRepo(db))
+  const brandWorkspaces = new BrandWorkspacesService(new BrandWorkspacesRepo(db))
   const knowledgeDocuments = new KnowledgeDocumentsRepo(db)
 ```
 
 Add both to the returned object (in the final `return { ... }`, alongside `knownWorkspaces`):
 
 ```ts
-    contentWorkspaces,
+    brandWorkspaces,
     knowledgeDocuments,
 ```
 
 Add re-exports at the bottom of the file (with the other `export type`/`export` lines):
 
 ```ts
-export type { ContentWorkspace, KnowledgeDocument, ScoredDocument } from '@anubis/content-memory'
+export type { BrandWorkspace, KnowledgeDocument, ScoredDocument } from '@anubis/content-memory'
 export { DEFAULT_WORKSPACE_ID } from '@anubis/content-memory'
 ```
 
@@ -1434,7 +1434,7 @@ Expected: both succeed; content-memory prints the SQL-copy line.
 - [ ] **Step 2: Run the content-memory test suite**
 
 Run: `pnpm vitest run packages/content-memory`
-Expected: all tests pass (types, content-workspaces repo + service, knowledge-documents, migrations-index).
+Expected: all tests pass (types, brand-workspaces repo + service, knowledge-documents, migrations-index).
 
 - [ ] **Step 3: Run the conversation test suite**
 
@@ -1459,7 +1459,7 @@ git commit -m "test(content-memory): phase 1 foundation verified" --allow-empty
 
 **Spec coverage (design §8 Phase 1):**
 - Package skeleton → Task 1. Build order → Task 7.
-- `content_workspaces` brand entity (design §4.1) → Task 3.
+- `brand_workspaces` brand entity (design §4.1) → Task 3.
 - `competitors.workspace_id` + default-brand backfill (design §4.2) → Task 8 (migration 010 + repo + tests).
 - Scoped retrieval with scope-before-rank (original spec §11, design §6) → Task 4 (`KnowledgeDocumentsRepo.search`).
 - Isolation tests (original spec §22.1–§22.3) → Task 4. Default/backfill tests → Task 8.
@@ -1467,13 +1467,13 @@ git commit -m "test(content-memory): phase 1 foundation verified" --allow-empty
 
 **Deliberately deferred (own later plans):** embeddings/vectors, `knowledge_chunks`, `content_similarity_items` + ingestion from `captured_posts`, `ContentContextPack`, `experience_memories`, validators, HTTP routes, workflow nodes. Phase 1 proves isolation with lexical search; Phase 2 adds the local embedder and replaces lexical scoring with semantic ranking behind the same `search()` surface.
 
-**Type consistency:** `Db`/`Migration` defined in `src/db/types.ts` (Task 2) and reused everywhere; `ContentWorkspace` shape identical across repo (Task 3), service (Task 5), and exports (Task 6); `NewKnowledgeDocument`/`ScoredDocument`/`SearchKnowledgeInput` defined in Task 4 and re-exported in Task 6; `DEFAULT_WORKSPACE_ID = 'default-workspace'` is the single source used by the SQL seed (Task 3), the SQL backfill (Task 8), the repo insert default (Task 8), and the tests.
+**Type consistency:** `Db`/`Migration` defined in `src/db/types.ts` (Task 2) and reused everywhere; `BrandWorkspace` shape identical across repo (Task 3), service (Task 5), and exports (Task 6); `NewKnowledgeDocument`/`ScoredDocument`/`SearchKnowledgeInput` defined in Task 4 and re-exported in Task 6; `DEFAULT_WORKSPACE_ID = 'default-workspace'` is the single source used by the SQL seed (Task 3), the SQL backfill (Task 8), the repo insert default (Task 8), and the tests.
 
 **Placeholder scan:** no TBD/TODO/"handle edge cases"/"similar to" — every code and SQL step is complete.
 
 **Known couplings (documented, accepted):**
 1. content-memory hardcodes migration versions 8–9; conversation owns 10. Adding future conversation-only migrations must avoid those numbers (next free is 11+).
-2. Migration 010 (conversation) references `content_workspaces`, created by content-memory's migration 8 — ordering is guaranteed by version sort.
+2. Migration 010 (conversation) references `brand_workspaces`, created by content-memory's migration 8 — ordering is guaranteed by version sort.
 3. `competitors.workspace_id` is nullable at the DB level (SQLite ALTER + FK constraint requires a NULL default); non-null is enforced in the app layer via the repo insert default.
 
 ---

@@ -7,6 +7,8 @@
 // What gets seeded:
 //   1. "Test: Echo static data"          — single Table node, instant smoke test
 //   2. "Test: Chain — Source → Sink"     — two Table nodes connected, visible progression
+//   3. "Test: Instagram JSON media fanout" — Instagram Post → JSON Transformer
+//                                             → Image / Video and JSON Transformer → Table
 //
 // Open Anubis → Workflows after running; both appear in the list.
 // Click "Open" then "▶ Run published".
@@ -120,10 +122,136 @@ if (tableCount !== 3) {
   `)
 }
 
+// Migrations 002/003 — apply the minimal competitor/post tables needed by the
+// seeded Instagram workflow if the user's install predates captured posts.
+const capturedPostTables = db
+  .prepare(`SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name IN ('competitors','captured_posts')`)
+  .get().c
+if (capturedPostTables !== 2) {
+  console.log('[seed] Competitor/captured post tables missing — applying migrations 002/003 inline.')
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS competitors (
+      id                TEXT PRIMARY KEY,
+      handle            TEXT NOT NULL,
+      display_name      TEXT,
+      niche             TEXT,
+      tint              TEXT,
+      followers         INTEGER,
+      avg_likes         INTEGER,
+      post_count        INTEGER NOT NULL DEFAULT 0,
+      last_refreshed_at INTEGER,
+      notes             TEXT,
+      added_at          INTEGER NOT NULL,
+      updated_at        INTEGER NOT NULL,
+      deleted_at        INTEGER
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_competitors_handle_active
+      ON competitors(handle) WHERE deleted_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_competitors_added_at
+      ON competitors(added_at DESC) WHERE deleted_at IS NULL;
+
+    CREATE TABLE IF NOT EXISTS captured_posts (
+      id              TEXT PRIMARY KEY,
+      competitor_id   TEXT NOT NULL REFERENCES competitors(id) ON DELETE CASCADE,
+      username        TEXT NOT NULL,
+      post_url        TEXT NOT NULL,
+      caption         TEXT,
+      likes           INTEGER,
+      comments        INTEGER,
+      posted_at       TEXT,
+      media_kind      TEXT,
+      media_url       TEXT,
+      carousel_count  INTEGER,
+      captured_at     INTEGER NOT NULL,
+      raw             TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_captured_posts_url
+      ON captured_posts(competitor_id, post_url);
+    CREATE INDEX IF NOT EXISTS idx_captured_posts_competitor_time
+      ON captured_posts(competitor_id, posted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_captured_posts_likes
+      ON captured_posts(likes DESC);
+  `)
+}
+
 // Clean up any prior seeded test workflows (cascade removes their runs).
 const removed = db.prepare(`DELETE FROM workflows WHERE name LIKE 'Test:%'`).run()
 if (removed.changes > 0) {
   console.log(`[seed] Removed ${removed.changes} prior test workflow(s).`)
+}
+
+function seedCapturedInstagramPost() {
+  const now = Date.now()
+  const competitorId = 'test-json-transformer-competitor'
+  const postId = 'test-json-transformer-post'
+  const mediaUrl =
+    'data:image/png;base64,' +
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+
+  db.prepare(`
+    INSERT INTO competitors (
+      id, handle, display_name, niche, tint, followers, avg_likes, post_count,
+      last_refreshed_at, notes, added_at, updated_at, deleted_at
+    ) VALUES (
+      @id, @handle, @displayName, @niche, @tint, @followers, @avgLikes, @postCount,
+      @lastRefreshedAt, @notes, @addedAt, @updatedAt, NULL
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      handle = excluded.handle,
+      display_name = excluded.display_name,
+      niche = excluded.niche,
+      post_count = excluded.post_count,
+      updated_at = excluded.updated_at,
+      deleted_at = NULL
+  `).run({
+    id: competitorId,
+    handle: '@anubis.test',
+    displayName: 'Anubis Test',
+    niche: 'Workflow QA',
+    tint: '#fd551d',
+    followers: 1000,
+    avgLikes: 42,
+    postCount: 1,
+    lastRefreshedAt: now,
+    notes: 'Seeded by scripts/create-test-workflow.mjs',
+    addedAt: now,
+    updatedAt: now,
+  })
+
+  db.prepare(`
+    INSERT INTO captured_posts (
+      id, competitor_id, username, post_url, caption, likes, comments,
+      posted_at, media_kind, media_url, carousel_count, captured_at, raw
+    ) VALUES (
+      @id, @competitorId, @username, @postUrl, @caption, @likes, @comments,
+      @postedAt, @mediaKind, @mediaUrl, @carouselCount, @capturedAt, @raw
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      caption = excluded.caption,
+      likes = excluded.likes,
+      comments = excluded.comments,
+      media_kind = excluded.media_kind,
+      media_url = excluded.media_url,
+      carousel_count = excluded.carousel_count,
+      captured_at = excluded.captured_at,
+      raw = excluded.raw
+  `).run({
+    id: postId,
+    competitorId,
+    username: 'anubis.test',
+    postUrl: 'https://instagram.com/p/anubis-json-transformer-test',
+    caption: 'Seeded post for JSON Transformer media fanout',
+    likes: 123,
+    comments: 7,
+    postedAt: new Date(now).toISOString(),
+    mediaKind: 'image',
+    mediaUrl,
+    carouselCount: 1,
+    capturedAt: now,
+    raw: JSON.stringify({ seeded: true, mediaUrls: [mediaUrl] }),
+  })
+
+  return postId
 }
 
 const insert = db.prepare(
@@ -199,6 +327,75 @@ const wf2 = seedWorkflow({
   },
 })
 console.log('[seed]', wf2, '→ Test: Chain — Source → Sink')
+
+const seededPostId = seedCapturedInstagramPost()
+const wf3 = seedWorkflow({
+  name: 'Test: Instagram JSON media fanout',
+  description:
+    'Instagram Post → JSON Transformer, then fan out to Image / Video and ' +
+    'JSON Transformer → Table. Uses a seeded captured post with an inline PNG, so no Instagram login is required.',
+  graph: {
+    nodes: [
+      {
+        id: 'instagram-post',
+        type: 'instagramPost',
+        position: { x: 80, y: 260 },
+        data: { source: 'existing', postId: seededPostId },
+      },
+      {
+        id: 'extract-json',
+        type: 'jsonTransformer',
+        position: { x: 560, y: 260 },
+        data: {
+          template: JSON.stringify({
+            caption: '{{input.post.caption}}',
+            mediaPaths: '{{input.post.mediaPaths}}',
+            rows: {
+              $map: 'input.post.mediaPaths',
+              template: {
+                label: 'media',
+                value: '{{item}}',
+              },
+            },
+          }, null, 2),
+        },
+      },
+      {
+        id: 'image-video',
+        type: 'imageVideo',
+        position: { x: 1040, y: 120 },
+        data: { source: 'upstream' },
+      },
+      {
+        id: 'table-json',
+        type: 'jsonTransformer',
+        position: { x: 1040, y: 400 },
+        data: {
+          template: JSON.stringify({
+            $map: 'input.rows',
+            template: {
+              label: '{{item.label}}',
+              value: '{{item.value}}',
+            },
+          }, null, 2),
+        },
+      },
+      {
+        id: 'table',
+        type: 'table',
+        position: { x: 1520, y: 400 },
+        data: { staticData: [] },
+      },
+    ],
+    edges: [
+      { id: 'e-instagram-extract', source: 'instagram-post', target: 'extract-json' },
+      { id: 'e-extract-media', source: 'extract-json', target: 'image-video' },
+      { id: 'e-extract-table-json', source: 'extract-json', target: 'table-json' },
+      { id: 'e-table-json-table', source: 'table-json', target: 'table' },
+    ],
+  },
+})
+console.log('[seed]', wf3, '→ Test: Instagram JSON media fanout')
 
 
 db.close()

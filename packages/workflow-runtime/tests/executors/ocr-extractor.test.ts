@@ -38,6 +38,27 @@ describe('ocrExtractorExecutor', () => {
     expect(ocr).toHaveBeenCalledWith('/p/up.png')
   })
 
+  it('falls back to first file path in an upstream files bundle', async () => {
+    const ocr = vi.fn().mockResolvedValue('OCR!')
+    await ocrExtractorExecutor.run(
+      {
+        nodeId: 'n1',
+        config: {},
+        upstream: {
+          n2: {
+            kind: 'files',
+            files: [
+              { kind: 'file', path: '/p/first.png' },
+              { kind: 'file', path: '/p/second.png' },
+            ],
+          },
+        },
+      },
+      ctxWithOcr(ocr),
+    )
+    expect(ocr).toHaveBeenCalledWith('/p/first.png')
+  })
+
   it('throws when no image source available', async () => {
     await expect(
       ocrExtractorExecutor.run({ nodeId: 'n1', config: {}, upstream: {} }, ctxWithOcr(async () => '')),

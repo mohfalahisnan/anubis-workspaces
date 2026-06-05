@@ -108,6 +108,8 @@ export class AiAgentService {
     workspaceId: string
     sessionId: string
     agentSessionId?: string
+    /** Terminate this run (kills the CLI child / interrupts the turn). */
+    cancel: () => void | Promise<void>
   }> {
     const workspaceId = input.workspaceId ?? 'default'
     const sessionId = input.sessionId ?? randomUUID()
@@ -135,13 +137,14 @@ export class AiAgentService {
         sessionId,
         agentSessionId,
         stream,
+        cancel: () => this.codex.cancel({ workspaceId, sessionId }),
       }
     }
 
     const mode = input.yolo
       ? 'bypassPermissions'
       : input.permissionMode ?? 'default'
-    const { emitter } = await this.claude.run({
+    const { emitter, cancel } = await this.claude.run({
       workspaceId,
       sessionId,
       claudeResumeId: input.prevAgentSessionId,
@@ -160,6 +163,7 @@ export class AiAgentService {
       workspaceId,
       sessionId,
       stream: emitter,
+      cancel,
     }
   }
 

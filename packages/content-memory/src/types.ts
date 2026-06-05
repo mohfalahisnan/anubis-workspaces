@@ -25,6 +25,8 @@ export const PLATFORMS: readonly Platform[] = [
 /** Well-known id of the auto-created brand all legacy competitors are assigned to. */
 export const DEFAULT_WORKSPACE_ID = 'default-workspace'
 
+export type BrandWorkspaceStatus = 'active' | 'archived'
+
 export type DocumentStatus = 'active' | 'archived' | 'deprecated'
 
 export type SourceType =

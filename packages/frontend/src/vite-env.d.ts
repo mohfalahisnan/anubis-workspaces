@@ -22,6 +22,10 @@ interface Window {
       /** Resolves to the selected absolute path, or null if cancelled. */
       pickSource(kind: 'folder' | 'zip'): Promise<string | null>
     }
+    workspace: {
+      /** Resolves to the selected absolute path, or null if cancelled. */
+      pick(): Promise<string | null>
+    }
     updater: {
       check(): Promise<unknown>
       startDownload(): Promise<void>

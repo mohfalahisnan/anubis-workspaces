@@ -63,6 +63,20 @@ ipcMain.handle('anubis:pick-skill-source', async (_event, kind: 'folder' | 'zip'
   return result.filePaths[0]
 })
 
+// Native picker for a conversation working directory. Returns the selected
+// absolute path, or null on cancel.
+ipcMain.handle('anubis:pick-workspace', async () => {
+  const options: Electron.OpenDialogOptions = {
+    title: 'Select working directory',
+    properties: ['openDirectory', 'createDirectory'],
+  }
+  const result = win
+    ? await dialog.showOpenDialog(win, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
+})
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Anubis',

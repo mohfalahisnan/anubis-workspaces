@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('anubis', {
     pickSource: (kind: 'folder' | 'zip') =>
       ipcRenderer.invoke('anubis:pick-skill-source', kind) as Promise<string | null>,
   },
+  workspace: {
+    /** Open a native folder picker. Resolves to the selected absolute path,
+     *  or null if the user cancels. */
+    pick: () => ipcRenderer.invoke('anubis:pick-workspace') as Promise<string | null>,
+  },
   updater: {
     check: () => ipcRenderer.invoke('check-update'),
     startDownload: () => ipcRenderer.invoke('start-download'),

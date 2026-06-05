@@ -3,6 +3,9 @@ import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
 import {
+  AgentRunService,
+  AgentRunsRepo,
+  BrandRuleValidator,
   ContentContextPacksRepo,
   ContentMemoryService,
   ContentSimilarityItemsRepo,
@@ -12,7 +15,11 @@ import {
   ExperienceIndexService,
   ExperienceMemoriesRepo,
   KnowledgeDocumentsRepo,
+  PlatformRuleValidator,
+  RepeatedMistakeValidator,
   SimilarityIngestionService,
+  ValidationService,
+  WorkspaceLeakageValidator,
   XenovaEmbedder,
   bundledModelCacheDir,
 } from '@anubis/content-memory'
@@ -71,6 +78,8 @@ export interface ConversationStack {
   capturedPostsSimilarity: CapturedPostsSimilarityIngestor
   contentMemory: ContentMemoryService
   experience: ExperienceIndexService
+  validation: ValidationService
+  agentRuns: AgentRunService
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -116,6 +125,14 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     contextPack,
     packs: new ContentContextPacksRepo(db),
   })
+  const brandWorkspacesRepo = new BrandWorkspacesRepo(db)
+  const validation = new ValidationService([
+    new WorkspaceLeakageValidator(brandWorkspacesRepo),
+    new BrandRuleValidator(),
+    new PlatformRuleValidator(),
+    new RepeatedMistakeValidator(experience),
+  ])
+  const agentRuns = new AgentRunService(new AgentRunsRepo(db))
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -177,6 +194,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     capturedPostsSimilarity,
     contentMemory,
     experience,
+    validation,
+    agentRuns,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()

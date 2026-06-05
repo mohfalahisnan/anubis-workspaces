@@ -54,4 +54,34 @@ describe('content-memory wired onto the stack', () => {
     })
     expect(active.map((x) => x.id)).toContain(m.id)
   })
+
+  it('exposes validation + agentRuns and flags leakage', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'anubis-cm-'))
+    const builtin = getBuiltinSkillRoots()
+    stack = createConversationService({
+      dataDir: dir,
+      skillRoots: {
+        autoInject: builtin.autoInject, optIn: builtin.optIn,
+        user: join(dir, 'skills'), userAutoInject: join(dir, 'skills', 'auto-inject'),
+        userOptIn: join(dir, 'skills', 'opt-in'),
+      },
+    })
+    stack.brandWorkspaces.create({ name: 'IronFit' }) // a second brand to leak
+    const { pack, packId } = await stack.contentMemory.buildForContentTask({
+      workspaceId: 'default-workspace', platform: 'instagram',
+      taskType: 'generate_content', query: 'x', objective: 'Generate',
+    })
+    const result = await stack.validation.validate({
+      workspaceId: 'default-workspace', platform: 'instagram',
+      contextPack: pack, output: 'Just like IronFit, do this.',
+    })
+    expect(result.passed).toBe(false)
+    const run = stack.agentRuns.saveRun({
+      workspaceId: 'default-workspace', agentId: 'a', taskType: 'generate_content',
+      userInput: 'x', intent: 'generate', output: 'o',
+      validationStatus: 'needs_review', contextPackId: packId,
+    })
+    expect(stack.agentRuns).toBeDefined()
+    expect(run.id).toBeTruthy()
+  })
 })

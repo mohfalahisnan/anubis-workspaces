@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 
 import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
-import { effectiveLevel } from '@anubis/shared'
+import { effectiveLevel, multiplierRatingFor } from '@anubis/shared'
 
 import { captureCompetitor, deletePost, listPosts, updatePost } from '@/api'
 import { cn } from '@/lib/utils'
@@ -31,7 +31,10 @@ import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
 import { CompetitorLevelDot } from '@/components/competitor-level-dot'
 import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
+import { PostMultiplierBadge } from '@/components/post-multiplier-badge'
+import { PostMultiplierFilter, matchesMultiplierFilter, type MultiplierFilter } from '@/components/post-multiplier-filter'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { useLevelMultipliers } from '@/hooks/use-level-multipliers'
 import {
   Dialog,
   DialogContent,
@@ -237,7 +240,9 @@ export function ContentPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const [multiplierFilter, setMultiplierFilter] = useState<MultiplierFilter>('all')
   const { config: levelsCfg } = useCompetitorLevels()
+  const multipliersCfg = useLevelMultipliers()
 
   async function refresh() {
     setBusy(true)
@@ -421,9 +426,14 @@ export function ContentPage() {
         levelFilter,
       ),
     )
+    .filter((card) => {
+      const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
+      const { rating } = multiplierRatingFor(level, card.post?.likes, card.post?.competitorAvgLikes, multipliersCfg)
+      return matchesMultiplierFilter(rating, multiplierFilter)
+    })
   const competitors = [...new Set(allCards.map((card) => card.handle))].sort()
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
-  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all'
+  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all' || multiplierFilter !== 'all'
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -567,6 +577,7 @@ export function ContentPage() {
                   setDateFrom('')
                   setDateTo('')
                   setLevelFilter('all')
+                  setMultiplierFilter('all')
                 }}
                 className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
               >
@@ -606,8 +617,9 @@ export function ContentPage() {
               </button>
             </div>
           </div>
-          <div className='mt-2 px-1'>
+          <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1'>
             <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+            <PostMultiplierFilter value={multiplierFilter} onChange={setMultiplierFilter} />
           </div>
         </div>
 
@@ -635,6 +647,7 @@ export function ContentPage() {
                 key={card.key}
                 card={card}
                 levelsCfg={levelsCfg}
+                multipliersCfg={multipliersCfg}
                 starred={!!stars[card.key]}
                 onStar={() => toggleStar(card.key)}
                 onEdit={card.post ? () => setEditingPost(card.post!) : undefined}
@@ -798,6 +811,7 @@ function PostCard({
   selected,
   onToggleSelect,
   levelsCfg,
+  multipliersCfg,
 }: {
   card: CardModel
   starred: boolean
@@ -808,6 +822,7 @@ function PostCard({
   selected: boolean
   onToggleSelect?: () => void
   levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
+  multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
 }) {
   const selectable = selectMode && !!onToggleSelect
   return (
@@ -863,6 +878,17 @@ function PostCard({
           )}
           <span className='text-muted-foreground'>·</span>
           <span className='shrink-0 text-muted-foreground'>{card.date}</span>
+          {card.post && (
+            <PostMultiplierBadge
+              className='ml-auto'
+              likes={card.post.likes}
+              competitorFollowers={card.post.competitorFollowers}
+              competitorAvgLikes={card.post.competitorAvgLikes}
+              competitorLevelOverride={card.post.competitorLevel}
+              levelsConfig={levelsCfg}
+              multipliersConfig={multipliersCfg}
+            />
+          )}
         </div>
         <p className='mt-2 line-clamp-2 min-h-[38px] text-[13px] leading-[1.45] text-foreground'>
           {card.caption}

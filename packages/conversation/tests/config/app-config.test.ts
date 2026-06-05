@@ -97,3 +97,77 @@ describe('AppConfigService — competitorLevels', () => {
     expect(cfg.competitorLevels).toBeUndefined()
   })
 })
+
+describe('AppConfigService — levelMultipliers', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'anubis-cfg-mult-'))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const valid = {
+    green: { min: 5, good: 10 },
+    yellow: { min: 10, good: 15 },
+    red: { min: 15, good: 20 },
+  }
+
+  it('accepts a valid levelMultipliers block and reloads it', () => {
+    new AppConfigService(dir).update({ levelMultipliers: valid })
+    const reloaded = new AppConfigService(dir).get()
+    expect(reloaded.levelMultipliers).toEqual(valid)
+  })
+
+  it('accepts fractional thresholds', () => {
+    const frac = {
+      green: { min: 2.5, good: 5 },
+      yellow: { min: 5, good: 7.5 },
+      red: { min: 7.5, good: 10 },
+    }
+    const next = new AppConfigService(dir).update({ levelMultipliers: frac })
+    expect(next.levelMultipliers).toEqual(frac)
+  })
+
+  it('drops the block when a band has min >= good', () => {
+    const next = new AppConfigService(dir).update({
+      levelMultipliers: {
+        green: { min: 10, good: 10 },
+        yellow: { min: 10, good: 15 },
+        red: { min: 15, good: 20 },
+      },
+    })
+    expect(next.levelMultipliers).toBeUndefined()
+  })
+
+  it('drops the block when any value is non-positive', () => {
+    const next = new AppConfigService(dir).update({
+      levelMultipliers: {
+        green: { min: 0, good: 10 },
+        yellow: { min: 10, good: 15 },
+        red: { min: 15, good: 20 },
+      },
+    })
+    expect(next.levelMultipliers).toBeUndefined()
+  })
+
+  it('drops the block when a level is missing', () => {
+    const next = new AppConfigService(dir).update({
+      // @ts-expect-error — deliberately incomplete to exercise sanitize
+      levelMultipliers: { green: { min: 5, good: 10 } },
+    })
+    expect(next.levelMultipliers).toBeUndefined()
+  })
+
+  it('leaves competitorLevels untouched when updating levelMultipliers', () => {
+    const svc = new AppConfigService(dir)
+    svc.update({
+      competitorLevels: { minActive: 1_000, greenMax: 10_000, yellowMax: 50_000, maxActive: 200_000 },
+    })
+    const next = svc.update({ levelMultipliers: valid })
+    expect(next.competitorLevels?.greenMax).toBe(10_000)
+    expect(next.levelMultipliers).toEqual(valid)
+  })
+})

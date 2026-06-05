@@ -3,13 +3,14 @@ import {
   CodeIcon,
   SaveIcon,
 } from 'lucide-react'
-import type { AppConfig, CompetitorLevelsConfig } from '@anubis/shared'
-import { DEFAULT_COMPETITOR_LEVELS, isValidCompetitorLevels } from '@anubis/shared'
+import type { AppConfig, CompetitorLevelsConfig, LevelMultipliersConfig, MultiplierBand } from '@anubis/shared'
+import { DEFAULT_COMPETITOR_LEVELS, DEFAULT_LEVEL_MULTIPLIERS, isValidCompetitorLevels, isValidLevelMultipliers } from '@anubis/shared'
 import {
   getAppConfig,
   updateAppConfig,
 } from '@/api'
 import { setCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { setLevelMultipliers } from '@/hooks/use-level-multipliers'
 import { cn } from '@/lib/utils'
 
 type Banner = { kind: 'success' | 'error'; message: string }
@@ -37,6 +38,9 @@ export function SettingsPage() {
   const effectiveLevels: CompetitorLevelsConfig =
     form.competitorLevels ?? config?.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS
 
+  const effectiveMultipliers: LevelMultipliersConfig =
+    form.levelMultipliers ?? config?.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS
+
   const chromePathDirty = config !== null && (form.chromePath ?? '') !== (config.chromePath ?? '')
   const levelsDirty =
     config !== null &&
@@ -44,8 +48,14 @@ export function SettingsPage() {
     JSON.stringify(config.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS)
   const levelsValid = isValidCompetitorLevels(effectiveLevels)
 
-  const dirty = chromePathDirty || levelsDirty
-  const canSave = dirty && levelsValid
+  const multipliersDirty =
+    config !== null &&
+    JSON.stringify(form.levelMultipliers ?? config.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS) !==
+    JSON.stringify(config.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS)
+  const multipliersValid = isValidLevelMultipliers(effectiveMultipliers)
+
+  const dirty = chromePathDirty || levelsDirty || multipliersDirty
+  const canSave = dirty && levelsValid && multipliersValid
 
   async function handleSave() {
     setBusy(true); setBanner(null)
@@ -53,14 +63,17 @@ export function SettingsPage() {
       const next = await updateAppConfig({
         chromePath: form.chromePath ?? '',
         competitorLevels: form.competitorLevels ?? config?.competitorLevels,
+        levelMultipliers: form.levelMultipliers ?? config?.levelMultipliers,
       })
       setConfig(next)
       setForm((f) => ({
         ...f,
         chromePath: next.chromePath ?? '',
         competitorLevels: next.competitorLevels,
+        levelMultipliers: next.levelMultipliers,
       }))
       setCompetitorLevels(next.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS)
+      setLevelMultipliers(next.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS)
       setBanner({ kind: 'success', message: 'Saved.' })
     } catch (e) {
       setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Could not save.' })
@@ -193,6 +206,38 @@ export function SettingsPage() {
             </p>
           )}
         </section>
+
+        <section className='mt-8 border-t border-border pt-6'>
+          <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>Level multipliers</h2>
+          <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
+            Per-post viral multiplier (<span className='font-mono'>post likes ÷ competitor avgLikes</span>) thresholds.
+            For each competitor level: at or above <span className='font-mono'>min</span> is yellow, at or above <span className='font-mono'>good</span> is green; below <span className='font-mono'>min</span> is red.
+          </p>
+
+          <div className='mt-4 flex flex-col gap-3'>
+            <MultiplierRow
+              label='Green competitor'
+              band={effectiveMultipliers.green}
+              onChange={(band) => setForm((f) => ({ ...f, levelMultipliers: { ...effectiveMultipliers, green: band } }))}
+            />
+            <MultiplierRow
+              label='Yellow competitor'
+              band={effectiveMultipliers.yellow}
+              onChange={(band) => setForm((f) => ({ ...f, levelMultipliers: { ...effectiveMultipliers, yellow: band } }))}
+            />
+            <MultiplierRow
+              label='Red competitor'
+              band={effectiveMultipliers.red}
+              onChange={(band) => setForm((f) => ({ ...f, levelMultipliers: { ...effectiveMultipliers, red: band } }))}
+            />
+          </div>
+
+          {!multipliersValid && (
+            <p className='mt-3 text-[12px] text-destructive'>
+              For each level, "min" and "good" must be &gt; 0 and min &lt; good.
+            </p>
+          )}
+        </section>
       </div>
     </div>
   )
@@ -213,6 +258,54 @@ function LevelInput({ label, value, onChange }: { label: string; value: number; 
         }}
         className='h-10 w-full rounded-md border border-border bg-card px-3 font-mono text-[12.5px] text-foreground outline-none focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
       />
+    </label>
+  )
+}
+
+function MultiplierRow({
+  label,
+  band,
+  onChange,
+}: {
+  label: string
+  band: MultiplierBand
+  onChange: (band: MultiplierBand) => void
+}) {
+  return (
+    <div className='grid grid-cols-[1fr_auto_auto] items-end gap-3 sm:grid-cols-[160px_1fr_1fr]'>
+      <span className='text-[12.5px] font-medium text-foreground'>{label}</span>
+      <MultiplierInput
+        label='Min (yellow)'
+        value={band.min}
+        onChange={(n) => onChange({ ...band, min: n })}
+      />
+      <MultiplierInput
+        label='Good (green)'
+        value={band.good}
+        onChange={(n) => onChange({ ...band, good: n })}
+      />
+    </div>
+  )
+}
+
+function MultiplierInput({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <label className='flex flex-col gap-1.5'>
+      <span className='text-[12px] text-muted-foreground'>{label}</span>
+      <div className='relative'>
+        <input
+          type='number'
+          min={0}
+          step={0.5}
+          value={Number.isFinite(value) ? value : ''}
+          onChange={(e) => {
+            const n = Number(e.target.value)
+            onChange(Number.isFinite(n) ? Math.max(0, n) : 0)
+          }}
+          className='h-10 w-full rounded-md border border-border bg-card pl-3 pr-7 font-mono text-[12.5px] text-foreground outline-none focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
+        />
+        <span className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[12px] text-muted-foreground'>×</span>
+      </div>
     </label>
   )
 }

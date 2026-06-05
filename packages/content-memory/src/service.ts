@@ -41,4 +41,10 @@ export class ContentMemoryService {
     })
     return { packId, pack }
   }
+
+  /** Load a previously built pack by id (e.g. for validation). */
+  getPack(packId: string): ContentContextPack | null {
+    const rec = this.deps.packs.findById(packId)
+    return rec ? (rec.contextJson as ContentContextPack) : null
+  }
 }

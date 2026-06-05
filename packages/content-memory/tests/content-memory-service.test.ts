@@ -49,4 +49,15 @@ describe('ContentMemoryService.buildForContentTask', () => {
     expect(pack.workspaceId).toBe('workspace-a')
     expect(packs.findById(packId)?.taskType).toBe('generate_content')
   })
+
+  it('getPack returns a persisted pack by id', async () => {
+    const { svc } = setup()
+    const { packId } = await svc.buildForContentTask({
+      workspaceId: 'workspace-a', platform: 'instagram',
+      taskType: 'generate_content', query: 'skincare', objective: 'Generate',
+    })
+    const pack = svc.getPack(packId)
+    expect(pack?.workspaceId).toBe('workspace-a')
+    expect(svc.getPack('nope')).toBeNull()
+  })
 })

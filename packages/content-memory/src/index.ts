@@ -83,3 +83,18 @@ export type {
   RecordExperienceInput, SaveFeedbackInput,
 } from './experience/experience-index-service.js'
 export { ExperienceIndexService } from './experience/experience-index-service.js'
+
+export type {
+  ValidationIssueType, ValidationIssue, ValidationResult, ValidateInput, OutputValidator,
+} from './validators/types.js'
+export { forbiddenPhraseViolations } from './validators/helpers.js'
+export { WorkspaceLeakageValidator } from './validators/workspace-leakage-validator.js'
+export { BrandRuleValidator } from './validators/brand-rule-validator.js'
+export { PlatformRuleValidator } from './validators/platform-rule-validator.js'
+export { RepeatedMistakeValidator } from './validators/repeated-mistake-validator.js'
+export { ValidationService } from './validators/validation-service.js'
+
+export type { AgentRun, ValidationStatus } from './db/repositories/agent-runs-repo.js'
+export { AgentRunsRepo } from './db/repositories/agent-runs-repo.js'
+export type { SaveAgentRunInput } from './agent-runs/agent-run-service.js'
+export { AgentRunService } from './agent-runs/agent-run-service.js'

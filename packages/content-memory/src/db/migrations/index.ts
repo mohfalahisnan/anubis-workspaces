@@ -18,4 +18,5 @@ export const CONTENT_MEMORY_MIGRATIONS: Migration[] = [
   load(12, '012_knowledge_documents_embedding.sql'),
   load(13, '013_content_context_packs.sql'),
   load(14, '014_experience_memories.sql'),
+  load(15, '015_agent_runs.sql'),
 ]

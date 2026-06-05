@@ -18,6 +18,10 @@ release
 # Editor directories and files
 .vscode/.debug.env
 .idea
+
+# Claude Code local state and git worktrees (never commit — a committed
+# worktree dir becomes a bare gitlink that breaks CI's checkout)
+.claude/
 .DS_Store
 *.suo
 *.ntvs*

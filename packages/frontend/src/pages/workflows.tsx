@@ -56,15 +56,17 @@ export function WorkflowsPage() {
         </div>
         <Button onClick={() => setIsCreating(true)}>+ New workflow</Button>
       </div>
-      <div className='min-h-0 flex-1 overflow-auto p-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+      <div className='flex-1 overflow-auto p-6 grid gap-4 grid-cols-3'>
         {items.length === 0 ? (
           <p className='text-sm text-muted-foreground col-span-full'>No workflows yet. Click "New workflow" to get started.</p>
         ) : items.map((item) => (
-          <div key={item.id} className='flex flex-col overflow-hidden rounded-2xl border border-border bg-card'>
+          <div key={item.id} className='flex flex-col overflow-hidden rounded-2xl border border-border bg-card max-h-72'>
             <WorkflowCardPreview graphJson={item.previewGraph} />
             <div className='space-y-3 p-5'>
               <div>
-                <p className='text-base font-medium'>{item.name}</p>
+                <p className='text-base font-medium cursor-pointer hover:underline' onClick={() => navigate({ page: 'workflow-editor', workflowId: item.id })}>
+                  {item.name}
+                </p>
                 {item.description ? <p className='text-xs text-muted-foreground'>{item.description}</p> : null}
                 <p className='mt-2 text-[11px] uppercase tracking-wider text-muted-foreground'>{statusLabel(item)}</p>
                 <p className='text-xs text-muted-foreground'>

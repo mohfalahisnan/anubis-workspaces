@@ -6,6 +6,7 @@ import { resolve, sep, join, extname } from 'node:path'
 import { getStack, getDataDir } from './services.js'
 import { WorkflowGraphSchema } from '@anubis/workflow-runtime'
 import { WorkflowRunManager } from './workflow-run-manager.js'
+import { TriggerManager } from './trigger-manager.js'
 import type { ConversationStack } from '@anubis/conversation'
 
 const ARTIFACT_MIME: Record<string, string> = {
@@ -24,6 +25,36 @@ let runManager: WorkflowRunManager | null = null
 function getRunManager(stack: ConversationStack): WorkflowRunManager {
   if (!runManager) runManager = new WorkflowRunManager(stack, getDataDir())
   return runManager
+}
+
+let triggerManager: TriggerManager | null = null
+function getTriggerManager(stack: ConversationStack): TriggerManager {
+  if (!triggerManager) triggerManager = new TriggerManager(stack, getRunManager(stack))
+  return triggerManager
+}
+
+const TRIGGER_TYPES = new Set(['scheduleTrigger', 'fileWatchTrigger'])
+function graphHasTrigger(graphJson?: string | null): boolean {
+  if (!graphJson) return false
+  try {
+    const g = JSON.parse(graphJson) as { nodes?: Array<{ type?: string }> }
+    return Array.isArray(g.nodes) && g.nodes.some((n) => n.type != null && TRIGGER_TYPES.has(n.type))
+  } catch {
+    return false
+  }
+}
+
+/** Called once at backend boot to restore armed triggers. */
+export function rearmTriggersOnBoot(stack: ConversationStack): void {
+  getTriggerManager(stack).rearmAll()
+}
+
+/** Called at backend shutdown to tear down timers/watchers. */
+export function shutdownTriggers(): void {
+  if (triggerManager) {
+    triggerManager.shutdown()
+    triggerManager = null
+  }
 }
 
 const CreateBody = z.object({
@@ -59,6 +90,8 @@ workflowRoutes.get('/', (c) => {
       draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt,
       lastRun: lastRun ? { id: lastRun.id, status: lastRun.status, startedAt: lastRun.startedAt } : undefined,
       previewGraph: wf.draftGraph,
+      hasTrigger: graphHasTrigger(wf.publishedGraph),
+      armed: getTriggerManager(stack).isArmed(wf.id),
     }
   })
   return c.json({ items })
@@ -86,7 +119,11 @@ workflowRoutes.get('/:id', (c) => {
   const stack = getStack()
   const wf = stack.workflows.get(c.req.param('id'))
   if (!wf) return c.json({ error: 'not_found' }, 404)
-  return c.json(wf)
+  return c.json({
+    ...wf,
+    hasTrigger: graphHasTrigger(wf.publishedGraph),
+    armed: getTriggerManager(stack).isArmed(wf.id),
+  })
 })
 
 workflowRoutes.patch('/:id', async (c) => {
@@ -108,6 +145,25 @@ workflowRoutes.post('/:id/publish', (c) => {
   const stack = getStack()
   const wf = stack.workflows.publish(c.req.param('id'), Date.now())
   return c.json(wf)
+})
+
+workflowRoutes.post('/:id/arm', (c) => {
+  const stack = getStack()
+  try {
+    getTriggerManager(stack).arm(c.req.param('id'))
+    return c.json({ armed: true })
+  } catch (err) {
+    const code = (err as { code?: number }).code
+    const message = err instanceof Error ? err.message : String(err)
+    if (code === 400) return c.json({ error: 'bad_request', message }, 400)
+    return c.json({ error: 'internal', message }, 500)
+  }
+})
+
+workflowRoutes.post('/:id/disarm', (c) => {
+  const stack = getStack()
+  getTriggerManager(stack).disarm(c.req.param('id'))
+  return c.json({ armed: false })
 })
 
 workflowRoutes.delete('/:id', (c) => {

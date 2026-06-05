@@ -73,7 +73,7 @@ export class TaskManager {
     if (inflight) return inflight
 
     const promise = (async () => {
-      const { stream, agentSessionId } = await this.aiAgent.streamAgent({
+      const { stream, agentSessionId, cancel: cancelRun } = await this.aiAgent.streamAgent({
         agent: profile.agent,
         workspaceId: conv.id,
         sessionId: conv.id,
@@ -102,7 +102,15 @@ export class TaskManager {
           throw new Error('Re-sending into an existing task is not supported yet; spawn a new turn instead.')
         },
         cancel: async () => {
-          this.tasks.delete(conv.id)
+          // Actually terminate the spawned agent run (kills the CLI child /
+          // interrupts the codex turn). Without this, Stop only drops the
+          // bookkeeping entry while the real process keeps running, holds the
+          // agent session, and blocks the next turn from resuming it.
+          try {
+            await cancelRun?.()
+          } finally {
+            this.tasks.delete(conv.id)
+          }
         },
       }
       task.emitter.on('session', (d) => { task.agentSessionId = d.sessionId; task.lastActivityAt = nowMs() })

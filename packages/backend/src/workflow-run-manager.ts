@@ -35,7 +35,10 @@ export class WorkflowRunManager {
     private dataDir: string,
   ) {}
 
-  async start(workflowId: string): Promise<{ runId: string }> {
+  async start(
+    workflowId: string,
+    triggerContext?: { nodeId: string; payload: unknown },
+  ): Promise<{ runId: string }> {
     if (this.runsByWorkflow.has(workflowId)) {
       const err = new Error('workflow already has an active run')
       ;(err as { code?: number }).code = 409
@@ -73,7 +76,11 @@ export class WorkflowRunManager {
       for (const l of listeners) l(event)
     }
 
-    void this.runAndPersist(active, JSON.parse(workflow.publishedGraph), emit, now).finally(() => {
+    const seed = triggerContext
+      ? { [triggerContext.nodeId]: triggerContext.payload }
+      : undefined
+
+    void this.runAndPersist(active, JSON.parse(workflow.publishedGraph), emit, now, seed).finally(() => {
       // Free the workflow slot so the user can start another run immediately.
       this.runsByWorkflow.delete(workflowId)
       // Keep the active entry (with buffered events) alive for a grace period
@@ -124,6 +131,7 @@ export class WorkflowRunManager {
     graph: ReturnType<typeof WorkflowGraphSchema.parse>,
     emit: (event: RunEvent) => void,
     startedAt: number,
+    seed?: Record<string, unknown>,
   ): Promise<void> {
     emit({ kind: 'run-started', runId: active.runId, at: startedAt })
 
@@ -211,7 +219,7 @@ export class WorkflowRunManager {
         signal: active.controller.signal,
         emit: (e: NodeRunEvent) => { void wrappedEmit(e) },
       }
-      const result = await runWorkflow(graph, executorRegistry, ctx)
+      const result = await runWorkflow(graph, executorRegistry, ctx, { seed })
       status = result.status
       runError = result.error
     } catch (err) {

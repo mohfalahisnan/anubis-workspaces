@@ -25,10 +25,22 @@ const CompetitorLevelsSchema = z.object({
   maxActive: z.number().int().positive(),
 }).strict()
 
+const MultiplierBandSchema = z.object({
+  min: z.number().positive(),
+  good: z.number().positive(),
+}).strict()
+
+const LevelMultipliersSchema = z.object({
+  green: MultiplierBandSchema,
+  yellow: MultiplierBandSchema,
+  red: MultiplierBandSchema,
+}).strict()
+
 const PatchBody = z.object({
   chromePath: z.string().optional(),
   crawlerProfileRoot: z.string().optional(),
   competitorLevels: CompetitorLevelsSchema.optional(),
+  levelMultipliers: LevelMultipliersSchema.optional(),
 }).strict()
 
 export const configRoutes = new Hono()

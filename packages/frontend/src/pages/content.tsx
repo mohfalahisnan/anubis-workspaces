@@ -8,7 +8,6 @@ import {
   ChevronDownIcon,
   Edit3Icon,
   GalleryHorizontalEndIcon,
-  GalleryVerticalEndIcon,
   HeartIcon,
   ImageIcon,
   MessageCircleIcon,
@@ -17,21 +16,24 @@ import {
   SearchIcon,
   Square as SquareIcon,
   StarIcon,
-  Table2Icon,
   Trash2Icon,
   XIcon,
 } from 'lucide-react'
 
 import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
-import { effectiveLevel } from '@anubis/shared'
+import { effectiveLevel, multiplierRatingFor } from '@anubis/shared'
 
 import { captureCompetitor, deletePost, listPosts, updatePost } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
-import { CompetitorLevelDot } from '@/components/competitor-level-dot'
 import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
+import { ViewToggle } from '@/components/view-toggle'
+import { levelTint, levelTip, resolveLevel } from '@/lib/competitor-level'
+import { PostMultiplierBadge } from '@/components/post-multiplier-badge'
+import { PostMultiplierFilter, matchesMultiplierFilter, type MultiplierFilter } from '@/components/post-multiplier-filter'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { useLevelMultipliers } from '@/hooks/use-level-multipliers'
 import {
   Dialog,
   DialogContent,
@@ -59,72 +61,6 @@ interface CardModel {
   mediaUrl?: string
   post?: CapturedPostSummary
 }
-
-/* Brand-aligned mid-tone backdrops per handle, used for both real
-   captured posts (when we don't have a thumbnail yet) and the mock
-   fallback grid. */
-const HANDLE_TINTS: Record<string, string> = {
-  '@ali.abdaal': '#B5663F',
-  '@kayla.studio': '#4E6E8E',
-  '@jamesclear': '#5E7D55',
-  '@studyquill': '#7E5E92',
-  '@marie_forleo': '#A85F6B',
-  '@notion': '#565B63',
-  '@magnoliabakery': '#9C6A3F',
-  '@raditya_dika': '#3F8079',
-  '@linear': '#46617E',
-}
-
-const MOCK_CARDS: CardModel[] = [
-  { key: 'm1', handle: '@ali.abdaal', date: '3d', format: 'carousel', chip: 'Carousel · 7',
-    caption: "I used to think productivity was about doing more. After 10 years it's actually about saying no faster.",
-    likes: '11.4K', comments: '312', engagement: '4.2%', hook: 'Contrarian Take',
-    tint: HANDLE_TINTS['@ali.abdaal']! },
-  { key: 'm2', handle: '@kayla.studio', date: '1d', format: 'reel', chip: 'Reel · 0:38',
-    caption: '5 brand kit mistakes I see every week (and the 30-second fix for each).',
-    likes: '4.2K', comments: '89', engagement: '3.1%', hook: 'Numbered List',
-    tint: HANDLE_TINTS['@kayla.studio']! },
-  { key: 'm3', handle: '@jamesclear', date: '5d', format: 'static', chip: 'Static',
-    caption: 'You do not rise to the level of your goals. You fall to the level of your systems.',
-    likes: '32.6K', comments: '540', engagement: '5.8%', hook: 'Aphorism',
-    tint: HANDLE_TINTS['@jamesclear']! },
-  { key: 'm4', handle: '@studyquill', date: '2d', format: 'carousel', chip: 'Carousel · 10',
-    caption: 'How I plan a 40-hour study week without burning out — my full Sunday reset.',
-    likes: '9.1K', comments: '204', engagement: '3.7%', hook: 'How-To',
-    tint: HANDLE_TINTS['@studyquill']! },
-  { key: 'm5', handle: '@marie_forleo', date: '6d', format: 'reel', chip: 'Reel · 1:02',
-    caption: 'The one question that ends overthinking in 60 seconds.',
-    likes: '3.8K', comments: '142', engagement: '2.9%', hook: 'Curiosity Gap',
-    tint: HANDLE_TINTS['@marie_forleo']! },
-  { key: 'm6', handle: '@notion', date: '4d', format: 'carousel', chip: 'Carousel · 6',
-    caption: '8 Notion templates our team actually uses every single day.',
-    likes: '9.7K', comments: '276', engagement: '4.0%', hook: 'Numbered List',
-    tint: HANDLE_TINTS['@notion']! },
-  { key: 'm7', handle: '@magnoliabakery', date: '12h', format: 'reel', chip: 'Reel · 0:24',
-    caption: 'Watch us pipe 200 cupcakes before the morning rush opens.',
-    likes: '18.4K', comments: '410', engagement: '6.2%', hook: 'Process Reveal',
-    tint: HANDLE_TINTS['@magnoliabakery']! },
-  { key: 'm8', handle: '@raditya_dika', date: '1d', format: 'reel', chip: 'Reel · 0:51',
-    caption: 'Hal-hal kecil yang ternyata bikin hari kamu jauh lebih baik.',
-    likes: '24.8K', comments: '612', engagement: '5.1%', hook: 'Relatable Confession',
-    tint: HANDLE_TINTS['@raditya_dika']! },
-  { key: 'm9', handle: '@linear', date: '1w', format: 'static', chip: 'Static',
-    caption: 'Speed is a feature. Everything we ship is built around it.',
-    likes: '2.1K', comments: '58', engagement: '2.4%', hook: 'Bold Claim',
-    tint: HANDLE_TINTS['@linear']! },
-  { key: 'm10', handle: '@ali.abdaal', date: '6d', format: 'reel', chip: 'Reel · 0:45',
-    caption: 'The 2-minute rule that completely rewired how I start hard tasks.',
-    likes: '8.9K', comments: '198', engagement: '3.9%', hook: 'How-To',
-    tint: HANDLE_TINTS['@ali.abdaal']! },
-  { key: 'm11', handle: '@kayla.studio', date: '4d', format: 'carousel', chip: 'Carousel · 5',
-    caption: 'Before / after: a small bakery rebrand that doubled their saves.',
-    likes: '5.6K', comments: '121', engagement: '3.4%', hook: 'Before & After',
-    tint: HANDLE_TINTS['@kayla.studio']! },
-  { key: 'm12', handle: '@jamesclear', date: '2w', format: 'carousel', chip: 'Carousel · 8',
-    caption: "Atomic Habits in 8 slides: the cheat sheet I wish I'd had at 25.",
-    likes: '27.2K', comments: '489', engagement: '5.5%', hook: 'Numbered List',
-    tint: HANDLE_TINTS['@jamesclear']! },
-]
 
 function FormatGlyph({ format }: { format: Format }) {
   const props = { strokeWidth: 1.6, className: 'size-9 text-white/55' }
@@ -237,7 +173,9 @@ export function ContentPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const [multiplierFilter, setMultiplierFilter] = useState<MultiplierFilter>('all')
   const { config: levelsCfg } = useCompetitorLevels()
+  const multipliersCfg = useLevelMultipliers()
 
   async function refresh() {
     setBusy(true)
@@ -245,7 +183,7 @@ export function ContentPage() {
       const items = await listPosts({ limit: 120, orderBy: 'recent' })
       setPosts(items)
     } catch {
-      // Backend offline → keep null so the mock fallback shows.
+      // Backend offline or request failed → show the empty state, not stale data.
       setPosts([])
     } finally {
       setBusy(false)
@@ -406,8 +344,7 @@ export function ContentPage() {
     }
   }
 
-  const usingMock = (posts ?? []).length === 0
-  const allCards = usingMock ? MOCK_CARDS : posts!.map(realPostToCard)
+  const allCards = (posts ?? []).map(realPostToCard)
   const cards = allCards
     .filter((card) => matchesFilters(card, {
       query,
@@ -421,9 +358,14 @@ export function ContentPage() {
         levelFilter,
       ),
     )
+    .filter((card) => {
+      const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
+      const { rating } = multiplierRatingFor(level, card.post?.likes, card.post?.competitorAvgLikes, multipliersCfg)
+      return matchesMultiplierFilter(rating, multiplierFilter)
+    })
   const competitors = [...new Set(allCards.map((card) => card.handle))].sort()
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
-  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all'
+  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all' || multiplierFilter !== 'all'
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -433,9 +375,11 @@ export function ContentPage() {
           <div>
             <h1 className='text-[30px] font-semibold leading-[1.1] tracking-[-0.025em]'>Content</h1>
             <p className='mt-2 max-w-xl text-[14px] leading-relaxed text-muted-foreground'>
-              {usingMock
-                ? 'No posts captured yet. Sample feed shown below. Add competitors and hit Refresh on each to populate real data.'
-                : `${headerCount} posts captured. Star the winners to add them to the similarity index.`}
+              {posts === null
+                ? 'Loading captured posts…'
+                : posts.length === 0
+                  ? 'No posts captured yet. Add competitors, then hit Capture posts to populate this feed.'
+                  : `${headerCount} posts captured. Star the winners to add them to the similarity index.`}
             </p>
           </div>
           <div className='flex shrink-0 items-center gap-2.5'>
@@ -462,8 +406,7 @@ export function ContentPage() {
               <button
                 type='button'
                 onClick={() => setSelectMode(true)}
-                disabled={busy || !!capturing || usingMock}
-                title={usingMock ? 'Select unavailable while showing sample data' : undefined}
+                disabled={busy || !!capturing || !posts || posts.length === 0}
                 className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
               >
                 <CheckSquareIcon className='size-[15px]' strokeWidth={2} />
@@ -499,21 +442,16 @@ export function ContentPage() {
           <BannerPanel banner={banner} onGoToCompetitors={() => navigate({ page: 'competitors' })} />
         )}
 
-        {usingMock && !capturing && !banner && (
-          <div
-            role='status'
-            className='mt-5 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3.5 py-2.5 text-[13px] text-foreground'
-          >
-            <span className='font-mono text-[var(--anubis-gold)]'>Sample data:</span>{' '}
-            Showing 12 example posts so you can see what the populated feed looks
-            like. Hit <span className='font-medium'>Capture posts</span> to run the
-            research-crawler against your tracked competitors and replace this with
-            real data.
-          </div>
+        {posts === null && <ContentLoadingGrid />}
+
+        {posts !== null && posts.length === 0 && (
+          <ContentEmptyState onCapture={() => setSelectionOpen(true)} disabled={!!capturing} />
         )}
 
-        {/* Sticky filter rail */}
-        <div className='sticky top-0 z-[5] -mx-1 bg-background pb-3.5 pt-[18px]'>
+        {posts !== null && posts.length > 0 && (
+          <>
+            {/* Sticky filter rail */}
+            <div className='sticky top-0 z-[5] -mx-1 bg-background pb-3.5 pt-[18px]'>
           <div className='flex min-h-14 flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2'>
             <label className='mr-1.5 flex min-w-[220px] flex-[1_1_280px] items-center gap-2 text-muted-foreground'>
               <SearchIcon className='size-[15px]' strokeWidth={2} />
@@ -567,6 +505,7 @@ export function ContentPage() {
                   setDateFrom('')
                   setDateTo('')
                   setLevelFilter('all')
+                  setMultiplierFilter('all')
                 }}
                 className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
               >
@@ -575,39 +514,11 @@ export function ContentPage() {
               </button>
             )}
 
-            <div className='ml-auto inline-flex gap-0.5 rounded-md border border-border bg-background p-[3px]'>
-              <button
-                type='button'
-                onClick={() => setView('grid')}
-                aria-pressed={view === 'grid'}
-                className={cn(
-                  'flex size-8 items-center justify-center rounded-[5px] transition-colors',
-                  view === 'grid'
-                    ? 'bg-card text-[var(--anubis-gold)] shadow-[inset_0_-2px_0_var(--anubis-gold)]'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                aria-label='Grid view'
-              >
-                <GalleryVerticalEndIcon className='size-[15px]' strokeWidth={2} />
-              </button>
-              <button
-                type='button'
-                onClick={() => setView('table')}
-                aria-pressed={view === 'table'}
-                className={cn(
-                  'flex size-8 items-center justify-center rounded-[5px] transition-colors',
-                  view === 'table'
-                    ? 'bg-card text-[var(--anubis-gold)] shadow-[inset_0_-2px_0_var(--anubis-gold)]'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                aria-label='Table view'
-              >
-                <Table2Icon className='size-[15px]' strokeWidth={2} />
-              </button>
-            </div>
+            <ViewToggle view={view} onChange={setView} className='ml-auto' />
           </div>
-          <div className='mt-2 px-1'>
+          <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1'>
             <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+            <PostMultiplierFilter value={multiplierFilter} onChange={setMultiplierFilter} />
           </div>
         </div>
 
@@ -635,6 +546,7 @@ export function ContentPage() {
                 key={card.key}
                 card={card}
                 levelsCfg={levelsCfg}
+                multipliersCfg={multipliersCfg}
                 starred={!!stars[card.key]}
                 onStar={() => toggleStar(card.key)}
                 onEdit={card.post ? () => setEditingPost(card.post!) : undefined}
@@ -648,6 +560,7 @@ export function ContentPage() {
         ) : (
           <PostTable
             cards={cards}
+            levelsCfg={levelsCfg}
             stars={stars}
             onStar={toggleStar}
             onEdit={(post) => setEditingPost(post)}
@@ -656,6 +569,8 @@ export function ContentPage() {
             selected={selected}
             onToggleSelect={toggleSelected}
           />
+        )}
+          </>
         )}
       </div>
 
@@ -798,6 +713,7 @@ function PostCard({
   selected,
   onToggleSelect,
   levelsCfg,
+  multipliersCfg,
 }: {
   card: CardModel
   starred: boolean
@@ -808,13 +724,18 @@ function PostCard({
   selected: boolean
   onToggleSelect?: () => void
   levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
+  multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
 }) {
   const selectable = selectMode && !!onToggleSelect
+  const level = resolveLevel(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)
+  const tip = levelTip(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)
   return (
     <article
       role={selectable ? 'button' : undefined}
       aria-pressed={selectable ? selected : undefined}
       onClick={selectable ? onToggleSelect : undefined}
+      title={tip}
+      style={{ background: levelTint(level, 'card') }}
       className={cn(
         'group relative overflow-hidden rounded-[13px] border border-border bg-card transition-all',
         selectMode
@@ -848,7 +769,6 @@ function PostCard({
 
       <div className='p-3'>
         <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
-          <CompetitorLevelDot followers={card.post?.competitorFollowers} levelOverride={card.post?.competitorLevel} config={levelsCfg} />
           {card.postUrl ? (
             <a
               href={card.postUrl}
@@ -863,6 +783,17 @@ function PostCard({
           )}
           <span className='text-muted-foreground'>·</span>
           <span className='shrink-0 text-muted-foreground'>{card.date}</span>
+          {card.post && (
+            <PostMultiplierBadge
+              className='ml-auto'
+              likes={card.post.likes}
+              competitorFollowers={card.post.competitorFollowers}
+              competitorAvgLikes={card.post.competitorAvgLikes}
+              competitorLevelOverride={card.post.competitorLevel}
+              levelsConfig={levelsCfg}
+              multipliersConfig={multipliersCfg}
+            />
+          )}
         </div>
         <p className='mt-2 line-clamp-2 min-h-[38px] text-[13px] leading-[1.45] text-foreground'>
           {card.caption}
@@ -909,6 +840,7 @@ function PostCard({
 
 function PostTable({
   cards,
+  levelsCfg,
   stars,
   onStar,
   onEdit,
@@ -918,6 +850,7 @@ function PostTable({
   onToggleSelect,
 }: {
   cards: CardModel[]
+  levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
   stars: Record<string, boolean>
   onStar: (key: string) => void
   onEdit: (post: CapturedPostSummary) => void
@@ -947,14 +880,20 @@ function PostTable({
               const id = card.post?.id
               const isSelected = !!id && selected.has(id)
               const selectable = selectMode && !!id
+              const level = resolveLevel(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)
               return (
                 <tr
                   key={card.key}
                   onClick={selectable ? () => onToggleSelect(id!) : undefined}
+                  title={levelTip(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)}
+                  style={{
+                    background: isSelected
+                      ? 'color-mix(in oklab, var(--anubis-gold) 8%, transparent)'
+                      : levelTint(level, 'row'),
+                  }}
                   className={cn(
                     'border-b border-border/70 last:border-0',
                     selectable && 'cursor-pointer',
-                    isSelected && 'bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]',
                     selectMode && !selectable && 'opacity-50',
                   )}
                 >
@@ -1259,6 +1198,41 @@ function BannerPanel({
   )
 }
 
+/* ---------- Loading / empty states ---------- */
+
+function ContentLoadingGrid() {
+  return (
+    <div className='mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4'>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className='aspect-[3/4] animate-pulse rounded-[13px] border border-border bg-card' />
+      ))}
+    </div>
+  )
+}
+
+function ContentEmptyState({ onCapture, disabled }: { onCapture: () => void; disabled?: boolean }) {
+  return (
+    <div className='mt-10 flex flex-col items-center gap-4 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center'>
+      <ImageIcon className='size-7 text-muted-foreground' strokeWidth={1.5} />
+      <div>
+        <h2 className='text-[16px] font-semibold tracking-[-0.01em]'>No posts captured yet</h2>
+        <p className='mt-1.5 text-[13px] text-muted-foreground'>
+          Add competitors, then run a capture to pull their recent posts into this feed.
+        </p>
+      </div>
+      <button
+        type='button'
+        onClick={onCapture}
+        disabled={disabled}
+        className='inline-flex h-9 items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-3.5 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:cursor-not-allowed disabled:opacity-50'
+      >
+        <ArrowDownToLineIcon className='size-[15px]' strokeWidth={2.2} />
+        Capture posts
+      </button>
+    </div>
+  )
+}
+
 /* ---------- Real → card converter ---------- */
 
 function realPostToCard(p: CapturedPostSummary): CardModel {
@@ -1284,7 +1258,7 @@ function realPostToCard(p: CapturedPostSummary): CardModel {
     comments: formatBigNumber(p.comments),
     engagement: undefined, // requires follower count; future work
     hook: undefined,        // requires classifier; future work
-    tint: p.competitorTint ?? HANDLE_TINTS[handle] ?? '#565B63',
+    tint: p.competitorTint ?? '#565B63',
     postUrl: p.postUrl,
     mediaUrl: p.mediaUrl,
     post: p,

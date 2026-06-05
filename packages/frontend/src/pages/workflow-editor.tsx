@@ -22,6 +22,8 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
   const activeRun     = useEditorStore((s) => s.activeRun)
   const markPublished = useEditorStore((s) => s.markPublished)
   const [error, setError] = useState<string | null>(null)
+  const [hasTrigger, setHasTrigger] = useState(false)
+  const [armed, setArmed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -34,6 +36,8 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
         published: wf.publishedGraph ? JSON.parse(wf.publishedGraph) : null,
         draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt ?? null,
       })
+      setHasTrigger(!!wf.hasTrigger)
+      setArmed(!!wf.armed)
       // If a run is in flight for this workflow (user navigated away and
       // came back mid-run), resubscribe so node-level progress shows up
       // again instead of just the conversation-level "running" status.
@@ -68,6 +72,13 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
     } catch (e) { setError(String(e)) }
   }
 
+  async function toggleArm() {
+    try {
+      const r = armed ? await workflowsApi.disarm(workflowId) : await workflowsApi.arm(workflowId)
+      setArmed(r.armed)
+    } catch (e) { setError(String(e)) }
+  }
+
   return (
     <div className='flex h-full min-h-0 flex-col bg-background'>
       <div className='border-b border-border px-6 py-3 flex items-center justify-between gap-4'>
@@ -75,7 +86,13 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
         <p className='text-sm font-medium truncate'>{name}{isDirty ? ' •' : ''}</p>
         <div className='flex gap-2'>
           <Button size='sm' variant='secondary' onClick={publish}>{publishedAt ? 'Re-publish' : 'Publish'}</Button>
-          <Button size='sm' onClick={startRun} disabled={!publishedAt || activeRun?.status === 'running'}>▶ Run published</Button>
+          {hasTrigger ? (
+            <Button size='sm' variant={armed ? 'destructive' : 'default'} onClick={toggleArm} disabled={!publishedAt}>
+              {armed ? '■ Disarm' : '⚡ Arm'}
+            </Button>
+          ) : (
+            <Button size='sm' onClick={startRun} disabled={!publishedAt || activeRun?.status === 'running'}>▶ Run published</Button>
+          )}
         </div>
       </div>
       {error ? <p className='px-6 py-2 text-xs text-red-300'>{error}</p> : null}

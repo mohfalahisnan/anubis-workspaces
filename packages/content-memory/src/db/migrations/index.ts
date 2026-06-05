@@ -15,4 +15,6 @@ export const CONTENT_MEMORY_MIGRATIONS: Migration[] = [
   load(9, '009_knowledge_documents.sql'),
   // 10 is owned by @anubis/conversation (competitors ALTER).
   load(11, '011_content_similarity_items.sql'),
+  load(12, '012_knowledge_documents_embedding.sql'),
+  load(13, '013_content_context_packs.sql'),
 ]

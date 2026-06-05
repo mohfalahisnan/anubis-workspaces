@@ -45,3 +45,28 @@ export {
   SimilarityIngestionService,
   normalizeSimilarityText,
 } from './similarity/similarity-ingestion-service.js'
+
+export type {
+  IngestKnowledgeInput,
+} from './knowledge/knowledge-ingestion-service.js'
+export { KnowledgeIngestionService } from './knowledge/knowledge-ingestion-service.js'
+
+export type {
+  SemanticSearchKnowledgeInput,
+} from './db/repositories/knowledge-documents-repo.js'
+
+export type { ContentContextPackRecord } from './db/repositories/content-context-packs-repo.js'
+export { ContentContextPacksRepo } from './db/repositories/content-context-packs-repo.js'
+
+export type {
+  ContentContextPack,
+  ContentTaskType,
+  SimilarContent,
+  Citation,
+  BuildContentContextInput,
+} from './context-pack/types.js'
+export type { ContextPackDeps } from './context-pack/context-pack-service.js'
+export { ContextPackService } from './context-pack/context-pack-service.js'
+
+export type { ContentMemoryDeps, BuildForContentTaskResult } from './service.js'
+export { ContentMemoryService } from './service.js'

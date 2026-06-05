@@ -70,3 +70,16 @@ export { ContextPackService } from './context-pack/context-pack-service.js'
 
 export type { ContentMemoryDeps, BuildForContentTaskResult } from './service.js'
 export { ContentMemoryService } from './service.js'
+
+export type {
+  ExperienceScope, ExperienceType, Severity, MemoryStatus,
+} from './types.js'
+export { EXPERIENCE_TYPES, SEVERITIES, MEMORY_STATUSES } from './types.js'
+
+export type { ExperienceMemory, RecallActiveInput } from './db/repositories/experience-memories-repo.js'
+export { ExperienceMemoriesRepo } from './db/repositories/experience-memories-repo.js'
+
+export type {
+  RecordExperienceInput, SaveFeedbackInput,
+} from './experience/experience-index-service.js'
+export { ExperienceIndexService } from './experience/experience-index-service.js'

@@ -4,6 +4,28 @@ Brand-scoped content memory: build an AI-ready **context pack** for a brand + pl
 validate generated output against it, persist a run trace, and feed reviewer feedback back as
 learnable experience. Backed by `@anubis/content-memory`.
 
+## Source of truth — MANDATORY
+
+Content memory is the **authoritative source** for brand voice, rules, audience, offers,
+approved/rejected examples, and prior mistakes. For **any** content or brand task — generating,
+rewriting, reviewing, briefing, or planning content for a brand — you MUST, every time:
+
+1. **Build a context pack first** (`POST /content-memory/context-pack`) and ground your work in
+   it. Do **not** invent brand voice, audience, offers, or rules from your own priors or the
+   open web. Use `pack.brandContext`, `pack.workspaceRules`, `pack.globalFrameworks`, and the
+   approved examples. Treat the **rejected** examples and `mustAvoid` rules as hard constraints.
+   If a needed fact is not in the pack, it is unknown — ask the user; do not guess.
+2. **Validate every draft** against that pack (`POST /content-memory/validate`) before showing
+   it to the user. Never surface output with a `critical` or `high` issue — apply each
+   `suggestedCorrection`, then re-validate until it passes.
+3. **Record the run** (`POST /content-memory/runs`, linking `contextPackId`) and route the
+   human's verdict back through `POST /content-memory/feedback` so the brand keeps learning.
+   Promote a memory (`/memories/:id/promote`) when a lesson should apply to future work.
+
+Skipping the context pack and writing "from general knowledge" is a defect. The pack — not the
+model's priors — is the truth. Brand isolation is strict: never use one brand's facts, examples,
+or name for another `workspaceId`.
+
 Two concepts drive every call:
 
 - **`workspaceId`** — the *brand* workspace (a `brand_workspaces` row). The well-known default

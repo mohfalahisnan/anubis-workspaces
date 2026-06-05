@@ -17,12 +17,37 @@ export const executableNodeTypes: NodeTypes = {
   aiAgentConversation: AiAgentConversationExecutableNode as never,
 }
 
-export const NODE_PALETTE = [
-  { type: 'instagramPost',       label: 'Instagram Post' },
-  { type: 'imageVideo',          label: 'Image / Video' },
-  { type: 'transformerMedia',    label: 'Transformer · Media' },
-  { type: 'transformerBrief',    label: 'Transformer · Brief' },
-  { type: 'ocrExtractor',        label: 'OCR Extractor' },
-  { type: 'table',               label: 'Table' },
-  { type: 'aiAgentConversation', label: 'AI Agent · Conversation' },
+/**
+ * Palette categories, ordered as they appear in the sidebar. Nodes are grouped
+ * by capability: where data comes from (Trigger, Source, Web Search), what
+ * transforms it (Tools, Agent), and where it ends up (Output).
+ */
+export const NODE_CATEGORIES = [
+  'trigger',
+  'source',
+  'webSearch',
+  'tools',
+  'agent',
+  'output',
 ] as const
+
+export type NodeCategory = (typeof NODE_CATEGORIES)[number]
+
+export const NODE_CATEGORY_LABELS: Record<NodeCategory, string> = {
+  trigger:   'Trigger',
+  source:    'Source',
+  webSearch: 'Web Search',
+  tools:     'Tools',
+  agent:     'Agent',
+  output:    'Output',
+}
+
+export const NODE_PALETTE = [
+  { type: 'imageVideo',          label: 'Image / Video',          category: 'source'    },
+  { type: 'transformerMedia',    label: 'Transformer · Media',    category: 'source'    },
+  { type: 'instagramPost',       label: 'Instagram Post',         category: 'webSearch' },
+  { type: 'transformerBrief',    label: 'Transformer · Brief',    category: 'tools'     },
+  { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
+  { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
+  { type: 'table',               label: 'Table',                  category: 'output'    },
+] as const satisfies ReadonlyArray<{ type: string; label: string; category: NodeCategory }>

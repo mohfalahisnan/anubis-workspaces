@@ -349,6 +349,13 @@ export interface CreateConversationInput {
   override?: Record<string, unknown>
 }
 
+export interface WorkspaceSummary {
+  /** Absolute path to a previously used working directory. */
+  path: string
+  /** Epoch ms of the last time a conversation used this folder. */
+  lastUsedAt: number
+}
+
 export interface ProfileConfigInput {
   agent: AgentKind
   model?: string
@@ -374,6 +381,7 @@ export type SkillListResponse = ListResponse<SkillSummary>
 export type CronJobListResponse = ListResponse<CronJobSummary>
 export type MessageListResponse = ListResponse<MessageSummary>
 export type CompetitorListResponse = ListResponse<CompetitorSummary>
+export type WorkspaceListResponse = ListResponse<WorkspaceSummary>
 
 export interface CapturedPostSummary {
   id: string

@@ -67,7 +67,10 @@
       "electron-winstaller",
       "esbuild",
       "msw",
-      "node-pty"
+      "node-pty",
+      "onnxruntime-node",
+      "protobufjs",
+      "sharp"
     ]
   }
 }

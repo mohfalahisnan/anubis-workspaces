@@ -23,6 +23,7 @@ pnpm workspaces (`pnpm-workspace.yaml`): `apps/*` and `packages/*`.
 - `packages/research-crawler` (`@anubis/research-crawler`) — internal crawler core. No HTTP/MCP server and no standalone binary packaging.
 - `packages/ai-agent` (`@anubis/ai-agent`) — internal Codex/Claude agent core used by backend HTTP routes. No MCP, CLI, or bundled binaries.
 - `packages/shared` (`@anubis/shared`) — types shared between frontend and backend (e.g. `ApiHealthResponse`).
+- `packages/content-memory` (`@anubis/content-memory`) — internal brand-scoped content-memory core: brand workspaces, scoped knowledge/similarity retrieval, local offline embeddings, context pack, experience memories, and output validators. Owns SQL migrations 008/009/011–015 (spliced into conversation's runner); `conversation → content-memory` is one-way. See `packages/content-memory/README.md`.
 
 Internal deps use `workspace:*`. Package imports inside `@anubis/research-crawler` use explicit
 `.js` extensions (ESM/`isolatedModules`), even though sources are `.ts`.

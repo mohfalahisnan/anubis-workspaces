@@ -4,6 +4,9 @@ import {
   PLATFORMS,
   CONTENT_TYPES,
   APPROVAL_STATUSES,
+  EXPERIENCE_TYPES,
+  SEVERITIES,
+  MEMORY_STATUSES,
 } from '../src/types.js'
 
 describe('content-memory constants', () => {
@@ -25,5 +28,15 @@ describe('similarity enums', () => {
 
   it('exposes approval statuses', () => {
     expect(APPROVAL_STATUSES).toEqual(['approved', 'rejected', 'needs_review'])
+  })
+})
+
+describe('experience enums', () => {
+  it('exposes experience types, severities, and statuses', () => {
+    expect(EXPERIENCE_TYPES).toContain('mistake')
+    expect(EXPERIENCE_TYPES).toContain('validation_rule')
+    expect(SEVERITIES).toEqual(['low', 'medium', 'high', 'critical'])
+    expect(MEMORY_STATUSES).toContain('candidate')
+    expect(MEMORY_STATUSES).toContain('active')
   })
 })

@@ -66,3 +66,22 @@ export const APPROVAL_STATUSES: readonly ApprovalStatus[] = [
   'rejected',
   'needs_review',
 ]
+
+export type ExperienceScope = 'global' | 'workspace' | 'platform' | 'campaign' | 'agent'
+
+export type ExperienceType =
+  | 'mistake' | 'correction' | 'workflow_rule'
+  | 'validation_rule' | 'preference' | 'anti_pattern' | 'lesson'
+
+export const EXPERIENCE_TYPES: readonly ExperienceType[] = [
+  'mistake', 'correction', 'workflow_rule',
+  'validation_rule', 'preference', 'anti_pattern', 'lesson',
+]
+
+export type Severity = 'low' | 'medium' | 'high' | 'critical'
+export const SEVERITIES: readonly Severity[] = ['low', 'medium', 'high', 'critical']
+
+export type MemoryStatus = 'candidate' | 'active' | 'reinforced' | 'deprecated' | 'rejected'
+export const MEMORY_STATUSES: readonly MemoryStatus[] = [
+  'candidate', 'active', 'reinforced', 'deprecated', 'rejected',
+]

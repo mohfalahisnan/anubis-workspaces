@@ -103,9 +103,9 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
   const brandWorkspaces = new BrandWorkspacesService(new BrandWorkspacesRepo(db))
   const knowledgeDocuments = new KnowledgeDocumentsRepo(db)
-  // Offline-first: load the bundled model, never hit the network. In the
-  // packaged app, swap cacheDir for join(process.resourcesPath, 'models')
-  // (design §9 open item).
+  // Offline-first: load the bundled model, never hit the network.
+  // bundledModelCacheDir() resolves to the package-relative models/ dir in
+  // dev/tsx and to ANUBIS_MODELS_DIR (resources/models) in the packaged app.
   const contentEmbedder = new XenovaEmbedder({
     cacheDir: bundledModelCacheDir(),
     allowRemoteModels: false,

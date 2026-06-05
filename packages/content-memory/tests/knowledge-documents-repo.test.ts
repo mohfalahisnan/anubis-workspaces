@@ -16,6 +16,7 @@ function sqlFor(file: string): string {
 const migrations = [
   { version: 8, sql: sqlFor('008_brand_workspaces.sql') },
   { version: 9, sql: sqlFor('009_knowledge_documents.sql') },
+  { version: 12, sql: sqlFor('012_knowledge_documents_embedding.sql') },
 ]
 
 function setup() {
@@ -34,6 +35,7 @@ function setup() {
 function doc(over: Partial<NewKnowledgeDocument>): NewKnowledgeDocument {
   return {
     id: over.id ?? `d-${Math.random().toString(36).slice(2)}`,
+    embedding: over.embedding,
     scope: over.scope ?? 'workspace',
     workspaceId: 'workspaceId' in over ? (over.workspaceId ?? null) : 'workspace-a',
     platform: over.platform ?? null,
@@ -118,6 +120,36 @@ describe('KnowledgeDocumentsRepo.search — scope isolation', () => {
     const results = repo.search({
       workspaceId: 'workspace-a', platform: 'instagram', query: 'global note',
       includeGlobal: false,
+    })
+    expect(results).toHaveLength(0)
+  })
+})
+
+describe('KnowledgeDocumentsRepo.searchSemantic', () => {
+  it('ranks scoped docs by cosine to the query embedding', () => {
+    const repo = setup()
+    repo.insert(doc({ id: 'near', workspaceId: 'workspace-a', extractedText: 'hooks',
+      embedding: Float32Array.from([1, 0, 0, 0]) }))
+    repo.insert(doc({ id: 'far', workspaceId: 'workspace-a', extractedText: 'hooks',
+      embedding: Float32Array.from([0, 1, 0, 0]) }))
+    repo.insert(doc({ id: 'other-ws', workspaceId: 'workspace-b', extractedText: 'hooks',
+      embedding: Float32Array.from([1, 0, 0, 0]) }))
+
+    const results = repo.searchSemantic({
+      workspaceId: 'workspace-a', platform: 'instagram',
+      queryEmbedding: Float32Array.from([1, 0, 0, 0]),
+    })
+
+    expect(results.map((r) => r.id)).toEqual(['near', 'far'])
+    expect(results.every((r) => r.scope === 'global' || r.workspaceId === 'workspace-a')).toBe(true)
+  })
+
+  it('ignores documents without an embedding', () => {
+    const repo = setup()
+    repo.insert(doc({ id: 'no-emb', workspaceId: 'workspace-a' })) // embedding undefined
+    const results = repo.searchSemantic({
+      workspaceId: 'workspace-a', platform: 'instagram',
+      queryEmbedding: Float32Array.from([1, 0, 0, 0]),
     })
     expect(results).toHaveLength(0)
   })

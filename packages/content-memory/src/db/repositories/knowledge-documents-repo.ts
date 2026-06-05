@@ -1,5 +1,6 @@
 import type { Db } from '../types.js'
 import type { DocumentStatus, Platform, Scope, SourceType } from '../../types.js'
+import { cosine, fromBlob, toBlob } from '../../embedding/vector.js'
 
 export interface KnowledgeDocument {
   id: string
@@ -13,6 +14,7 @@ export interface KnowledgeDocument {
   tags: string[]
   topics: string[]
   entities: string[]
+  embedding?: Float32Array
   status: DocumentStatus
   contentHash: string
   createdAt: number
@@ -26,6 +28,15 @@ export interface SearchKnowledgeInput {
   platform: Platform
   query: string
   includeGlobal?: boolean
+  limit?: number
+}
+
+export interface SemanticSearchKnowledgeInput {
+  workspaceId: string
+  platform: Platform
+  queryEmbedding: Float32Array
+  includeGlobal?: boolean
+  sourceTypes?: SourceType[]
   limit?: number
 }
 
@@ -44,6 +55,7 @@ interface Row {
   tags: string
   topics: string
   entities: string
+  embedding: Buffer | null
   status: string
   content_hash: string
   created_at: number
@@ -72,6 +84,7 @@ function toDoc(r: Row): KnowledgeDocument {
     tags: parseArr(r.tags),
     topics: parseArr(r.topics),
     entities: parseArr(r.entities),
+    embedding: r.embedding ? fromBlob(r.embedding) : undefined,
     status: r.status as DocumentStatus,
     contentHash: r.content_hash,
     createdAt: r.created_at,
@@ -103,10 +116,10 @@ export class KnowledgeDocumentsRepo {
     this.db.prepare(`
       INSERT INTO knowledge_documents (
         id, scope, workspace_id, platform, source_type, title, extracted_text,
-        summary, tags, topics, entities, status, content_hash, created_at, updated_at
+        summary, tags, topics, entities, embedding, status, content_hash, created_at, updated_at
       ) VALUES (
         @id, @scope, @workspaceId, @platform, @sourceType, @title, @extractedText,
-        @summary, @tags, @topics, @entities, @status, @contentHash, @createdAt, @updatedAt
+        @summary, @tags, @topics, @entities, @embedding, @status, @contentHash, @createdAt, @updatedAt
       )
     `).run({
       id: d.id,
@@ -120,6 +133,7 @@ export class KnowledgeDocumentsRepo {
       tags: JSON.stringify(d.tags),
       topics: JSON.stringify(d.topics),
       entities: JSON.stringify(d.entities),
+      embedding: d.embedding ? toBlob(d.embedding) : null,
       status: d.status,
       contentHash: d.contentHash,
       createdAt: d.createdAt,
@@ -155,6 +169,34 @@ export class KnowledgeDocumentsRepo {
       .map((d) => ({ ...d, score: lexicalScore(d, input.query) }))
       .sort((a, b) => b.score - a.score || b.createdAt - a.createdAt)
 
+    return typeof input.limit === 'number' ? scored.slice(0, input.limit) : scored
+  }
+
+  /** Semantic search: scope+platform filtered in SQL, cosine-ranked in JS. */
+  searchSemantic(input: SemanticSearchKnowledgeInput): ScoredDocument[] {
+    const includeGlobal = input.includeGlobal ?? true
+    const where: string[] = [
+      "status = 'active'",
+      'embedding IS NOT NULL',
+      '(workspace_id = @workspaceId OR (@includeGlobal = 1 AND scope = \'global\'))',
+      "(platform IS NULL OR platform = @platform OR platform = 'general')",
+    ]
+    const params: Record<string, unknown> = {
+      workspaceId: input.workspaceId,
+      includeGlobal: includeGlobal ? 1 : 0,
+      platform: input.platform,
+    }
+    if (input.sourceTypes?.length) {
+      where.push(`source_type IN (${input.sourceTypes.map((_, i) => `@st${i}`).join(', ')})`)
+      input.sourceTypes.forEach((st, i) => { params[`st${i}`] = st })
+    }
+    const rows = this.db
+      .prepare(`SELECT * FROM knowledge_documents WHERE ${where.join(' AND ')}`)
+      .all(params) as Row[]
+    const scored = rows
+      .map(toDoc)
+      .map((d) => ({ ...d, score: d.embedding ? cosine(d.embedding, input.queryEmbedding) : 0 }))
+      .sort((a, b) => b.score - a.score || b.createdAt - a.createdAt)
     return typeof input.limit === 'number' ? scored.slice(0, input.limit) : scored
   }
 }

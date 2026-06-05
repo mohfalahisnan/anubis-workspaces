@@ -22,11 +22,17 @@ function NodeHandle({ type, position, id, label }: NodeHandleProps) {
   )
 }
 
-export function NodeDirectionalHandles() {
+export type HandleVariant = 'both' | 'in' | 'out'
+
+export function NodeDirectionalHandles({ variant = 'both' }: { variant?: HandleVariant } = {}) {
   return (
     <>
-      <NodeHandle type='target' position={Position.Left}  id={WORKFLOW_TARGET_HANDLE} label='IN' />
-      <NodeHandle type='source' position={Position.Right} id={WORKFLOW_SOURCE_HANDLE} label='OUT' />
+      {variant !== 'out' ? (
+        <NodeHandle type='target' position={Position.Left}  id={WORKFLOW_TARGET_HANDLE} label='IN' />
+      ) : null}
+      {variant !== 'in' ? (
+        <NodeHandle type='source' position={Position.Right} id={WORKFLOW_SOURCE_HANDLE} label='OUT' />
+      ) : null}
     </>
   )
 }

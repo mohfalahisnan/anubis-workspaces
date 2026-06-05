@@ -11,6 +11,7 @@ import { ConversationsRepo } from '../../src/db/repositories/conversations-repo.
 import { MessagesRepo } from '../../src/db/repositories/messages-repo.js'
 import { ArtifactsRepo } from '../../src/db/repositories/artifacts-repo.js'
 import { AgentSessionsRepo } from '../../src/db/repositories/agent-sessions-repo.js'
+import { KnownWorkspacesRepo } from '../../src/db/repositories/known-workspaces-repo.js'
 import { CronJobsRepo } from '../../src/db/repositories/cron-jobs-repo.js'
 import { ProfileService } from '../../src/profiles/profile-service.js'
 import { SkillLoader } from '../../src/skills/loader.js'
@@ -63,6 +64,7 @@ function setup() {
     messages: new MessagesRepo(db),
     artifacts: new ArtifactsRepo(db),
     sessions: new AgentSessionsRepo(db),
+    knownWorkspaces: new KnownWorkspacesRepo(db),
     agentHomeRoot,
     workspacesRoot,
   })
@@ -72,6 +74,18 @@ function setup() {
 describe('ConversationService', () => {
   let ctx: ReturnType<typeof setup>
   beforeEach(() => { ctx = setup() })
+
+  it('records an explicitly chosen workspace but not an auto temp dir', () => {
+    const { svc, db, workspacesRoot } = setup()
+    const real = mkdtempSync(join(tmpdir(), 'anubis-real-ws-'))
+    // Explicit real folder → recorded.
+    svc.create({ title: 't', profileId: 'claude-coding', workspacePath: real })
+    // No workspacePath → backend auto-creates one under workspacesRoot → NOT recorded.
+    svc.create({ title: 't2', profileId: 'claude-coding' })
+    const known = new KnownWorkspacesRepo(db).list().map((w) => w.path)
+    expect(known).toContain(real)
+    expect(known.some((p) => p.startsWith(workspacesRoot))).toBe(false)
+  })
 
   it('create stores skills snapshot and profile id', () => {
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })

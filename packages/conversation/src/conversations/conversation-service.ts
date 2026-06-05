@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, relative, isAbsolute } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
@@ -31,6 +31,7 @@ import type { ConversationsRepo } from '../db/repositories/conversations-repo.js
 import type { MessagesRepo } from '../db/repositories/messages-repo.js'
 import type { ArtifactsRepo } from '../db/repositories/artifacts-repo.js'
 import type { AgentSessionsRepo } from '../db/repositories/agent-sessions-repo.js'
+import type { KnownWorkspacesRepo } from '../db/repositories/known-workspaces-repo.js'
 import type { SseBroadcaster } from '../sse/broadcaster.js'
 import type { CronService } from '../cron/cron-service.js'
 import type { TaskManager } from './task-manager.js'
@@ -85,6 +86,7 @@ export interface ConversationServiceDeps {
   messages: MessagesRepo
   artifacts: ArtifactsRepo
   sessions: AgentSessionsRepo
+  knownWorkspaces: KnownWorkspacesRepo
   /**
    * Root directory under which each profile gets its own isolated
    * agent home folder ({agentHomeRoot}/{profileId}/{agent}/).
@@ -124,8 +126,21 @@ export class ConversationService {
       updatedAt: now,
     }
     this.deps.conversations.insert(conv)
+    if (input.workspacePath) this.rememberWorkspace(input.workspacePath)
     if (input.profileId) this.deps.profiles.touchLastUsed(input.profileId)
     return conv
+  }
+
+  /**
+   * Remember a user-chosen workspace so it can be re-selected later. Skips
+   * the throwaway per-conversation scratch dirs the service auto-creates
+   * under `workspacesRoot` — only real folders the user picked are kept.
+   */
+  private rememberWorkspace(path: string): void {
+    const rel = relative(this.deps.workspacesRoot, path)
+    const isScratch = rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+    if (isScratch) return
+    this.deps.knownWorkspaces.remember(path)
   }
 
   list(opts: { limit?: number; archived?: boolean } = {}): Conversation[] {
@@ -167,6 +182,7 @@ export class ConversationService {
       profileId: patch.profileId === undefined ? undefined : patch.profileId,
       workspacePath,
     })
+    if (workspacePath) this.rememberWorkspace(workspacePath)
     return this.deps.conversations.findById(id)!
   }
 

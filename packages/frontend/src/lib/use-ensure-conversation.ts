@@ -21,6 +21,7 @@ export function useEnsureConversation(
   selectedProfile: ProfileSummary | null,
   effort: ReasoningEffort,
   profileDefaultEffort: ReasoningEffort,
+  workspacePath: string | null,
 ): EnsureState {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +43,7 @@ export function useEnsureConversation(
           title: deriveTitle(firstContent),
           profileId: selectedProfile.id,
           agent: selectedProfile.config.agent,
+          ...(workspacePath ? { workspacePath } : {}),
           ...(override ? { override } : {}),
         })
         return created.id
@@ -53,7 +55,7 @@ export function useEnsureConversation(
         setCreating(false)
       }
     },
-    [conversationId, selectedProfile, effort, profileDefaultEffort],
+    [conversationId, selectedProfile, effort, profileDefaultEffort, workspacePath],
   )
 
   return { ensure, creating, error }

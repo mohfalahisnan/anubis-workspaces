@@ -11,6 +11,7 @@ import { ConversationsRepo } from '../../src/db/repositories/conversations-repo.
 import { MessagesRepo } from '../../src/db/repositories/messages-repo.js'
 import { ArtifactsRepo } from '../../src/db/repositories/artifacts-repo.js'
 import { AgentSessionsRepo } from '../../src/db/repositories/agent-sessions-repo.js'
+import { KnownWorkspacesRepo } from '../../src/db/repositories/known-workspaces-repo.js'
 import { CronJobsRepo } from '../../src/db/repositories/cron-jobs-repo.js'
 import { ProfileService } from '../../src/profiles/profile-service.js'
 import { SkillLoader } from '../../src/skills/loader.js'
@@ -61,6 +62,7 @@ function setupWith(drive: (em: TypedEmitter<AgentEventMap>) => void) {
     messages: new MessagesRepo(db),
     artifacts: new ArtifactsRepo(db),
     sessions: new AgentSessionsRepo(db),
+    knownWorkspaces: new KnownWorkspacesRepo(db),
     agentHomeRoot,
     workspacesRoot,
   })

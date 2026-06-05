@@ -16,4 +16,5 @@ export const MIGRATIONS: Migration[] = [
   load(4, '004_workflows.sql'),
   load(5, '005_competitors_bio_level.sql'),
   load(6, '006_workflow_triggers.sql'),
+  load(7, '007_known_workspaces.sql'),
 ]

@@ -10,6 +10,7 @@ import { ConversationsRepo } from './db/repositories/conversations-repo.js'
 import { MessagesRepo } from './db/repositories/messages-repo.js'
 import { ArtifactsRepo } from './db/repositories/artifacts-repo.js'
 import { AgentSessionsRepo } from './db/repositories/agent-sessions-repo.js'
+import { KnownWorkspacesRepo } from './db/repositories/known-workspaces-repo.js'
 import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
 import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
 import { CompetitorsService } from './competitors/competitors-service.js'
@@ -47,6 +48,7 @@ export interface ConversationStack {
   cron: CronService
   taskManager: TaskManager
   aiAgent: AiAgentService
+  knownWorkspaces: KnownWorkspacesRepo
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -67,6 +69,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const artifactsRepo = new ArtifactsRepo(db)
   const sessionsRepo = new AgentSessionsRepo(db)
   const cronRepo = new CronJobsRepo(db)
+  const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -107,6 +110,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     messages: messagesRepo,
     artifacts: artifactsRepo,
     sessions: sessionsRepo,
+    knownWorkspaces: knownWorkspacesRepo,
     agentHomeRoot,
     workspacesRoot,
   })
@@ -119,6 +123,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,
     appConfig, skills, sse, cron, taskManager: tm, aiAgent,
+    knownWorkspaces: knownWorkspacesRepo,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()
@@ -138,6 +143,8 @@ export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'
 export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-posts-repo.js'
 export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+export type { KnownWorkspace } from './db/repositories/known-workspaces-repo.js'
+export { KnownWorkspacesRepo } from './db/repositories/known-workspaces-repo.js'
 export type { Workflow } from './db/repositories/workflows-repo.js'
 export { WorkflowsRepo } from './db/repositories/workflows-repo.js'
 export type { WorkflowRun, WorkflowRunStep, RunStatus, StepStatus } from './db/repositories/workflow-runs-repo.js'

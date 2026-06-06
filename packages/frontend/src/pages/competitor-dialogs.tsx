@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useActiveWorkspace } from '@/lib/workspace'
 import {
   ArrowDownToLineIcon,
   ChevronDownIcon,
@@ -310,6 +311,7 @@ export function FindCompetitorsDialog({
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
   const [addingErrors, setAddingErrors] = useState<string[]>([])
+  const { activeWorkspaceId } = useActiveWorkspace()
 
   useEffect(() => {
     if (!open) {
@@ -371,6 +373,7 @@ export function FindCompetitorsDialog({
         await createCompetitor({
           handle: candidate.username,
           displayName: candidate.fullName?.trim() || undefined,
+          workspaceId: activeWorkspaceId,
         })
         added++
       } catch (e) {

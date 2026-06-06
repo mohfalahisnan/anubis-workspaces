@@ -30,6 +30,13 @@ export interface NodeShellProps {
    * footer. Used by the Media node so the artifact fills the whole card.
    */
   bleed?: boolean
+  /**
+   * Render only `children`, filling the whole card — no accent bar, header,
+   * or footer. The run-state border glow and connection handles are kept.
+   * Used by pure viewer nodes (Image / Video, Markdown) so the card shows
+   * just the media or rendered text.
+   */
+  chromeless?: boolean
 }
 
 const SHELL_BASE =
@@ -58,6 +65,7 @@ export function NodeShell({
   handles = 'both',
   handlesNode,
   bleed = false,
+  chromeless = false,
 }: NodeShellProps) {
   const runClass = runStatus ? RUN_STATUS_BORDER[runStatus] : 'border-border'
 
@@ -79,18 +87,24 @@ export function NodeShell({
     <div className={cn(SHELL_BASE, runClass, className)}>
       {handlesNode ?? <NodeDirectionalHandles variant={handles} />}
       <div className='overflow-hidden rounded-2xl'>
-        <div className={cn('h-1 bg-gradient-to-r', accent)} />
-        {bleed ? (
-          <>
-            <div className='px-4 pt-4'>{header}</div>
-            {children ? <div className='mt-3'>{children}</div> : <div className='pb-4' />}
-          </>
+        {chromeless ? (
+          children
         ) : (
-          <div className='p-4'>
-            {header}
-            {children ? <div className='mt-4'>{children}</div> : null}
-            {footer ? <div className='mt-4 border-t border-border pt-3'>{footer}</div> : null}
-          </div>
+          <>
+            <div className={cn('h-1 bg-gradient-to-r', accent)} />
+            {bleed ? (
+              <>
+                <div className='px-4 pt-4'>{header}</div>
+                {children ? <div className='mt-3'>{children}</div> : <div className='pb-4' />}
+              </>
+            ) : (
+              <div className='p-4'>
+                {header}
+                {children ? <div className='mt-4'>{children}</div> : null}
+                {footer ? <div className='mt-4 border-t border-border pt-3'>{footer}</div> : null}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

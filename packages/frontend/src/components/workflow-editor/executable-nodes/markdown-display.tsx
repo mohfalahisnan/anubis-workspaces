@@ -1,9 +1,8 @@
 import { memo } from 'react'
 import { FileText } from 'lucide-react'
-import { NodeShell, StatusBadge } from '@/components/workflow'
+import { NodeShell } from '@/components/workflow'
 import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { MessageResponse } from '@/components/ai-elements/message'
-import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 
@@ -15,18 +14,19 @@ export const MarkdownDisplayExecutableNode = memo(function MarkdownDisplayExecut
   const runStatus = useNodeRunStatus(id)
   const output = useNodeRunOutput(id) as { kind: 'markdown'; text: string } | undefined
   const text = output?.kind === 'markdown' ? output.text : data.staticText ?? ''
+  const hasText = text.trim().length > 0
   return (
     <NodeShell
       icon={FileText}
       title='Markdown'
-      subtitle='Passive — renders upstream text as markdown'
       accent={ACCENT_GRADIENTS.review}
       handles='both'
       runStatus={runStatus}
-      footer={<div className='flex flex-wrap gap-2'><StatusBadge>output</StatusBadge><RunStateBadge nodeId={id} /></div>}
+      chromeless={hasText}
     >
-      {text ? (
-        <div className='max-h-60 overflow-auto rounded-xl border border-border bg-muted/30 p-3 text-xs'>
+      {hasText ? (
+        // Full rendered markdown — fills the card, no max-height scroll.
+        <div className='bg-muted/20 p-4 text-xs'>
           <MessageResponse>{text}</MessageResponse>
         </div>
       ) : (

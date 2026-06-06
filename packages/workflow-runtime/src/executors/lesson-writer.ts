@@ -13,8 +13,19 @@ const ConfigSchema = z.object({
 export type LessonWriterConfig = z.infer<typeof ConfigSchema>
 
 const DEFAULT_PROMPTS: Record<'mistake' | 'lesson', string> = {
-  mistake: 'The reviewed content was REJECTED. Write a concise lesson capturing the mistake and the rule to avoid it next time. Put the lesson in the `text` field.',
+  mistake: 'The reviewed content was REJECTED. Write a concise lesson capturing the mistake and the rule to avoid it next time; use the reviewer comment as the primary reason. Put the lesson in the `text` field.',
   lesson:  'The reviewed content was APPROVED. Write a concise lesson capturing WHAT made this content work, as a reusable rule. Put the lesson in the `text` field.',
+}
+
+/** Pull the reviewer's note out of an upstream human-approval output, if any. */
+function reviewerComment(upstream: Record<string, unknown>): string | null {
+  for (const value of Object.values(upstream)) {
+    if (value && typeof value === 'object' && (value as { kind?: unknown }).kind === 'approval') {
+      const n = (value as { notes?: unknown }).notes
+      if (typeof n === 'string' && n.trim()) return n.trim()
+    }
+  }
+  return null
 }
 
 /**
@@ -32,8 +43,11 @@ export const lessonWriterExecutor: Executor<LessonWriterConfig> = {
       .map(([src, v]) => `<context source="${src}">\n${JSON.stringify(v, null, 2)}\n</context>`)
       .join('\n')
     const prompt = input.config.prompt ?? DEFAULT_PROMPTS[input.config.lessonType]
+    const comment = reviewerComment(input.upstream)
+    const commentBlock = comment ? `<reviewer-comment>\n${comment}\n</reviewer-comment>` : ''
     const content = [
       contextBlocks,
+      commentBlock,
       'End your reply with EXACTLY one ```anubis-output``` block: { "text": "the lesson" }.',
       prompt,
     ].filter(Boolean).join('\n\n')

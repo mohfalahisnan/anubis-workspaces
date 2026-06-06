@@ -50,9 +50,15 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const workflowsApi = {
-  list:        () => jsonFetch<{ items: WorkflowSummary[] }>('/workflows'),
-  create:      (name: string, description?: string) =>
-                jsonFetch<WorkflowDetail>('/workflows', { method: 'POST', body: JSON.stringify({ name, description }) }),
+  list:        (workspaceId?: string) =>
+                jsonFetch<{ items: WorkflowSummary[] }>(
+                  workspaceId ? `/workflows?workspaceId=${encodeURIComponent(workspaceId)}` : '/workflows',
+                ),
+  create:      (name: string, description?: string, workspaceId?: string) =>
+                jsonFetch<WorkflowDetail>('/workflows', {
+                  method: 'POST',
+                  body: JSON.stringify({ name, description, workspaceId }),
+                }),
   get:         (id: string) => jsonFetch<WorkflowDetail>(`/workflows/${id}`),
   patchMeta:   (id: string, patch: { name?: string; description?: string | null }) =>
                 jsonFetch<WorkflowDetail>(`/workflows/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),

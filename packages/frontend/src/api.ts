@@ -6,6 +6,10 @@ import {
   type AgentNotInstalledErrorPayload,
   type ApiHealthResponse,
   type AppConfig,
+  type BrandWorkspaceListResponse,
+  type BrandWorkspaceSummary,
+  type CreateBrandWorkspaceInput,
+  type UpdateBrandWorkspaceInput,
   type CapturedPostListResponse,
   type CapturedPostSummary,
   type CaptureResultPayload,
@@ -328,6 +332,34 @@ export async function removeWorkspace(path: string): Promise<void> {
   })
 }
 
+/* Brand workspaces (content-memory) — distinct from the filesystem workspaces above. */
+
+export async function listBrandWorkspaces(): Promise<BrandWorkspaceSummary[]> {
+  const r = await api<BrandWorkspaceListResponse>('/content-memory/workspaces')
+  return r.items
+}
+
+export async function createBrandWorkspace(
+  input: CreateBrandWorkspaceInput,
+): Promise<BrandWorkspaceSummary> {
+  const r = await api<{ ok: true; workspace: BrandWorkspaceSummary }>(
+    '/content-memory/workspaces',
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+  return r.workspace
+}
+
+export async function updateBrandWorkspace(
+  id: string,
+  patch: UpdateBrandWorkspaceInput,
+): Promise<BrandWorkspaceSummary> {
+  const r = await api<{ ok: true; workspace: BrandWorkspaceSummary }>(
+    `/content-memory/workspaces/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.workspace
+}
+
 export async function deleteConversation(conversationId: string): Promise<void> {
   await api<{ ok: true }>(
     `/conversations/${encodeURIComponent(conversationId)}`,
@@ -397,8 +429,11 @@ export async function deleteCronJob(id: string): Promise<void> {
   })
 }
 
-export async function listCompetitors(): Promise<CompetitorSummary[]> {
-  const r = await api<CompetitorListResponse>('/competitors')
+export async function listCompetitors(workspaceId?: string): Promise<CompetitorSummary[]> {
+  const path = workspaceId
+    ? `/competitors?workspaceId=${encodeURIComponent(workspaceId)}`
+    : '/competitors'
+  const r = await api<CompetitorListResponse>(path)
   return r.items
 }
 
@@ -480,6 +515,7 @@ export interface ListPostsOpts {
   competitorId?: string
   limit?: number
   orderBy?: 'recent' | 'engagement'
+  workspaceId?: string
 }
 
 /**
@@ -538,6 +574,7 @@ export async function listPosts(
   if (opts.competitorId) params.set('competitorId', opts.competitorId)
   if (opts.limit !== undefined) params.set('limit', String(opts.limit))
   if (opts.orderBy) params.set('orderBy', opts.orderBy)
+  if (opts.workspaceId) params.set('workspaceId', opts.workspaceId)
   const qs = params.toString()
   const path = qs ? `/posts?${qs}` : '/posts'
   const r = await api<CapturedPostListResponse>(path)

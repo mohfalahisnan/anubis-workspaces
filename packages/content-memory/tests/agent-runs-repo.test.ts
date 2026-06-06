@@ -49,4 +49,15 @@ describe('AgentRunService.saveRun', () => {
     const runs = repo.listForWorkspace('ws-a')
     expect(runs[0]!.validationStatus).toBe('failed')
   })
+
+  it('listForWorkspace on the service returns runs most-recent first', () => {
+    const { svc } = setup()
+    svc.saveRun({ workspaceId: 'ws-a', agentId: 'a', taskType: 'generate_content',
+      userInput: 'u', intent: 'i', output: 'o', validationStatus: 'passed' }, 100)
+    svc.saveRun({ workspaceId: 'ws-a', agentId: 'a', taskType: 'generate_content',
+      userInput: 'u', intent: 'i', output: 'o', validationStatus: 'failed' }, 200)
+    const runs = svc.listForWorkspace('ws-a')
+    expect(runs[0]!.validationStatus).toBe('failed')
+    expect(runs).toHaveLength(2)
+  })
 })

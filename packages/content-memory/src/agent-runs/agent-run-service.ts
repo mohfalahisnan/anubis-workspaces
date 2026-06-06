@@ -54,4 +54,8 @@ export class AgentRunService {
     this.repo.insert(run)
     return run
   }
+
+  listForWorkspace(workspaceId: string, limit = 100): AgentRun[] {
+    return this.repo.listForWorkspace(workspaceId, limit)
+  }
 }

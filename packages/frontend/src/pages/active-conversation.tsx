@@ -324,6 +324,11 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     if (!conversationId || stopping) return
     setStopping(true)
     setSendError(null)
+    // Treat the run as stopped locally right away — the kill switch is a hard
+    // force-stop, and the backend now guarantees a terminal `done` event, so we
+    // don't wait on the round-trip to clear the live indicators. The SSE hook
+    // stays open and reconciles the transcript when `done` lands.
+    setForceStopped(true)
     try {
       await cancelConversation(conversationId)
     } catch (e) {
@@ -331,10 +336,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     } finally {
       setStopping(false)
     }
-    // Safety fallback: if the SSE `done` event doesn't arrive within 3s, treat
-    // the run as stopped locally so the user isn't stuck staring at "Stop".
-    // The SSE hook keeps running, so transcripts remain correct.
-    setTimeout(() => setForceStopped(true), 3000)
   }, [conversationId, stopping])
 
   const onSend = useCallback(async (content: string) => {

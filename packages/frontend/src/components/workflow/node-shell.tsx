@@ -12,7 +12,7 @@ export interface NodeShellProps {
   icon: ComponentType<{ className?: string }>
   title: string
   subtitle?: string
-  /** Tailwind gradient classes (e.g. "from-[#fd551d] to-[#ff9b7a]"). */
+  /** Tailwind gradient classes — prefer the `ACCENT_GRADIENTS` presets. */
   accent?: string
   footer?: ReactNode
   children?: ReactNode
@@ -23,18 +23,23 @@ export interface NodeShellProps {
   runStatus?: NodeRunStatus
   /** Which connection handles to render. Defaults to both. */
   handles?: HandleVariant
+  /**
+   * Render `children` edge-to-edge below the header — no body padding, no
+   * footer. Used by the Media node so the artifact fills the whole card.
+   */
+  bleed?: boolean
 }
 
 const SHELL_BASE =
-  'relative w-[360px] overflow-visible rounded-2xl border bg-[#0b0b0c]/90 backdrop-blur-xl ' +
-  'text-white shadow-2xl shadow-black/35 transition-shadow duration-300'
+  'relative w-[360px] overflow-visible rounded-2xl border bg-card/95 backdrop-blur-xl ' +
+  'text-card-foreground shadow-2xl shadow-black/20 transition-shadow duration-300'
 
 const RUN_STATUS_BORDER: Record<NodeRunStatus, string> = {
-  pending:   'border-[#fd551d]/20',
-  running:   'border-[#fd551d] shadow-[0_0_28px_4px_rgba(253,85,29,0.55)] animate-pulse',
-  succeeded: 'border-[#22c55e] shadow-[0_0_24px_2px_rgba(34,197,94,0.45)]',
-  failed:    'border-[#ef4444] shadow-[0_0_28px_4px_rgba(239,68,68,0.55)]',
-  skipped:   'border-[#a1a1aa]/40',
+  pending:   'border-border',
+  running:   'border-primary shadow-[0_0_26px_3px_rgba(217,164,65,0.5)] animate-pulse',
+  succeeded: 'border-anubis-success shadow-[0_0_22px_2px_rgba(95,185,122,0.42)]',
+  failed:    'border-destructive shadow-[0_0_26px_3px_rgba(224,122,111,0.5)]',
+  skipped:   'border-muted-foreground/40',
 }
 
 export function NodeShell({
@@ -48,29 +53,41 @@ export function NodeShell({
   disableMotion = false,
   runStatus,
   handles = 'both',
+  bleed = false,
 }: NodeShellProps) {
-  const runClass = runStatus ? RUN_STATUS_BORDER[runStatus] : 'border-[#fd551d]/20'
+  const runClass = runStatus ? RUN_STATUS_BORDER[runStatus] : 'border-border'
+
+  const header = (
+    <div className='flex items-start gap-3'>
+      <div className='rounded-xl border border-primary/20 bg-primary/10 p-2 text-primary'>
+        <Icon className='h-5 w-5' />
+      </div>
+      <div className='min-w-0 flex-1'>
+        <h3 className='text-sm font-semibold tracking-tight text-foreground'>{title}</h3>
+        {subtitle ? (
+          <p className='mt-0.5 text-xs leading-relaxed text-muted-foreground'>{subtitle}</p>
+        ) : null}
+      </div>
+    </div>
+  )
 
   const inner = (
     <div className={cn(SHELL_BASE, runClass, className)}>
       <NodeDirectionalHandles variant={handles} />
       <div className='overflow-hidden rounded-2xl'>
         <div className={cn('h-1 bg-gradient-to-r', accent)} />
-        <div className='p-4'>
-          <div className='flex items-start gap-3'>
-            <div className='rounded-xl border border-[#fd551d]/20 bg-[#fd551d]/10 p-2 text-[#fd551d]'>
-              <Icon className='h-5 w-5' />
-            </div>
-            <div className='min-w-0 flex-1'>
-              <h3 className='text-sm font-semibold tracking-tight text-white'>{title}</h3>
-              {subtitle ? (
-                <p className='mt-0.5 text-xs leading-relaxed text-zinc-400'>{subtitle}</p>
-              ) : null}
-            </div>
+        {bleed ? (
+          <>
+            <div className='px-4 pt-4'>{header}</div>
+            {children ? <div className='mt-3'>{children}</div> : <div className='pb-4' />}
+          </>
+        ) : (
+          <div className='p-4'>
+            {header}
+            {children ? <div className='mt-4'>{children}</div> : null}
+            {footer ? <div className='mt-4 border-t border-border pt-3'>{footer}</div> : null}
           </div>
-          {children ? <div className='mt-4'>{children}</div> : null}
-          {footer ? <div className='mt-4 border-t border-white/10 pt-3'>{footer}</div> : null}
-        </div>
+        )}
       </div>
     </div>
   )

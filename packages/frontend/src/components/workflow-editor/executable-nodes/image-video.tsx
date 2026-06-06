@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { NodeShell, StatusBadge } from '@/components/workflow'
+import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
@@ -41,7 +42,7 @@ export const ImageVideoExecutableNode = memo(function ImageVideoExecutableNode({
       icon={ImageIcon}
       title='Image / Video'
       subtitle={subtitle}
-      accent='from-[#fd551d] to-[#8b5cf6]'
+      accent={ACCENT_GRADIENTS.media}
       runStatus={runStatus}
       footer={
         <div className='flex flex-wrap gap-2'>
@@ -50,7 +51,7 @@ export const ImageVideoExecutableNode = memo(function ImageVideoExecutableNode({
         </div>
       }
     >
-      <p className='text-xs text-zinc-300'>
+      <p className='text-xs text-muted-foreground'>
         {data.source === 'local'
           ? 'Uses an existing local file as-is (no download).'
           : data.source === 'upstream'
@@ -58,23 +59,23 @@ export const ImageVideoExecutableNode = memo(function ImageVideoExecutableNode({
           : 'Downloads to a run artifact and outputs the file path.'}
       </p>
       {output?.kind === 'file' ? (
-        <div className='mt-3 rounded-xl border border-white/10 bg-black/30 p-2'>
+        <div className='mt-3 rounded-xl border border-border bg-muted/30 p-2'>
           <FileThumb path={output.path} />
           {output.mimeType ? (
-            <p className='mt-1 truncate text-[10px] text-zinc-500'>
+            <p className='mt-1 truncate text-[10px] text-muted-foreground'>
               {output.mimeType}{output.sizeBytes ? ` · ${(output.sizeBytes / 1024).toFixed(1)} KB` : ''}
             </p>
           ) : null}
         </div>
       ) : null}
       {output?.kind === 'files' ? (
-        <div className='mt-3 space-y-2 rounded-xl border border-white/10 bg-black/30 p-2'>
+        <div className='mt-3 space-y-2 rounded-xl border border-border bg-muted/30 p-2'>
           <div className={`grid gap-2 ${output.files.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {output.files.slice(0, 4).map((file) => (
               <FileThumb key={file.path} path={file.path} />
             ))}
           </div>
-          <p className='text-[10px] text-zinc-500'>
+          <p className='text-[10px] text-muted-foreground'>
             {output.files.length} file{output.files.length === 1 ? '' : 's'}
           </p>
         </div>

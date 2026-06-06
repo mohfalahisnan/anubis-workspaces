@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Table as TableIcon } from 'lucide-react'
 import { NodeShell, StatusBadge } from '@/components/workflow'
+import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
@@ -23,7 +24,7 @@ export const TableExecutableNode = memo(function TableExecutableNode({ id, data 
       icon={TableIcon}
       title='Table'
       subtitle='Passive — displays input or static rows'
-      accent='from-[#fd551d] to-[#22c55e]'
+      accent={ACCENT_GRADIENTS.review}
       runStatus={runStatus}
       footer={
         <div className='flex flex-wrap gap-2'>
@@ -32,22 +33,22 @@ export const TableExecutableNode = memo(function TableExecutableNode({ id, data 
         </div>
       }
     >
-      <p className='text-xs text-zinc-300'>Whatever flows in shows up here.</p>
+      <p className='text-xs text-muted-foreground'>Whatever flows in shows up here.</p>
       {output?.kind === 'table' && output.rows.length > 0 ? (() => {
         const cols = Object.keys(output.rows[0] ?? {}).slice(0, 4)
         return (
-          <div className='mt-3 overflow-hidden rounded-xl border border-white/10'>
+          <div className='mt-3 overflow-hidden rounded-xl border border-border'>
             <table className='w-full text-left text-[10px]'>
-              <thead className='bg-white/[0.06] uppercase tracking-wider text-zinc-400'>
+              <thead className='bg-muted uppercase tracking-wider text-muted-foreground'>
                 <tr>{cols.map((c) => <th key={c} className='px-2 py-1'>{c}</th>)}</tr>
               </thead>
-              <tbody className='divide-y divide-white/10'>
+              <tbody className='divide-y divide-border'>
                 {output.rows.slice(0, 3).map((row, i) => (
-                  <tr key={i}>{cols.map((c) => <td key={c} className='px-2 py-1 text-zinc-300'>{previewCell((row as Record<string, unknown>)[c])}</td>)}</tr>
+                  <tr key={i}>{cols.map((c) => <td key={c} className='px-2 py-1 text-foreground/80'>{previewCell((row as Record<string, unknown>)[c])}</td>)}</tr>
                 ))}
               </tbody>
             </table>
-            {output.rows.length > 3 ? <p className='border-t border-white/10 bg-white/[0.04] px-2 py-1 text-[9px] text-zinc-500'>+ {output.rows.length - 3} more rows</p> : null}
+            {output.rows.length > 3 ? <p className='border-t border-border bg-muted/50 px-2 py-1 text-[9px] text-muted-foreground'>+ {output.rows.length - 3} more rows</p> : null}
           </div>
         )
       })() : null}

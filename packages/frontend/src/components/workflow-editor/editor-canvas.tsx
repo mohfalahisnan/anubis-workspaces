@@ -76,7 +76,7 @@ export function EditorCanvas() {
   const routedEdges = applyVisualEdgeRouting(edges)
 
   return (
-    <div className='relative h-full w-full bg-[#0b0b0c]' onDragOver={onDragOver} onDrop={onDrop}>
+    <div className='relative h-full w-full bg-background' onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow
         nodes={nodes}
         edges={routedEdges}
@@ -90,10 +90,10 @@ export function EditorCanvas() {
         fitView
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={24} size={1} color='rgba(253, 85, 29, 0.16)' />
-        <Controls className='!border-[#fd551d]/20 !bg-[#161617]/90 !text-white' />
+        <Background gap={24} size={1} color='rgba(217, 164, 65, 0.18)' />
+        <Controls className='!border-border !bg-card/90 !text-foreground' />
         <MiniMap pannable zoomable nodeStrokeWidth={3}
-          className='!border !border-[#fd551d]/20 !bg-[#161617]/90' maskColor='rgba(0,0,0,0.55)' />
+          className='!border !border-border !bg-card/90' maskColor='rgba(0,0,0,0.45)' />
       </ReactFlow>
     </div>
   )

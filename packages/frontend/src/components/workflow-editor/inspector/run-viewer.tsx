@@ -12,7 +12,7 @@ export function RunViewer() {
         <p className='text-xs uppercase tracking-wider text-muted-foreground'>Run · {activeRun.runId}</p>
         <p className='text-sm'>Status: <b>{activeRun.status}</b></p>
         {activeRun.status === 'failed' ? (
-          <pre className='whitespace-pre-wrap rounded-md bg-red-500/10 p-2 text-[11px] text-red-200'>
+          <pre className='whitespace-pre-wrap rounded-md border border-destructive/30 bg-destructive/10 p-2 text-[11px] text-destructive'>
             {activeRun.error || '(no error message returned by the runner)'}
           </pre>
         ) : null}
@@ -32,12 +32,12 @@ export function RunViewer() {
       {step.startedAt ? <p className='text-xs'>Started: {new Date(step.startedAt).toLocaleTimeString()}</p> : null}
       {step.finishedAt ? <p className='text-xs'>Finished: {new Date(step.finishedAt).toLocaleTimeString()}</p> : null}
       {step.status === 'failed' ? (
-        <pre className='whitespace-pre-wrap rounded-md bg-red-500/10 p-2 text-[11px] text-red-200'>
+        <pre className='whitespace-pre-wrap rounded-md border border-destructive/30 bg-destructive/10 p-2 text-[11px] text-destructive'>
           {step.error || '(executor failed without a message)'}
         </pre>
       ) : null}
       {step.output != null ? (
-        <pre className='whitespace-pre-wrap rounded-md bg-white/[0.04] p-2 text-[11px] text-zinc-200'>{JSON.stringify(step.output, null, 2)}</pre>
+        <pre className='whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-2 text-[11px] text-foreground/80'>{JSON.stringify(step.output, null, 2)}</pre>
       ) : null}
     </div>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { workflowsApi, type WorkflowSummary } from '@/api/workflows'
 import { useNavigation } from '@/lib/navigation'
+import { useActiveWorkspace } from '@/lib/workspace'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -10,17 +11,19 @@ import { WorkflowCardPreview } from './workflows/workflow-card-preview'
 
 export function WorkflowsPage() {
   const { navigate } = useNavigation()
+  const { activeWorkspaceId } = useActiveWorkspace()
   const [items, setItems] = useState<WorkflowSummary[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [draftName, setDraftName] = useState('')
 
   useEffect(() => {
-    workflowsApi.list().then((r) => setItems(r.items)).catch((e) => console.error(e))
-  }, [])
+    workflowsApi.list(activeWorkspaceId).then((r) => setItems(r.items)).catch((e) => console.error(e))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId])
 
   async function handleCreate() {
     if (!draftName.trim()) return
-    const wf = await workflowsApi.create(draftName.trim())
+    const wf = await workflowsApi.create(draftName.trim(), undefined, activeWorkspaceId)
     setIsCreating(false); setDraftName('')
     navigate({ page: 'workflow-editor', workflowId: wf.id })
   }

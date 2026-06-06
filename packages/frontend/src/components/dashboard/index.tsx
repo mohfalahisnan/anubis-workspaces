@@ -10,6 +10,7 @@ import {
 } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation, type PageKey } from '@/lib/navigation'
+import { useActiveWorkspace } from '@/lib/workspace'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { ConversationsPage } from '@/pages/conversations'
@@ -102,7 +103,7 @@ function LiveStatusRow({ counts }: { counts: LiveCounts }) {
   )
 }
 
-function useLiveCounts(): LiveCounts {
+function useLiveCounts(workspaceId: string): LiveCounts {
   const [counts, setCounts] = useState<LiveCounts>({})
 
   useEffect(() => {
@@ -114,7 +115,7 @@ function useLiveCounts(): LiveCounts {
         listConversations({ limit: 200 }),
         listSkills(),
         listCronJobs(),
-        listCompetitors(),
+        listCompetitors(workspaceId),
       ])
       if (!active) return
       setCounts({
@@ -132,14 +133,15 @@ function useLiveCounts(): LiveCounts {
     return () => {
       active = false
     }
-  }, [])
+  }, [workspaceId])
 
   return counts
 }
 
 function HomePage() {
   const { navigate } = useNavigation()
-  const counts = useLiveCounts()
+  const { activeWorkspaceId } = useActiveWorkspace()
+  const counts = useLiveCounts(activeWorkspaceId)
 
   function handleAction(action: Action) {
     switch (action.id) {

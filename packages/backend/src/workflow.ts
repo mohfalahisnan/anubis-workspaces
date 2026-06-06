@@ -204,6 +204,21 @@ workflowRoutes.get('/runs/:runId', (c) => {
   return c.json({ run, steps })
 })
 
+const DecisionBody = z.object({
+  nodeId: z.string().min(1),
+  decision: z.enum(['approved', 'rejected']),
+  notes: z.string().optional(),
+})
+
+workflowRoutes.post('/runs/:runId/decisions', async (c) => {
+  const stack = getStack()
+  const mgr = getRunManager(stack)
+  const body = DecisionBody.parse(await c.req.json())
+  const ok = mgr.decide(c.req.param('runId'), body)
+  if (!ok) return c.json({ error: 'no_pending_decision' }, 404)
+  return c.json({ ok: true })
+})
+
 workflowRoutes.delete('/runs/:runId', (c) => {
   const stack = getStack()
   const mgr = getRunManager(stack)

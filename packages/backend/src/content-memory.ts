@@ -37,6 +37,10 @@ const MEMORY_TYPE = z.enum([
   'preference', 'anti_pattern', 'lesson',
 ])
 
+const MEMORY_STATUS = z.enum([
+  'candidate', 'active', 'reinforced', 'deprecated', 'rejected',
+])
+
 const FeedbackBody = z.object({
   runId: z.string().min(1),
   workspaceId: z.string().min(1),
@@ -104,4 +108,37 @@ contentMemoryRoutes.post('/runs', async (c) => {
   const body = RunBody.parse(await c.req.json())
   const run = getStack().agentRuns.saveRun(body)
   return c.json({ ok: true, run }, 201)
+})
+
+const ListMemoriesQuery = z.object({
+  workspaceId: z.string().min(1),
+  status: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(1000).optional(),
+})
+
+contentMemoryRoutes.get('/memories', (c) => {
+  const q = ListMemoriesQuery.parse({
+    workspaceId: c.req.query('workspaceId'),
+    status: c.req.query('status'),
+    limit: c.req.query('limit'),
+  })
+  const statuses = q.status
+    ? q.status.split(',').map((s) => s.trim()).filter(Boolean).map((s) => MEMORY_STATUS.parse(s))
+    : undefined
+  const items = getStack().experience.list(q.workspaceId, { statuses, limit: q.limit })
+  return c.json({ ok: true, items })
+})
+
+const ListRunsQuery = z.object({
+  workspaceId: z.string().min(1),
+  limit: z.coerce.number().int().positive().max(1000).optional(),
+})
+
+contentMemoryRoutes.get('/runs', (c) => {
+  const q = ListRunsQuery.parse({
+    workspaceId: c.req.query('workspaceId'),
+    limit: c.req.query('limit'),
+  })
+  const items = getStack().agentRuns.listForWorkspace(q.workspaceId, q.limit)
+  return c.json({ ok: true, items })
 })

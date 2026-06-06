@@ -1,6 +1,7 @@
 import {
   ActivityIcon,
   BarChart3Icon,
+  BrainIcon,
   CalendarClockIcon,
   FileTextIcon,
   ImageIcon,
@@ -32,6 +33,7 @@ export const navItems: NavItem[] = [
   { label: 'Conversations', icon: ScrollTextIcon, page: 'conversations' },
   { label: 'Competitors', icon: UsersRoundIcon, page: 'competitors' },
   { label: 'Content', icon: ImagesIcon, page: 'content' },
+  { label: 'Memory', icon: BrainIcon, page: 'memory' },
   { label: 'Profiles', icon: SlidersHorizontalIcon, page: 'profiles' },
   { label: 'Skills', icon: LibraryIcon, page: 'skills' },
   { label: 'Scheduled', icon: CalendarClockIcon, page: 'scheduled' },

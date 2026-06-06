@@ -14,6 +14,7 @@ import { useActiveWorkspace } from '@/lib/workspace'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { ConversationsPage } from '@/pages/conversations'
+import { MemoryPage } from '@/pages/memory'
 import { PlaceholderPage } from '@/pages/placeholder'
 import { CompetitorsPage } from '@/pages/competitors'
 import { ProfileEditorPage } from '@/pages/profile-editor'
@@ -34,6 +35,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   conversations: 'Conversations',
   'active-conversation': 'Conversations',
   content: 'Content',
+  memory: 'Memory',
   profiles: 'Profiles',
   'profile-editor': 'Profiles · Edit',
   skills: 'Skills',
@@ -199,6 +201,8 @@ function CurrentPage() {
       return <ActiveConversationPage conversationId={route.conversationId} />
     case 'content':
       return <ContentPage />
+    case 'memory':
+      return <MemoryPage />
     case 'profiles':
       return <ProfilesPage />
     case 'profile-editor':

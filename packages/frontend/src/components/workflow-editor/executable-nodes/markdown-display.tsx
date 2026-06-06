@@ -21,7 +21,7 @@ export const MarkdownDisplayExecutableNode = memo(function MarkdownDisplayExecut
       title='Markdown'
       subtitle='Passive — renders upstream text as markdown'
       accent={ACCENT_GRADIENTS.review}
-      handles='in'
+      handles='both'
       runStatus={runStatus}
       footer={<div className='flex flex-wrap gap-2'><StatusBadge>output</StatusBadge><RunStateBadge nodeId={id} /></div>}
     >

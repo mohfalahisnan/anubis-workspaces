@@ -17,6 +17,10 @@ export const WorkflowEdgeSchema = z.object({
   id: z.string().min(1),
   source: z.string().min(1),
   target: z.string().min(1),
+  /** Outgoing port the edge leaves from. Branch-aware nodes (humanApproval) use 'approved' | 'rejected'. */
+  sourceHandle: z.string().optional(),
+  /** `loop: true` marks a back-edge that re-arms a loop body; exempt from cycle checks. */
+  data: z.object({ loop: z.boolean().optional() }).optional(),
 })
 
 export const WorkflowGraphSchema = z.object({

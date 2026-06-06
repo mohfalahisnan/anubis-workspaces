@@ -1,6 +1,6 @@
 import { assertAcyclicExceptLoops, isLoopEdge } from './graph.js'
 import type {
-  Executor, ExecutorContext, RunStatus, StepStatus, WorkflowGraph,
+  Executor, ExecutorContext, RunStatus, StepStatus, WorkflowEdge, WorkflowGraph,
 } from './types.js'
 
 export interface RunResult {
@@ -62,6 +62,55 @@ export async function runWorkflow(
     }
   }
 
+  // ----- loop re-arm -------------------------------------------------------
+  const iteration = new Map<string, number>()  // keyed by loop target (re-entry node)
+  let rejected = false
+
+  function reachable(start: string, adj: Map<string, string[]>): Set<string> {
+    const seen = new Set<string>([start])
+    const q = [start]
+    while (q.length) {
+      const x = q.shift()!
+      for (const y of adj.get(x) ?? []) if (!seen.has(y)) { seen.add(y); q.push(y) }
+    }
+    return seen
+  }
+
+  /** All nodes reachable forward from the loop re-entry node — the region re-run each iteration. */
+  function downstreamRegion(target: string): Set<string> {
+    const fwd = new Map<string, string[]>()
+    for (const n of graph.nodes) fwd.set(n.id, [])
+    for (const e of forward) fwd.get(e.source)!.push(e.target)
+    return reachable(target, fwd)
+  }
+
+  /**
+   * A node with an outgoing loop edge just finished (it only runs on the taken
+   * branch). Re-arm the loop body for another iteration, bounded by the governing
+   * approval's `maxIterations` (default 3). The loop source's output is preserved
+   * so the re-entry node can consume the lesson; everything else in the body resets.
+   */
+  function rearm(loopEdge: WorkflowEdge): void {
+    const target = loopEdge.target
+    const loopSource = loopEdge.source
+    const approvalNode = forward.find((e) => e.target === loopSource && e.sourceHandle === 'rejected')?.source
+    const max = (approvalNode
+      ? (nodeById.get(approvalNode)!.data as { maxIterations?: number } | undefined)?.maxIterations
+      : undefined) ?? 3
+    const n = (iteration.get(target) ?? 0) + 1
+    if (n >= max) { rejected = true; return }
+    iteration.set(target, n)
+    // Reset the whole downstream region so branch-exit nodes (e.g. the approved
+    // path) are revived for the next decision. Edges entering the region from
+    // outside (the original upstream context) stay active.
+    const region = downstreamRegion(target)
+    for (const id of region) {
+      stepStatuses[id] = 'pending'
+      if (id !== loopSource) delete outputs[id]   // keep the lesson so `target` can read it
+    }
+    for (const e of forward) if (region.has(e.source)) edgeState.set(e.id, 'pending')
+  }
+
   function readyNodes(): string[] {
     const out: string[] = []
     for (const n of graph.nodes) {
@@ -107,7 +156,7 @@ export async function runWorkflow(
     if (!didWork) break
   }
 
-  return { status: 'succeeded', outputs, stepStatuses }
+  return { status: rejected ? 'rejected' : 'succeeded', outputs, stepStatuses }
 
   async function runNode(nodeId: string): Promise<RunResult | null> {
     if (opts?.seed && Object.prototype.hasOwnProperty.call(opts.seed, nodeId)) {
@@ -136,6 +185,7 @@ export async function runWorkflow(
       stepStatuses[nodeId] = 'succeeded'
       ctx.emit({ kind: 'node-succeeded', nodeId, at: Date.now(), output })
       markOutgoing(nodeId, selectedBranch(output))
+      for (const le of loops) if (le.source === nodeId) rearm(le)
       return null
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

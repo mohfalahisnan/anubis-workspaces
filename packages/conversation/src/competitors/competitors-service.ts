@@ -13,6 +13,7 @@ export interface CreateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  workspaceId?: string
 }
 
 export interface UpdateCompetitorInput {
@@ -59,8 +60,8 @@ function pickTintFor(handle: string): string {
 export class CompetitorsService {
   constructor(private repo: CompetitorsRepo) {}
 
-  list(): Competitor[] {
-    return this.repo.list()
+  list(workspaceId?: string): Competitor[] {
+    return this.repo.list(workspaceId)
   }
 
   get(id: string): Competitor | null {
@@ -85,6 +86,7 @@ export class CompetitorsService {
       notes: input.notes?.trim() || undefined,
       bio: input.bio?.trim() || undefined,
       level: input.level ?? undefined,
+      workspaceId: input.workspaceId,
       addedAt: now,
       updatedAt: now,
     }

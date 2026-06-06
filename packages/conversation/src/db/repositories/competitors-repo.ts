@@ -108,12 +108,16 @@ export class CompetitorsRepo {
     return r ? toCompetitor(r) : null
   }
 
-  list(): Competitor[] {
-    const rows = this.db
-      .prepare(
-        'SELECT * FROM competitors WHERE deleted_at IS NULL ORDER BY added_at DESC',
-      )
-      .all() as Row[]
+  list(workspaceId?: string): Competitor[] {
+    const rows = workspaceId
+      ? (this.db
+          .prepare(
+            'SELECT * FROM competitors WHERE deleted_at IS NULL AND workspace_id = ? ORDER BY added_at DESC',
+          )
+          .all(workspaceId) as Row[])
+      : (this.db
+          .prepare('SELECT * FROM competitors WHERE deleted_at IS NULL ORDER BY added_at DESC')
+          .all() as Row[])
     return rows.map(toCompetitor)
   }
 

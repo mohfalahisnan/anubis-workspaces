@@ -32,6 +32,8 @@ export type NodeRunEvent =
   | { kind: 'node-started';   nodeId: string; at: number }
   | { kind: 'node-succeeded'; nodeId: string; at: number; output: unknown }
   | { kind: 'node-failed';    nodeId: string; at: number; error: string }
+  | { kind: 'node-awaiting';  nodeId: string; at: number; title?: string; instructions?: string }
+  | { kind: 'node-decided';   nodeId: string; at: number; decision: 'approved' | 'rejected'; notes?: string }
   | { kind: 'run-started';    runId: string; at: number }
   | { kind: 'run-finished';   runId: string; at: number; status: string; error?: string }
 
@@ -73,6 +75,8 @@ export const workflowsApi = {
                 jsonFetch<{ run: { id: string; status: string; startedAt: number; finishedAt?: number; error?: string },
                             steps: Array<{ id: string; nodeId: string; status: string; output?: string; error?: string }> }>(`/workflows/runs/${runId}`),
   cancelRun:   (runId: string) => jsonFetch<void>(`/workflows/runs/${runId}`, { method: 'DELETE' }),
+  decide:      (runId: string, body: { nodeId: string; decision: 'approved' | 'rejected'; notes?: string }) =>
+                jsonFetch<{ ok: true }>(`/workflows/runs/${runId}/decisions`, { method: 'POST', body: JSON.stringify(body) }),
   arm:         (id: string) => jsonFetch<{ armed: boolean }>(`/workflows/${id}/arm`, { method: 'POST' }),
   disarm:      (id: string) => jsonFetch<{ armed: boolean }>(`/workflows/${id}/disarm`, { method: 'POST' }),
 }

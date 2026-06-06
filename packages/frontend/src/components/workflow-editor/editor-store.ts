@@ -3,17 +3,20 @@ import type { Edge, Node } from '@xyflow/react'
 import type { NodeRunEvent } from '@/api/workflows'
 
 export type StepState = {
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+  status: 'pending' | 'running' | 'awaiting' | 'succeeded' | 'failed' | 'skipped'
   startedAt?: number
   finishedAt?: number
   output?: unknown
   error?: string
+  /** Set while status === 'awaiting' — the human-approval prompt. */
+  title?: string
+  instructions?: string
 }
 
 export type ActiveRun = {
   runId: string
   steps: Record<string, StepState>
-  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
+  status: 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'rejected' | 'cancelled'
   error?: string
 }
 
@@ -132,6 +135,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       steps[event.nodeId] = { ...steps[event.nodeId], status: 'succeeded', finishedAt: event.at, output: event.output }
     } else if (event.kind === 'node-failed') {
       steps[event.nodeId] = { ...steps[event.nodeId], status: 'failed', finishedAt: event.at, error: event.error }
+    } else if (event.kind === 'node-awaiting') {
+      steps[event.nodeId] = { ...steps[event.nodeId], status: 'awaiting', title: event.title, instructions: event.instructions }
+      set({ activeRun: { ...s.activeRun, status: 'awaiting_approval', steps } })
+      return
+    } else if (event.kind === 'node-decided') {
+      steps[event.nodeId] = { ...steps[event.nodeId], status: 'running' }
+      set({ activeRun: { ...s.activeRun, status: 'running', steps } })
+      return
     } else if (event.kind === 'run-finished') {
       set({
         activeRun: {

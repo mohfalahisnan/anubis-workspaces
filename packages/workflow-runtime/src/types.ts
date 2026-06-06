@@ -32,8 +32,8 @@ export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>
 export type WorkflowEdge = z.infer<typeof WorkflowEdgeSchema>
 export type WorkflowGraph = z.infer<typeof WorkflowGraphSchema>
 
-export type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'
-export type StepStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+export type RunStatus = 'pending' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'rejected' | 'cancelled'
+export type StepStatus = 'pending' | 'running' | 'awaiting' | 'succeeded' | 'failed' | 'skipped'
 
 export interface ExecutorInput<TConfig> {
   nodeId: string
@@ -71,6 +71,19 @@ export interface ExecutorContext {
     }): Promise<{ conversationId: string; messageId: string; text: string }>
     cancel(conversationId: string): Promise<void>
   }
+  approvals: {
+    waitFor(nodeId: string, opts: { title?: string; instructions?: string; upstream: unknown }): Promise<{ decision: 'approved' | 'rejected'; notes?: string }>
+  }
+  experience: {
+    recordCandidate(input: {
+      type: 'mistake' | 'lesson'
+      title: string; problem: string; correction: string
+      preventionRule?: string | null; severity?: 'low' | 'medium' | 'high' | 'critical'
+      workspaceId?: string | null; platform?: string | null; sourceRunId?: string | null
+    }): { id: string }
+  }
+  /** The run's brand workspace (default 'default-workspace'). */
+  workspaceId: string
   runId:   string
   signal:  AbortSignal
   emit:    (event: NodeRunEvent) => void
@@ -80,6 +93,8 @@ export type NodeRunEvent =
   | { kind: 'node-started';   nodeId: string; at: number }
   | { kind: 'node-succeeded'; nodeId: string; at: number; output: unknown }
   | { kind: 'node-failed';    nodeId: string; at: number; error: string }
+  | { kind: 'node-awaiting';  nodeId: string; at: number; title?: string; instructions?: string }
+  | { kind: 'node-decided';   nodeId: string; at: number; decision: 'approved' | 'rejected'; notes?: string }
 
 export type RunLifecycleEvent =
   | { kind: 'run-started';  runId: string; at: number }

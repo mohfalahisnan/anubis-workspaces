@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useActiveWorkspace } from '@/lib/workspace'
 import {
   ArrowDownToLineIcon,
   ArrowUpRightIcon,
@@ -176,11 +177,12 @@ export function ContentPage() {
   const [multiplierFilter, setMultiplierFilter] = useState<MultiplierFilter>('all')
   const { config: levelsCfg } = useCompetitorLevels()
   const multipliersCfg = useLevelMultipliers()
+  const { activeWorkspaceId } = useActiveWorkspace()
 
   async function refresh() {
     setBusy(true)
     try {
-      const items = await listPosts({ limit: 120, orderBy: 'recent' })
+      const items = await listPosts({ limit: 120, orderBy: 'recent', workspaceId: activeWorkspaceId })
       setPosts(items)
     } catch {
       // Backend offline or request failed → show the empty state, not stale data.
@@ -192,7 +194,8 @@ export function ContentPage() {
 
   useEffect(() => {
     void refresh()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId])
 
   function toggleStar(key: string) {
     setStars((s) => ({ ...s, [key]: !s[key] }))

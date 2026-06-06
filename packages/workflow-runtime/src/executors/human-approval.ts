@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Executor } from '../types.js'
+import { firstUpstreamText } from './_text.js'
 
 const ConfigSchema = z.object({
   title: z.string().optional(),
@@ -13,6 +14,8 @@ export interface HumanApprovalOutput {
   kind: 'approval'
   decision: 'approved' | 'rejected'
   notes?: string
+  /** The reviewed text, surfaced top-level so a Markdown node downstream renders it. */
+  text: string
   /** The reviewed upstream content, passed through so the taken branch can use it. */
   reviewed: Record<string, unknown>
 }
@@ -38,6 +41,7 @@ export const humanApprovalExecutor: Executor<HumanApprovalConfig> = {
       kind: 'approval',
       decision,
       ...(notes ? { notes } : {}),
+      text: firstUpstreamText(input.upstream) ?? '',
       reviewed: input.upstream,
     } satisfies HumanApprovalOutput
   },

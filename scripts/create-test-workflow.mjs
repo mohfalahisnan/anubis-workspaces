@@ -101,7 +101,7 @@ if (tableCount !== 3) {
     CREATE TABLE IF NOT EXISTS workflow_runs (
       id              TEXT PRIMARY KEY,
       workflow_id     TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-      status          TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','cancelled')),
+      status          TEXT NOT NULL CHECK (status IN ('pending','running','awaiting_approval','succeeded','failed','rejected','cancelled')),
       graph_snapshot  TEXT NOT NULL,
       started_at      INTEGER NOT NULL,
       finished_at     INTEGER,
@@ -112,7 +112,8 @@ if (tableCount !== 3) {
       id           TEXT PRIMARY KEY,
       run_id       TEXT NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
       node_id      TEXT NOT NULL,
-      status       TEXT NOT NULL CHECK (status IN ('pending','running','succeeded','failed','skipped')),
+      status       TEXT NOT NULL CHECK (status IN ('pending','running','awaiting','succeeded','failed','skipped')),
+      iteration    INTEGER NOT NULL DEFAULT 0,
       started_at   INTEGER,
       finished_at  INTEGER,
       output       TEXT,

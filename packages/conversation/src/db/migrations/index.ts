@@ -24,4 +24,6 @@ export const MIGRATIONS: Migration[] = [
   load(10, '010_competitors_workspace.sql'),
   // 016 alters workflows and depends on brand_workspaces existing (8).
   load(16, '016_workflows_workspace.sql'),
+  // 017 widens workflow run/step status enums (pause/branch/loop engine).
+  load(17, '017_workflow_runs_pause.sql'),
 ]

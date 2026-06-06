@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ExperienceScope, ExperienceType, Platform, Severity } from '../types.js'
+import type { ExperienceScope, ExperienceType, MemoryStatus, Platform, Severity } from '../types.js'
 import type {
   ExperienceMemoriesRepo, ExperienceMemory, RecallActiveInput,
 } from '../db/repositories/experience-memories-repo.js'
@@ -94,5 +94,12 @@ export class ExperienceIndexService {
 
   recallActive(input: RecallActiveInput): ExperienceMemory[] {
     return this.repo.recallActive(input)
+  }
+
+  list(
+    workspaceId: string,
+    opts: { statuses?: MemoryStatus[]; limit?: number } = {},
+  ): ExperienceMemory[] {
+    return this.repo.listForWorkspace(workspaceId, opts)
   }
 }

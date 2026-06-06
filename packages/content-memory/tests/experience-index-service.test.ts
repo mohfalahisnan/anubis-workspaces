@@ -66,4 +66,14 @@ describe('ExperienceIndexService', () => {
     const active = svc.recallActive({ workspaceId: 'workspace-a', platform: 'instagram' })
     expect(active.map((x) => x.id)).toContain(m.id)
   })
+
+  it('list returns memories of every status for the workspace, newest first', () => {
+    const { svc } = setup()
+    svc.recordCandidate({ workspaceId: 'workspace-a', type: 'mistake', title: 'A', problem: 'p', correction: 'c' }, 100)
+    const active = svc.recordCandidate({ workspaceId: 'workspace-a', type: 'lesson', title: 'B', problem: 'p', correction: 'c' }, 200)
+    svc.promote(active.id)
+    const all = svc.list('workspace-a')
+    expect(all.map((m) => m.title)).toEqual(['B', 'A'])
+    expect(svc.list('workspace-a', { statuses: ['candidate'] }).map((m) => m.title)).toEqual(['A'])
+  })
 })

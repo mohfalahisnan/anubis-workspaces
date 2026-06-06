@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+use $Graphify
+
 ## Overview
 
 Anubis is an Electron desktop app built as a pnpm monorepo. The Electron main process

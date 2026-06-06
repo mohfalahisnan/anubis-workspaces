@@ -22,4 +22,6 @@ export const MIGRATIONS: Migration[] = [
   ...CONTENT_MEMORY_MIGRATIONS,
   // 010 alters competitors and depends on brand_workspaces existing (8).
   load(10, '010_competitors_workspace.sql'),
+  // 016 alters workflows and depends on brand_workspaces existing (8).
+  load(16, '016_workflows_workspace.sql'),
 ]

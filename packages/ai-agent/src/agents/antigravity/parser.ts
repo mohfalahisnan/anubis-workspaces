@@ -13,7 +13,7 @@ export interface ParsedAntigravityOutput {
   finishReason?: string
 }
 
-function tryParse(text: string): unknown {
+export function tryParse(text: string): unknown {
   try {
     return JSON.parse(text)
   } catch {
@@ -30,7 +30,7 @@ function isContentBlocks(content: unknown): content is AntigravityContentBlock[]
 }
 
 /** Consume one parsed JSON object, pushing events / metadata into `out`. */
-function ingest(obj: AntigravityJson, out: ParsedAntigravityOutput): void {
+export function ingest(obj: AntigravityJson, out: ParsedAntigravityOutput): void {
   const sid = sessionIdOf(obj)
   if (sid) out.sessionId = sid
   if (obj.usage !== undefined) out.usageRaw = obj.usage

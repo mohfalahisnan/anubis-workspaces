@@ -2,7 +2,7 @@ import * as pty from 'node-pty'
 import { TypedEmitter, type AgentEventMap } from '../../events/stream.js'
 import { wrapPromptWithSystem } from '../wrap-system-prompt.js'
 import { buildAntigravityArgs } from './build-args.js'
-import { parseAntigravityOutput } from './parser.js'
+import { parseAntigravityOutput, tryParse, ingest, type ParsedAntigravityOutput } from './parser.js'
 import { stripTerminalSequences } from './terminal.js'
 
 export interface AntigravityRunOpts {
@@ -113,7 +113,74 @@ export class AntigravityAgent {
 
     // node-pty merges stdout+stderr into one data stream.
     let buf = ''
-    proc.onData((chunk) => { buf += chunk })
+    let lastCleanedText = ''
+    let processedLinesCount = 0
+    let isJsonMode: boolean | null = null
+    let emittedAny = false
+
+    proc.onData((chunk) => {
+      buf += chunk
+
+      if (isJsonMode === null) {
+        const cleaned = stripTerminalSequences(buf)
+        const trimmed = cleaned.trim()
+        if (trimmed.length > 0) {
+          isJsonMode = trimmed.startsWith('{') || trimmed.startsWith('[')
+        }
+      }
+
+      if (isJsonMode === true) {
+        const lines = buf.split(/\r?\n/)
+        // Process all completed lines
+        while (processedLinesCount < lines.length - 1) {
+          const rawLine = lines[processedLinesCount]
+          processedLinesCount++
+          if (rawLine === undefined) continue
+          const cleanedLine = stripTerminalSequences(rawLine).trim()
+          if (!cleanedLine) continue
+          try {
+            const parsed = JSON.parse(cleanedLine)
+            if (parsed && typeof parsed === 'object') {
+              const tempOut: ParsedAntigravityOutput = {
+                events: [],
+                sessionId: undefined,
+                usageRaw: undefined,
+                finishReason: undefined,
+              }
+              ingest(parsed, tempOut)
+              if (tempOut.sessionId) {
+                emitter.emit('session', { sessionId: tempOut.sessionId })
+                emittedAny = true
+              }
+              for (const ev of tempOut.events) {
+                if (ev.kind === 'partial') {
+                  emitter.emit('partial', { deltaText: ev.text })
+                } else if (ev.kind === 'tool_call') {
+                  emitter.emit('tool_call', { name: ev.name, args: ev.args })
+                } else {
+                  emitter.emit('tool_result', {
+                    name: ev.name,
+                    result: ev.result,
+                    isError: ev.isError,
+                  })
+                }
+                emittedAny = true
+              }
+            }
+          } catch {
+            // Incomplete or single JSON object line, ignore for now
+          }
+        }
+      } else if (isJsonMode === false) {
+        const cleaned = stripTerminalSequences(buf, true)
+        if (cleaned.length > lastCleanedText.length) {
+          const delta = cleaned.slice(lastCleanedText.length)
+          emitter.emit('partial', { deltaText: delta })
+          lastCleanedText = cleaned
+          emittedAny = true
+        }
+      }
+    })
 
     proc.onExit(({ exitCode }) => {
       if (terminalEmitted) return
@@ -132,27 +199,94 @@ export class AntigravityAgent {
         return
       }
 
-      const parsed = parseAntigravityOutput(text)
-      if (parsed.sessionId) {
-        emitter.emit('session', { sessionId: parsed.sessionId })
-      }
-      for (const ev of parsed.events) {
-        if (ev.kind === 'partial') {
-          emitter.emit('partial', { deltaText: ev.text })
-        } else if (ev.kind === 'tool_call') {
-          emitter.emit('tool_call', { name: ev.name, args: ev.args })
-        } else {
-          emitter.emit('tool_result', {
-            name: ev.name,
-            result: ev.result,
-            isError: ev.isError,
-          })
+      if (isJsonMode === true) {
+        // Check if the whole output is a single JSON object or array.
+        const trimmed = text.trim()
+        const whole = tryParse(trimmed)
+        if (whole && typeof whole === 'object') {
+          if (!emittedAny) {
+            const parsed = parseAntigravityOutput(text)
+            if (parsed.sessionId) {
+              emitter.emit('session', { sessionId: parsed.sessionId })
+            }
+            for (const ev of parsed.events) {
+              if (ev.kind === 'partial') {
+                emitter.emit('partial', { deltaText: ev.text })
+              } else if (ev.kind === 'tool_call') {
+                emitter.emit('tool_call', { name: ev.name, args: ev.args })
+              } else {
+                emitter.emit('tool_result', {
+                  name: ev.name,
+                  result: ev.result,
+                  isError: ev.isError,
+                })
+              }
+            }
+            emitter.emit('done', {
+              finishReason: parsed.finishReason ?? 'stop',
+              usage: parsed.usageRaw,
+            })
+            return
+          }
         }
+
+        // Process any remaining lines (e.g. the last line without a trailing newline)
+        const lines = buf.split(/\r?\n/)
+        let finalUsageRaw: unknown = undefined
+        let finalFinishReason: string | undefined = undefined
+        for (let i = processedLinesCount; i < lines.length; i++) {
+          const rawLine = lines[i]
+          if (rawLine === undefined) continue
+          const cleanedLine = stripTerminalSequences(rawLine).trim()
+          if (!cleanedLine) continue
+          try {
+            const parsed = JSON.parse(cleanedLine)
+            if (parsed && typeof parsed === 'object') {
+              const tempOut: ParsedAntigravityOutput = {
+                events: [],
+                sessionId: undefined,
+                usageRaw: undefined,
+                finishReason: undefined,
+              }
+              ingest(parsed, tempOut)
+              if (tempOut.sessionId) {
+                emitter.emit('session', { sessionId: tempOut.sessionId })
+              }
+              if (tempOut.usageRaw) finalUsageRaw = tempOut.usageRaw
+              if (tempOut.finishReason) finalFinishReason = tempOut.finishReason
+              for (const ev of tempOut.events) {
+                if (ev.kind === 'partial') {
+                  emitter.emit('partial', { deltaText: ev.text })
+                } else if (ev.kind === 'tool_call') {
+                  emitter.emit('tool_call', { name: ev.name, args: ev.args })
+                } else {
+                  emitter.emit('tool_result', {
+                    name: ev.name,
+                    result: ev.result,
+                    isError: ev.isError,
+                  })
+                }
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+        const parsed = parseAntigravityOutput(text)
+        emitter.emit('done', {
+          finishReason: finalFinishReason ?? parsed.finishReason ?? 'stop',
+          usage: finalUsageRaw ?? parsed.usageRaw,
+        })
+      } else {
+        // Plain text mode
+        if (text.length > lastCleanedText.length) {
+          const delta = text.slice(lastCleanedText.length)
+          emitter.emit('partial', { deltaText: delta })
+        }
+        emitter.emit('done', {
+          finishReason: 'stop',
+        })
       }
-      emitter.emit('done', {
-        finishReason: parsed.finishReason ?? 'stop',
-        usage: parsed.usageRaw,
-      })
     })
 
     return { emitter, sessionId, cancel }

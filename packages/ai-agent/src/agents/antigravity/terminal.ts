@@ -10,9 +10,10 @@
  * We remove OSC sequences (window-title sets, which embed the binary path),
  * CSI/charset escapes, then normalize CR/LF and trim.
  */
-export function stripTerminalSequences(input: string): string {
+export function stripTerminalSequences(input: string, keepTrailing = false): string {
   const noOsc = input.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
   const noAnsi = noOsc.replace(/\x1b[@-Z\\-_]|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[()][AB0]/g, '')
-  // CRLF → LF, drop any bare CR (overwrite carriage returns), trim trailing ws.
-  return noAnsi.replace(/\r\n/g, '\n').replace(/\r/g, '').replace(/[ \t\n]+$/g, '')
+  // CRLF → LF, drop any bare CR (overwrite carriage returns), trim trailing ws if not keepTrailing.
+  const base = noAnsi.replace(/\r\n/g, '\n').replace(/\r/g, '')
+  return keepTrailing ? base : base.replace(/[ \t\n]+$/g, '')
 }

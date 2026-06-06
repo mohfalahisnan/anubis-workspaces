@@ -49,9 +49,17 @@ export function EditorCanvas() {
   }, [edges, setEdges])
 
   const onConnect: OnConnect = useCallback((conn) => {
-    if (wouldCreateCycle(nodes, edges, conn)) return
+    // A self-loop is never allowed; a backward connection becomes a loop edge
+    // (bounded by the approval's maxIterations) instead of being refused.
+    if (conn.source && conn.source === conn.target) return
+    const loop = wouldCreateCycle(nodes, edges, conn)
     pushHistory()
-    setEdges(addEdge({ ...conn, id: `e-${Date.now()}`, type: 'separated' }, edges))
+    setEdges(addEdge({
+      ...conn,
+      id: `e-${Date.now()}`,
+      type: 'separated',
+      ...(loop ? { data: { loop: true }, animated: true } : {}),
+    }, edges))
   }, [nodes, edges, setEdges, pushHistory])
 
   const onDragOver = useCallback((e: React.DragEvent) => {

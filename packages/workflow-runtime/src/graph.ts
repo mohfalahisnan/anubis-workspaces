@@ -1,4 +1,4 @@
-import type { WorkflowGraph } from './types.js'
+import type { WorkflowEdge, WorkflowGraph } from './types.js'
 
 export function validateGraphStructure(graph: WorkflowGraph): void {
   const ids = new Set<string>()
@@ -40,6 +40,20 @@ export function topologicalSort(graph: WorkflowGraph): string[] {
     throw new Error('graph contains a cycle')
   }
   return order
+}
+
+export function isLoopEdge(e: WorkflowEdge): boolean {
+  return e.data?.loop === true
+}
+
+/**
+ * Reject cycles formed by non-loop edges only. Loop edges (`data.loop`) are
+ * permitted to be back-edges — they re-arm a bounded loop body at runtime.
+ */
+export function assertAcyclicExceptLoops(graph: WorkflowGraph): void {
+  validateGraphStructure(graph)
+  const forward = graph.edges.filter((e) => !isLoopEdge(e))
+  topologicalSort({ nodes: graph.nodes, edges: forward })
 }
 
 export function incomingEdges(graph: WorkflowGraph, nodeId: string): string[] {

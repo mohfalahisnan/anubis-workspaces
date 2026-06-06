@@ -16,11 +16,13 @@ export const HumanApprovalExecutableNode = memo(function HumanApprovalExecutable
   const status = useNodeRunStatus(id)
   const runId = useEditorStore((s) => s.activeRun?.runId)
   const [busy, setBusy] = useState(false)
+  const [notes, setNotes] = useState('')
 
   const decide = async (decision: 'approved' | 'rejected') => {
     if (!runId) return
+    if (decision === 'rejected' && !notes.trim()) return
     setBusy(true)
-    try { await workflowsApi.decide(runId, { nodeId: id, decision }) }
+    try { await workflowsApi.decide(runId, { nodeId: id, decision, notes: notes.trim() || undefined }) }
     catch (e) { console.error('decision failed', e) }
     finally { setBusy(false) }
   }
@@ -35,9 +37,18 @@ export const HumanApprovalExecutableNode = memo(function HumanApprovalExecutable
       handlesNode={<ApprovalHandles />}
     >
       {status === 'awaiting' ? (
-        <div className='flex gap-2'>
-          <Button size='sm' disabled={busy} onClick={() => decide('approved')}>Approve</Button>
-          <Button size='sm' variant='destructive' disabled={busy} onClick={() => decide('rejected')}>Reject</Button>
+        <div className='flex flex-col gap-2'>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder='Comment (required to reject)…'
+            className='nodrag w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50'
+          />
+          <div className='flex gap-2'>
+            <Button size='sm' disabled={busy} onClick={() => decide('approved')}>Approve</Button>
+            <Button size='sm' variant='destructive' disabled={busy || !notes.trim()} onClick={() => decide('rejected')}>Reject</Button>
+          </div>
         </div>
       ) : (
         <p className='text-xs text-muted-foreground'>Pauses the run for your approve / reject decision.</p>

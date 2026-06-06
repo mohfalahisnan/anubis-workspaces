@@ -91,4 +91,30 @@ describe('ExperienceMemoriesRepo', () => {
     const got = repo.recallActive({ workspaceId: 'workspace-a', platform: 'instagram' })
     expect(got.map((m) => m.id)).not.toContain('tt')
   })
+
+  it('listForWorkspace returns all statuses for the workspace + global, newest first', () => {
+    const repo = setup()
+    repo.insert(mem({ id: 'old', workspaceId: 'workspace-a', status: 'candidate', createdAt: 100 }))
+    repo.insert(mem({ id: 'new', workspaceId: 'workspace-a', status: 'active', createdAt: 300 }))
+    repo.insert(mem({ id: 'global', scope: 'global', workspaceId: null, status: 'deprecated', createdAt: 200 }))
+    repo.insert(mem({ id: 'other', workspaceId: 'workspace-b', status: 'active', createdAt: 400 }))
+
+    const got = repo.listForWorkspace('workspace-a')
+    expect(got.map((m) => m.id)).toEqual(['new', 'global', 'old']) // newest first; other workspace excluded
+  })
+
+  it('listForWorkspace filters by status set', () => {
+    const repo = setup()
+    repo.insert(mem({ id: 'c', workspaceId: 'workspace-a', status: 'candidate' }))
+    repo.insert(mem({ id: 'a', workspaceId: 'workspace-a', status: 'active' }))
+    const got = repo.listForWorkspace('workspace-a', { statuses: ['candidate'] })
+    expect(got.map((m) => m.id)).toEqual(['c'])
+  })
+
+  it('listForWorkspace respects limit', () => {
+    const repo = setup()
+    repo.insert(mem({ id: 'a', workspaceId: 'workspace-a', createdAt: 100 }))
+    repo.insert(mem({ id: 'b', workspaceId: 'workspace-a', createdAt: 200 }))
+    expect(repo.listForWorkspace('workspace-a', { limit: 1 }).map((m) => m.id)).toEqual(['b'])
+  })
 })

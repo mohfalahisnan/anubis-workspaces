@@ -158,4 +158,22 @@ export class ExperienceMemoriesRepo {
     const mapped = rows.map(toMemory)
     return typeof input.limit === 'number' ? mapped.slice(0, input.limit) : mapped
   }
+
+  listForWorkspace(
+    workspaceId: string,
+    opts: { statuses?: MemoryStatus[]; limit?: number } = {},
+  ): ExperienceMemory[] {
+    const statuses = opts.statuses && opts.statuses.length > 0 ? opts.statuses : null
+    const statusClause = statuses
+      ? `AND status IN (${statuses.map(() => '?').join(', ')})`
+      : ''
+    const rows = this.db.prepare(`
+      SELECT * FROM experience_memories
+      WHERE (workspace_id = ? OR workspace_id IS NULL)
+        ${statusClause}
+      ORDER BY created_at DESC
+    `).all(workspaceId, ...(statuses ?? [])) as Row[]
+    const mapped = rows.map(toMemory)
+    return typeof opts.limit === 'number' ? mapped.slice(0, opts.limit) : mapped
+  }
 }

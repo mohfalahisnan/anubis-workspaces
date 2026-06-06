@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { killProcessTree } from '../process-tree.js'
 
 export interface PoolKey {
   workspaceId: string
@@ -60,7 +61,9 @@ export class CodexPool {
       } catch {
         // ignore
       }
-      slot.child.kill()
+      // Tree-kill: the app-server runs under a cmd.exe shim on Windows, so a
+      // bare kill() would orphan it and leak the process across turns.
+      killProcessTree(slot.child.pid)
     } catch {
       // ignore
     }

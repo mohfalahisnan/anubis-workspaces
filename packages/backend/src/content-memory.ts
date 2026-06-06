@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
+import { brandWorkspaceRoutes } from './brand-workspaces.js'
 
 const PLATFORM = z.enum([
   'instagram', 'tiktok', 'youtube', 'facebook', 'linkedin', 'x', 'threads', 'general',
@@ -21,6 +22,8 @@ const BuildBody = z.object({
 }).strict()
 
 export const contentMemoryRoutes = new Hono()
+
+contentMemoryRoutes.route('/workspaces', brandWorkspaceRoutes)
 
 contentMemoryRoutes.post('/context-pack', async (c) => {
   const body = BuildBody.parse(await c.req.json())

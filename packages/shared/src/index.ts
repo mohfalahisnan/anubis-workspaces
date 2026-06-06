@@ -435,6 +435,64 @@ export interface CapturedPostSummary {
 
 export type CapturedPostListResponse = ListResponse<CapturedPostSummary>
 
+/* Content-memory: experience memories + agent-run log (read views). */
+
+export interface ExperienceMemorySummary {
+  id: string
+  scope: 'global' | 'workspace' | 'platform' | 'campaign' | 'agent'
+  workspaceId: string | null
+  platform: string | null
+  campaignId: string | null
+  agentId: string | null
+  type:
+    | 'mistake' | 'correction' | 'workflow_rule'
+    | 'validation_rule' | 'preference' | 'anti_pattern' | 'lesson'
+  title: string
+  problem: string
+  cause: string | null
+  correction: string
+  triggerPattern: string | null
+  preventionRule: string | null
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  status: 'candidate' | 'active' | 'reinforced' | 'deprecated' | 'rejected'
+  usageCount: number
+  successCount: number
+  failureCount: number
+  confidence: number
+  sourceRunId: string | null
+  sourceDocumentId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type ExperienceMemoryListResponse = ListResponse<ExperienceMemorySummary>
+
+export interface AgentRunSummary {
+  id: string
+  workspaceId: string
+  platform: string | null
+  campaignId: string | null
+  agentId: string
+  workflowId: string | null
+  taskType: string
+  userInput: string
+  intent: string
+  retrievedChunkIds: string[]
+  retrievedDecisionIds: string[]
+  retrievedExperienceMemoryIds: string[]
+  retrievedSimilarityItemIds: string[]
+  contextPackId: string | null
+  plan: string | null
+  output: string
+  validationStatus: 'passed' | 'failed' | 'needs_review'
+  humanFeedback: string | null
+  errorType: string | null
+  errorSummary: string | null
+  createdAt: number
+}
+
+export type AgentRunListResponse = ListResponse<AgentRunSummary>
+
 export interface CaptureResultPayload {
   ok: true
   competitor: CompetitorSummary

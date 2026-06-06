@@ -143,10 +143,16 @@
   100% { margin-left: 100%; }
 }
 
+@keyframes nodeRunGlow {
+  0%, 100% { box-shadow: 0 0 18px 2px color-mix(in oklab, var(--anubis-gold) 35%, transparent); }
+  50%      { box-shadow: 0 0 30px 6px color-mix(in oklab, var(--anubis-gold-hi) 70%, transparent); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [class*='anubisPulse'],
   [class*='anubisBlink'],
-  [class*='anubisIndeterminate'] {
+  [class*='anubisIndeterminate'],
+  [class*='nodeRunGlow'] {
     animation: none !important;
   }
 }

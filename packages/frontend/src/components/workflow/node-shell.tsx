@@ -38,8 +38,8 @@ const SHELL_BASE =
 
 const RUN_STATUS_BORDER: Record<NodeRunStatus, string> = {
   pending:   'border-border',
-  running:   'border-primary shadow-[0_0_26px_3px_rgba(217,164,65,0.5)] animate-pulse',
-  awaiting:  'border-anubis-gold-hi shadow-[0_0_30px_4px_rgba(217,164,65,0.7)] animate-pulse',
+  running:   'border-primary shadow-[0_0_26px_3px_rgba(217,164,65,0.5)] animate-[nodeRunGlow_1.6s_ease-in-out_infinite]',
+  awaiting:  'border-anubis-gold-hi shadow-[0_0_30px_4px_rgba(217,164,65,0.7)] animate-[nodeRunGlow_1.6s_ease-in-out_infinite]',
   succeeded: 'border-anubis-success shadow-[0_0_22px_2px_rgba(95,185,122,0.42)]',
   failed:    'border-destructive shadow-[0_0_26px_3px_rgba(224,122,111,0.5)]',
   skipped:   'border-muted-foreground/40',

@@ -6,7 +6,7 @@ import { motion } from 'motion/react'
 import { ACCENT_GRADIENTS } from './theme'
 import { NodeDirectionalHandles, type HandleVariant } from './handles'
 
-export type NodeRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+export type NodeRunStatus = 'pending' | 'running' | 'awaiting' | 'succeeded' | 'failed' | 'skipped'
 
 export interface NodeShellProps {
   icon: ComponentType<{ className?: string }>
@@ -23,6 +23,8 @@ export interface NodeShellProps {
   runStatus?: NodeRunStatus
   /** Which connection handles to render. Defaults to both. */
   handles?: HandleVariant
+  /** Custom handle nodes — when set, replaces the default directional handles. */
+  handlesNode?: ReactNode
   /**
    * Render `children` edge-to-edge below the header — no body padding, no
    * footer. Used by the Media node so the artifact fills the whole card.
@@ -37,6 +39,7 @@ const SHELL_BASE =
 const RUN_STATUS_BORDER: Record<NodeRunStatus, string> = {
   pending:   'border-border',
   running:   'border-primary shadow-[0_0_26px_3px_rgba(217,164,65,0.5)] animate-pulse',
+  awaiting:  'border-anubis-gold-hi shadow-[0_0_30px_4px_rgba(217,164,65,0.7)] animate-pulse',
   succeeded: 'border-anubis-success shadow-[0_0_22px_2px_rgba(95,185,122,0.42)]',
   failed:    'border-destructive shadow-[0_0_26px_3px_rgba(224,122,111,0.5)]',
   skipped:   'border-muted-foreground/40',
@@ -53,6 +56,7 @@ export function NodeShell({
   disableMotion = false,
   runStatus,
   handles = 'both',
+  handlesNode,
   bleed = false,
 }: NodeShellProps) {
   const runClass = runStatus ? RUN_STATUS_BORDER[runStatus] : 'border-border'
@@ -73,7 +77,7 @@ export function NodeShell({
 
   const inner = (
     <div className={cn(SHELL_BASE, runClass, className)}>
-      <NodeDirectionalHandles variant={handles} />
+      {handlesNode ?? <NodeDirectionalHandles variant={handles} />}
       <div className='overflow-hidden rounded-2xl'>
         <div className={cn('h-1 bg-gradient-to-r', accent)} />
         {bleed ? (

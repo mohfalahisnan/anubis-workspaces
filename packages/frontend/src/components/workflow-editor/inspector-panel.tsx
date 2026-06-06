@@ -8,6 +8,8 @@ import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-con
 import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
 import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conversation-config'
+import { HumanApprovalConfigForm } from './inspector/config/human-approval-config'
+import { LessonWriterConfigForm } from './inspector/config/lesson-writer-config'
 import { MarkdownDisplayConfigForm } from './inspector/config/markdown-display-config'
 import { ScheduleTriggerConfigForm } from './inspector/config/schedule-trigger-config'
 import { FileWatchTriggerConfigForm } from './inspector/config/file-watch-trigger-config'
@@ -24,6 +26,8 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   table:               TableConfigForm,
   imageVideo:          ImageVideoConfigForm,
   aiAgentConversation: AiAgentConversationConfigForm,
+  humanApproval:       HumanApprovalConfigForm,
+  lessonWriter:        LessonWriterConfigForm,
   markdownDisplay:     MarkdownDisplayConfigForm,
   scheduleTrigger:     ScheduleTriggerConfigForm,
   fileWatchTrigger:    FileWatchTriggerConfigForm,

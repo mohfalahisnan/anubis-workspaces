@@ -38,6 +38,10 @@ import {
   type UpdateCapturedPostInput,
   type UpdateCronJobInput,
   type WorkspaceSummary,
+  type AgentRunSummary,
+  type AgentRunListResponse,
+  type ExperienceMemorySummary,
+  type ExperienceMemoryListResponse,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -596,4 +600,38 @@ export async function deletePost(id: string): Promise<void> {
   await api<{ ok: true }>(`/posts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+/* ---------- Content-memory: memories + run log ---------- */
+
+export async function listExperienceMemories(
+  workspaceId: string,
+  opts: { status?: string; limit?: number } = {},
+): Promise<ExperienceMemorySummary[]> {
+  const params = new URLSearchParams({ workspaceId })
+  if (opts.status) params.set('status', opts.status)
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  const r = await api<ExperienceMemoryListResponse>(
+    `/content-memory/memories?${params.toString()}`,
+  )
+  return r.items
+}
+
+export async function listAgentRuns(
+  workspaceId: string,
+  opts: { limit?: number } = {},
+): Promise<AgentRunSummary[]> {
+  const params = new URLSearchParams({ workspaceId })
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  const r = await api<AgentRunListResponse>(
+    `/content-memory/runs?${params.toString()}`,
+  )
+  return r.items
+}
+
+export async function promoteMemory(id: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/content-memory/memories/${encodeURIComponent(id)}/promote`,
+    { method: 'POST' },
+  )
 }

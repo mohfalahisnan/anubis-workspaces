@@ -90,4 +90,22 @@ export class BrandWorkspacesRepo {
       .all() as Row[]
     return rows.map(toWorkspace)
   }
+
+  update(
+    id: string,
+    patch: Partial<Pick<BrandWorkspace, 'name' | 'brandSummary' | 'status'>>,
+    now: number,
+  ): BrandWorkspace | null {
+    const cur = this.findById(id)
+    if (!cur) return null
+    const next: BrandWorkspace = { ...cur, ...patch, updatedAt: now }
+    this.db
+      .prepare(
+        `UPDATE brand_workspaces
+         SET name = ?, brand_summary = ?, status = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(next.name, next.brandSummary, next.status, next.updatedAt, id)
+    return next
+  }
 }

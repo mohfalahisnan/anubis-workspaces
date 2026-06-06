@@ -40,4 +40,12 @@ export class BrandWorkspacesService {
   list(): BrandWorkspace[] {
     return this.repo.list()
   }
+
+  update(
+    id: string,
+    input: { name?: string; brandSummary?: string | null; status?: 'active' | 'archived' },
+    now: number = Date.now(),
+  ): BrandWorkspace | null {
+    return this.repo.update(id, input, now)
+  }
 }

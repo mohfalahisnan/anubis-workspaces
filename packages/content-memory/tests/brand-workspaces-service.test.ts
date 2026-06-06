@@ -36,3 +36,27 @@ describe('BrandWorkspacesService', () => {
     expect(svc.get(ws.id)?.constraints).toEqual(['no fear hooks'])
   })
 })
+
+describe('BrandWorkspacesService.update', () => {
+  it('renames a workspace and bumps updatedAt', () => {
+    const svc = service()
+    const ws = svc.create({ name: 'Acme' }, 1000)
+    const updated = svc.update(ws.id, { name: 'Acme Co' }, 2000)
+    expect(updated?.name).toBe('Acme Co')
+    expect(updated?.updatedAt).toBe(2000)
+    expect(svc.get(ws.id)?.name).toBe('Acme Co')
+  })
+
+  it('updates brandSummary and archives', () => {
+    const svc = service()
+    const ws = svc.create({ name: 'Acme' }, 1000)
+    const updated = svc.update(ws.id, { brandSummary: 'gentle skincare', status: 'archived' }, 2000)
+    expect(updated?.brandSummary).toBe('gentle skincare')
+    expect(updated?.status).toBe('archived')
+  })
+
+  it('returns null for an unknown id', () => {
+    const svc = service()
+    expect(svc.update('nope', { name: 'x' }, 2000)).toBeNull()
+  })
+})

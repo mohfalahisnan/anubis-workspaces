@@ -1,11 +1,14 @@
 import { Dashboard } from './components/dashboard'
 import { NavigationProvider } from './lib/navigation'
+import { WorkspaceProvider } from './lib/workspace'
 
 function App() {
   return (
-    <NavigationProvider>
-      <Dashboard />
-    </NavigationProvider>
+    <WorkspaceProvider>
+      <NavigationProvider>
+        <Dashboard />
+      </NavigationProvider>
+    </WorkspaceProvider>
   )
 }
 

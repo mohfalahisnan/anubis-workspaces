@@ -35,7 +35,8 @@
     "!packages/*/node_modules/@types/**",
     "!packages/*/node_modules/undici-types/**",
     "!packages/*/node_modules/.vite/**",
-    "!packages/*/node_modules/.vite-temp/**"
+    "!packages/*/node_modules/.vite-temp/**",
+    "!**/node_modules/.bin/**"
   ],
   "extraResources": [
     { "from": "packages/content-memory/models", "to": "models" }

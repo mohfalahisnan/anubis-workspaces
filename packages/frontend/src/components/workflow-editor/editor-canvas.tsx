@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   Background, Controls, MiniMap, ReactFlow,
   type Connection, type Edge, type Node, type OnConnect, type OnEdgesChange, type OnNodesChange,
@@ -7,6 +7,7 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { workflowEdgeTypes, applyVisualEdgeRouting } from '@/components/workflow'
+import { isRunInProgress, nodeDimmed, edgeRunState, EDGE_RUN_STYLE } from '@/components/workflow/run-visuals'
 import { executableNodeTypes } from './executable-nodes'
 import { useEditorStore } from './editor-store'
 
@@ -36,6 +37,7 @@ export function EditorCanvas() {
   const setEdges = useEditorStore((s) => s.setEdges)
   const pushHistory = useEditorStore((s) => s.pushHistory)
   const setSelection = useEditorStore((s) => s.setSelection)
+  const activeRun = useEditorStore((s) => s.activeRun)
   const { screenToFlowPosition } = useReactFlow()
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
@@ -81,13 +83,36 @@ export function EditorCanvas() {
     setNodes([...nodes, newNode])
   }, [nodes, setNodes, pushHistory, screenToFlowPosition])
 
-  const routedEdges = applyVisualEdgeRouting(edges)
+  const inProgress = isRunInProgress(activeRun)
+  const steps = activeRun?.steps
+
+  const displayNodes = useMemo(
+    () => nodes.map((n) => ({
+      ...n,
+      style: {
+        ...n.style,
+        opacity: nodeDimmed(steps?.[n.id]?.status, inProgress) ? 0.4 : 1,
+        transition: 'opacity 300ms ease',
+      },
+    })),
+    [nodes, steps, inProgress],
+  )
+
+  const displayEdges = useMemo(() => {
+    const routed = applyVisualEdgeRouting(edges)
+    // Idle: leave edges exactly as they are (already static in the editor).
+    if (!inProgress) return routed
+    return routed.map((e) => {
+      const state = edgeRunState(steps?.[e.source]?.status, steps?.[e.target]?.status, true)
+      return { ...e, animated: state === 'flowing', style: { ...e.style, ...EDGE_RUN_STYLE[state] } }
+    })
+  }, [edges, steps, inProgress])
 
   return (
     <div className='relative h-full w-full bg-background' onDragOver={onDragOver} onDrop={onDrop}>
       <ReactFlow
-        nodes={nodes}
-        edges={routedEdges}
+        nodes={displayNodes}
+        edges={displayEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

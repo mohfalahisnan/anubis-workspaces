@@ -1,7 +1,7 @@
 import type { Db } from '../client.js'
 
-export type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'
-export type StepStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+export type RunStatus = 'pending' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed' | 'rejected' | 'cancelled'
+export type StepStatus = 'pending' | 'running' | 'awaiting' | 'succeeded' | 'failed' | 'skipped'
 
 export interface WorkflowRun {
   id: string

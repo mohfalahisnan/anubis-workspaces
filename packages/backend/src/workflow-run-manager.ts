@@ -16,12 +16,20 @@ import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 
 type Listener = (event: RunEvent) => void
 
+type Decision = { decision: 'approved' | 'rejected'; notes?: string }
+
 interface ActiveRun {
   runId: string
+  workflowId: string
+  workspaceId: string
   controller: AbortController
   listeners: Set<Listener>
   buffered: RunEvent[]
   finished: boolean
+  /** Human-approval nodes awaiting a decision, keyed by nodeId. */
+  pendingApprovals: Map<string, { resolve: (d: Decision) => void; reject: (e: Error) => void }>
+  /** Persist+emit a node event; set once the run loop starts. Used by decide(). */
+  emitNode?: (e: NodeRunEvent) => void
 }
 
 const INLINE_OUTPUT_LIMIT = 256 * 1024
@@ -58,7 +66,10 @@ export class WorkflowRunManager {
     const controller = new AbortController()
     const listeners = new Set<Listener>()
     const buffered: RunEvent[] = []
-    const active: ActiveRun = { runId, controller, listeners, buffered, finished: false }
+    const active: ActiveRun = {
+      runId, workflowId, workspaceId: workflow.workspaceId ?? 'default-workspace',
+      controller, listeners, buffered, finished: false, pendingApprovals: new Map(),
+    }
     this.active.set(runId, active)
     this.runsByWorkflow.set(workflowId, runId)
 
@@ -100,6 +111,18 @@ export class WorkflowRunManager {
     const active = this.active.get(runId)
     if (!active) return false
     active.controller.abort()
+    return true
+  }
+
+  /** Resolve a parked human-approval decision. Returns false if none is pending. */
+  decide(runId: string, input: { nodeId: string; decision: 'approved' | 'rejected'; notes?: string }): boolean {
+    const active = this.active.get(runId)
+    const pending = active?.pendingApprovals.get(input.nodeId)
+    if (!active || !pending) return false
+    active.pendingApprovals.delete(input.nodeId)
+    active.emitNode?.({ kind: 'node-decided', nodeId: input.nodeId, at: Date.now(), decision: input.decision, notes: input.notes })
+    this.stack.workflowRuns.setRunStatus(runId, 'running', null, null)
+    pending.resolve({ decision: input.decision, notes: input.notes })
     return true
   }
 
@@ -150,7 +173,16 @@ export class WorkflowRunManager {
             id: stepId, runId: active.runId, nodeId: event.nodeId,
             status: 'succeeded', finishedAt: event.at, output: JSON.stringify(stored),
           })
-        } else {
+        } else if (event.kind === 'node-awaiting') {
+          repo.upsertStep({
+            id: stepId, runId: active.runId, nodeId: event.nodeId,
+            status: 'awaiting', startedAt: event.at,
+          })
+          repo.setRunStatus(active.runId, 'awaiting_approval', null, null)
+        } else if (event.kind === 'node-decided') {
+          // Run status returns to 'running' in decide(); the executor's own
+          // node-succeeded event records the step's final state.
+        } else if (event.kind === 'node-failed') {
           repo.upsertStep({
             id: stepId, runId: active.runId, nodeId: event.nodeId,
             status: 'failed', finishedAt: event.at, error: event.error || '(executor failed without a message)',
@@ -161,6 +193,7 @@ export class WorkflowRunManager {
       }
       emit(event)
     }
+    active.emitNode = wrappedEmit
 
     let status: RunStatus = 'failed'
     let runError: string | undefined
@@ -215,6 +248,25 @@ export class WorkflowRunManager {
             await this.stack.conversation.cancel(conversationId)
           },
         },
+        approvals: {
+          waitFor: (nodeId: string, opts: { title?: string; instructions?: string; upstream: unknown }) =>
+            new Promise<Decision>((resolve, reject) => {
+              active.pendingApprovals.set(nodeId, { resolve, reject })
+              void wrappedEmit({ kind: 'node-awaiting', nodeId, at: Date.now(), title: opts.title, instructions: opts.instructions })
+              const onAbort = () => { active.pendingApprovals.delete(nodeId); reject(new Error('run cancelled')) }
+              if (active.controller.signal.aborted) onAbort()
+              else active.controller.signal.addEventListener('abort', onAbort, { once: true })
+            }),
+        },
+        experience: {
+          recordCandidate: (input: {
+            type: 'mistake' | 'lesson'
+            title: string; problem: string; correction: string
+            preventionRule?: string | null; severity?: 'low' | 'medium' | 'high' | 'critical'
+            workspaceId?: string | null; platform?: string | null; sourceRunId?: string | null
+          }) => ({ id: this.stack.experience.recordCandidate(input as never).id }),
+        },
+        workspaceId: active.workspaceId,
         runId: active.runId,
         signal: active.controller.signal,
         emit: (e: NodeRunEvent) => { void wrappedEmit(e) },

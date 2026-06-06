@@ -92,4 +92,31 @@ describe('TaskManager', () => {
     expect(cancels[0]).toHaveBeenCalledTimes(1)
     await tm.shutdown()
   })
+
+  it('kill during the building window tears the run down once it spawns', async () => {
+    let resolveStream: (v: unknown) => void = () => {}
+    const streamReady = new Promise((r) => { resolveStream = r })
+    const cancel = vi.fn(async () => {})
+    const emitter = new TypedEmitter<AgentEventMap>()
+    const svc = {
+      streamAgent: vi.fn(() => streamReady),
+    }
+    const tm = new TaskManager(svc as never, { idleMs: 10_000 })
+    const conv = { id: 'c1', agent: 'claude' as const, workspacePath: '/tmp' }
+    const profile = { agent: 'claude' as const }
+
+    // Start the turn but leave it stuck in the building window.
+    const buildP = tm.getOrBuild(conv, profile, { prompt: 'hi', msgId: 'm1' })
+    // Kill while still building — must NOT be a silent no-op.
+    await tm.kill('c1', 'user')
+    // Now let the spawn finish.
+    resolveStream({ stream: emitter, workspaceId: 'w', sessionId: 's', agentSessionId: 'a', cancel })
+    await buildP
+
+    // The spawned run was actually cancelled, and no live task remains.
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(tm.isBusy('c1')).toBe(false)
+    expect(tm.subscribe('c1')).toBeNull()
+    await tm.shutdown()
+  })
 })

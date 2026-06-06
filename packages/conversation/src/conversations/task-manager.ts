@@ -35,6 +35,7 @@ export interface TaskManagerOpts {
 export class TaskManager {
   private tasks = new Map<string, AgentTask>()
   private building = new Map<string, Promise<AgentTask>>()
+  private cancelledWhileBuilding = new Set<string>()
   private timer: NodeJS.Timeout | null = null
 
   constructor(
@@ -120,6 +121,12 @@ export class TaskManager {
       task.emitter.on('done', () => { task.status = 'finished' })
       task.emitter.on('error', () => { task.status = 'error' })
       this.tasks.set(conv.id, task)
+      // A kill that landed while we were still spawning recorded the id here.
+      // Tear the freshly-spawned run down now that the child actually exists.
+      // (UI/DB state was already settled by ConversationService.cancel.)
+      if (this.cancelledWhileBuilding.delete(conv.id)) {
+        await task.cancel()
+      }
       return task
     })()
 
@@ -133,9 +140,17 @@ export class TaskManager {
 
   async kill(conversationId: string, _reason: 'idle' | 'user' | 'shutdown'): Promise<void> {
     const t = this.tasks.get(conversationId)
-    if (!t) return
-    await t.cancel()
-    this.tasks.delete(conversationId)
+    if (t) {
+      await t.cancel()
+      this.tasks.delete(conversationId)
+      return
+    }
+    // No live task yet, but a spawn may be in flight. Flag it so the build's
+    // continuation kills the run the moment the child exists — instead of
+    // silently dropping the Stop and letting an unstoppable turn proceed.
+    if (this.building.has(conversationId)) {
+      this.cancelledWhileBuilding.add(conversationId)
+    }
   }
 
   async shutdown(): Promise<void> {

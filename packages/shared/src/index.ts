@@ -145,6 +145,7 @@ export interface CreateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  workspaceId?: string
 }
 
 export interface UpdateCompetitorInput {
@@ -382,6 +383,29 @@ export type CronJobListResponse = ListResponse<CronJobSummary>
 export type MessageListResponse = ListResponse<MessageSummary>
 export type CompetitorListResponse = ListResponse<CompetitorSummary>
 export type WorkspaceListResponse = ListResponse<WorkspaceSummary>
+
+/* Brand workspace (content-memory) — distinct from the filesystem WorkspaceSummary above. */
+export interface BrandWorkspaceSummary {
+  id: string
+  name: string
+  brandSummary?: string | null
+  status: 'active' | 'archived'
+  createdAt: number
+  updatedAt: number
+}
+
+export type BrandWorkspaceListResponse = ListResponse<BrandWorkspaceSummary>
+
+export interface CreateBrandWorkspaceInput {
+  name: string
+  brandSummary?: string
+}
+
+export interface UpdateBrandWorkspaceInput {
+  name?: string
+  brandSummary?: string | null
+  status?: 'active' | 'archived'
+}
 
 export interface CapturedPostSummary {
   id: string

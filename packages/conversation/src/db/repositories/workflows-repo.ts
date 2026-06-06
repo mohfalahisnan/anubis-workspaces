@@ -1,4 +1,6 @@
 import type { Db } from '../client.js'
+import { nowMs } from '../../util/time.js'
+import { BUILTIN_WORKFLOWS } from '../../workflows/builtin.js'
 
 export interface WorkflowRow {
   id: string
@@ -109,5 +111,23 @@ export class WorkflowsRepo {
 
   delete(id: string): void {
     this.db.prepare(`DELETE FROM workflows WHERE id = ?`).run(id)
+  }
+
+  /**
+   * Seed the built-in starter workflows. Idempotent and edit-safe: it only
+   * inserts a workflow whose id is absent, so user edits survive across boots
+   * and a deleted built-in re-appears on next launch — mirroring built-in
+   * profiles. Each built-in ships pre-published so it's runnable once configured.
+   */
+  seedBuiltins(): void {
+    const now = nowMs()
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO workflows (id, name, description, draft_graph, published_graph,
+        draft_updated_at, published_at, created_at, updated_at, workspace_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    for (const w of BUILTIN_WORKFLOWS) {
+      stmt.run(w.id, w.name, w.description, w.graph, w.graph, now, now, now, now, w.workspaceId)
+    }
   }
 }

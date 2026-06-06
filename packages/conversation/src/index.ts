@@ -149,6 +149,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
   const capturedPosts = new CapturedPostsRepo(db)
   const workflowsRepo = new WorkflowsRepo(db)
+  workflowsRepo.seedBuiltins()
   const workflowRunsRepo = new WorkflowRunsRepo(db)
   const workflowTriggersRepo = new WorkflowTriggersRepo(db)
   const appConfig = new AppConfigService(opts.dataDir)
@@ -219,6 +220,8 @@ export type { KnownWorkspace } from './db/repositories/known-workspaces-repo.js'
 export { KnownWorkspacesRepo } from './db/repositories/known-workspaces-repo.js'
 export type { Workflow } from './db/repositories/workflows-repo.js'
 export { WorkflowsRepo } from './db/repositories/workflows-repo.js'
+export type { BuiltinWorkflow } from './workflows/builtin.js'
+export { BUILTIN_WORKFLOWS } from './workflows/builtin.js'
 export type { WorkflowRun, WorkflowRunStep, RunStatus, StepStatus } from './db/repositories/workflow-runs-repo.js'
 export { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
 export type { WorkflowTriggerState } from './db/repositories/workflow-triggers-repo.js'

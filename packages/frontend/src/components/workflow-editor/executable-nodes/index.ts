@@ -11,6 +11,7 @@ import { HumanApprovalExecutableNode }          from './human-approval'
 import { LessonWriterExecutableNode }           from './lesson-writer'
 import { MarkdownDisplayExecutableNode }        from './markdown-display'
 import { MediaDisplayExecutableNode }           from './media-display'
+import { OriginalCopyExecutableNode }           from './original-copy'
 import { ScheduleTriggerExecutableNode }        from './schedule-trigger'
 import { FileWatchTriggerExecutableNode }       from './file-watch-trigger'
 
@@ -27,6 +28,7 @@ export const executableNodeTypes: NodeTypes = {
   lessonWriter:        LessonWriterExecutableNode as never,
   markdownDisplay:     MarkdownDisplayExecutableNode as never,
   mediaDisplay:        MediaDisplayExecutableNode as never,
+  originalCopy:        OriginalCopyExecutableNode as never,
   scheduleTrigger:     ScheduleTriggerExecutableNode as never,
   fileWatchTrigger:    FileWatchTriggerExecutableNode as never,
 }
@@ -71,4 +73,5 @@ export const NODE_PALETTE = [
   { type: 'table',               label: 'Table',                  category: 'output'    },
   { type: 'markdownDisplay',     label: 'Markdown',               category: 'output'    },
   { type: 'mediaDisplay',        label: 'Media',                  category: 'output'    },
+  { type: 'originalCopy',        label: 'Original Copy',          category: 'output'    },
 ] as const satisfies ReadonlyArray<{ type: string; label: string; category: NodeCategory }>

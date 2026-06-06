@@ -9,6 +9,7 @@ const TYPE_LABELS: Record<string, string> = {
   ocrExtractor: 'OCR',
   table: 'Table',
   aiAgentConversation: 'AI Agent',
+  originalCopy: 'Original Copy',
 }
 
 const TYPE_DOTS: Record<string, string> = {
@@ -19,6 +20,7 @@ const TYPE_DOTS: Record<string, string> = {
   ocrExtractor: 'bg-[#22c55e]',
   table: 'bg-[#22c55e]',
   aiAgentConversation: 'bg-white',
+  originalCopy: 'bg-[#22c55e]',
 }
 
 export const PreviewNode = memo(function PreviewNode({ type }: { type?: string }) {

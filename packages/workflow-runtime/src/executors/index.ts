@@ -11,6 +11,7 @@ import { humanApprovalExecutor }        from './human-approval.js'
 import { lessonWriterExecutor }         from './lesson-writer.js'
 import { markdownDisplayExecutor }      from './markdown-display.js'
 import { mediaDisplayExecutor }         from './media-display.js'
+import { originalCopyExecutor }         from './original-copy.js'
 import { scheduleTriggerExecutor }      from './schedule-trigger.js'
 import { fileWatchTriggerExecutor }     from './file-watch-trigger.js'
 
@@ -27,6 +28,7 @@ export const executorRegistry: Record<string, Executor<unknown>> = {
   lessonWriter:         lessonWriterExecutor as Executor<unknown>,
   markdownDisplay:      markdownDisplayExecutor as Executor<unknown>,
   mediaDisplay:         mediaDisplayExecutor as Executor<unknown>,
+  originalCopy:         originalCopyExecutor as Executor<unknown>,
   scheduleTrigger:      scheduleTriggerExecutor as Executor<unknown>,
   fileWatchTrigger:     fileWatchTriggerExecutor as Executor<unknown>,
 }
@@ -38,6 +40,6 @@ export {
   instagramPostExecutor, transformerMediaExecutor, ocrExtractorExecutor,
   imageVideoExecutor, aiAgentConversationExecutor,
   humanApprovalExecutor, lessonWriterExecutor,
-  markdownDisplayExecutor, mediaDisplayExecutor,
+  markdownDisplayExecutor, mediaDisplayExecutor, originalCopyExecutor,
   scheduleTriggerExecutor, fileWatchTriggerExecutor,
 }

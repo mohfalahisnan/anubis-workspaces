@@ -54,6 +54,7 @@ export interface ListPostsOpts {
   competitorId?: string
   limit?: number
   orderBy?: 'recent' | 'engagement'
+  workspaceId?: string
 }
 
 export interface UpdateCapturedPostPatch {
@@ -119,14 +120,19 @@ export class CapturedPostsRepo {
     const limit = opts.limit ?? 200
     const order =
       opts.orderBy === 'engagement'
-        ? 'COALESCE(likes, 0) DESC, COALESCE(comments, 0) DESC'
-        : 'COALESCE(posted_at, \'\') DESC, captured_at DESC'
-    const sql = opts.competitorId
-      ? `SELECT * FROM captured_posts WHERE competitor_id = ? ORDER BY ${order} LIMIT ?`
-      : `SELECT * FROM captured_posts ORDER BY ${order} LIMIT ?`
-    const rows = opts.competitorId
-      ? (this.db.prepare(sql).all(opts.competitorId, limit) as Row[])
-      : (this.db.prepare(sql).all(limit) as Row[])
+        ? 'COALESCE(cp.likes, 0) DESC, COALESCE(cp.comments, 0) DESC'
+        : 'COALESCE(cp.posted_at, \'\') DESC, cp.captured_at DESC'
+
+    const where: string[] = []
+    const params: unknown[] = []
+    if (opts.competitorId) { where.push('cp.competitor_id = ?'); params.push(opts.competitorId) }
+    const join = opts.workspaceId ? 'JOIN competitors c ON c.id = cp.competitor_id' : ''
+    if (opts.workspaceId) { where.push('c.workspace_id = ?'); params.push(opts.workspaceId) }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+    const sql = `SELECT cp.* FROM captured_posts cp ${join} ${whereSql} ORDER BY ${order} LIMIT ?`
+    params.push(limit)
+    const rows = this.db.prepare(sql).all(...params) as Row[]
     return rows.map(toPost)
   }
 

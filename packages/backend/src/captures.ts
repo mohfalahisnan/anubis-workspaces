@@ -121,6 +121,7 @@ const ListQuery = z.object({
   competitorId: z.string().optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
   orderBy: z.enum(['recent', 'engagement']).optional(),
+  workspaceId: z.string().optional(),
 }).strict()
 
 const UpdatePostBody = z.object({
@@ -151,6 +152,7 @@ postRoutes.get('/', (c) => {
     competitorId: opts.competitorId,
     limit: opts.limit ?? 60,
     orderBy: opts.orderBy ?? 'recent',
+    workspaceId: opts.workspaceId,
   })
 
   const competitorsById = new Map(stack.competitors.list().map((c) => [c.id, c]))

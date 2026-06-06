@@ -68,7 +68,7 @@ function setup() {
     agentHomeRoot,
     workspacesRoot,
   })
-  return { svc, profiles, db, aiAgent, tm, agentHomeRoot, workspacesRoot }
+  return { svc, profiles, db, aiAgent, tm, sse, agentHomeRoot, workspacesRoot }
 }
 
 describe('ConversationService', () => {
@@ -141,6 +141,39 @@ describe('ConversationService', () => {
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
     ctx.svc.delete(c.id)
     expect(ctx.svc.get(c.id)).toBeNull()
+  })
+
+  it('cancel forces a terminal status and a done SSE even when the stream never ends', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
+
+    // A stream that never emits a terminal — simulates a hung agent process.
+    const cancelSpy = vi.fn(async () => {})
+    ctx.aiAgent.streamAgent.mockImplementation(async () => ({
+      stream: new TypedEmitter<AgentEventMap>(),
+      workspaceId: 'w',
+      sessionId: 's',
+      agentSessionId: 'asid-1',
+      cancel: cancelSpy,
+    }))
+
+    await ctx.svc.sendMessage(c.id, { content: 'hi' })
+    expect(ctx.svc.get(c.id)?.status).toBe('running')
+
+    const events: Array<{ name: string }> = []
+    const sub = ctx.sse.subscribe(c.id, (e) => events.push(e))
+
+    await ctx.svc.cancel(c.id)
+
+    // The spawned run was actually cancelled...
+    expect(cancelSpy).toHaveBeenCalledTimes(1)
+    // ...the conversation reaches a terminal status (a clean stop, not error)...
+    expect(ctx.svc.get(c.id)?.status).toBe('finished')
+    // ...and a terminal `done` reached the UI so it can clear its streaming state.
+    expect(events.some((e) => e.name === 'done')).toBe(true)
+
+    sub.unsubscribe()
+    await ctx.tm.shutdown()
   })
 
   it('sendMessage auto-creates the profile agent home and injects CLAUDE_CONFIG_DIR', async () => {

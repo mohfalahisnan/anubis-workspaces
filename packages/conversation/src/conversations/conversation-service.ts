@@ -340,7 +340,17 @@ export class ConversationService {
 
   async cancel(id: string): Promise<void> {
     await this.deps.tm.kill(id, 'user')
-    this.deps.conversations.updateStatus(id, 'error')
+    // Guarantee a terminal state. If a stream relay was attached it has
+    // already settled the conversation to 'finished' via the runner's
+    // cancelled `done`. If not — the run was killed mid-build, or the agent
+    // hung and emitted nothing — drive it terminal ourselves and push a
+    // synthetic `done` so the UI clears its streaming state. A user-initiated
+    // stop is a clean end, so 'finished' (not 'error', which the UI paints red).
+    const cur = this.deps.conversations.findById(id)
+    if (cur && (cur.status === 'pending' || cur.status === 'running')) {
+      this.deps.conversations.updateStatus(id, 'finished')
+      this.deps.sse.publish(id, { name: 'done', data: { finishReason: 'cancelled' } })
+    }
   }
 
   /**

@@ -5,6 +5,7 @@ import type { ContentBlock } from './types.js'
 import { TypedEmitter, type AgentEventMap } from '../../events/stream.js'
 import { buildClaudeArgs } from './build-args.js'
 import { spawnNpmShim } from '../spawn-shim.js'
+import { killProcessTree } from '../process-tree.js'
 
 export interface RunClaudeStreamOpts {
   stdout: Readable
@@ -131,9 +132,14 @@ export class ClaudeAgent {
       if (cancelled) return
       cancelled = true
       try { child.stdin?.end() } catch { /* already closed */ }
-      // SIGTERM lets the CLI tear down its session cleanly; the `close`
-      // handler below emits the terminal `done`.
-      child.kill()
+      // Hard kill the whole tree: on Windows `child` is the cmd.exe shim and
+      // the real agent is a grandchild, so child.kill() alone would orphan it.
+      killProcessTree(child.pid)
+      // Emit the terminal immediately rather than waiting for `close` — a hung
+      // child may never close its stdout pipe, which would leave the UI
+      // streaming forever. `terminalEmitted` guards against a later `close`
+      // double-firing.
+      if (!terminalEmitted) emitter.emit('done', { finishReason: 'cancelled' })
     }
 
     // Write the prompt to stdin and close it so Claude Code reads it as

@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { NodeShell, StatusBadge } from '@/components/workflow'
+import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
@@ -35,7 +36,7 @@ interface InstagramPostOutput {
 function ResultSection({ output }: { output: InstagramPostOutput }) {
   const post = output.post
   return (
-    <div className='mt-3 space-y-2 rounded-xl border border-white/10 bg-black/30 p-2'>
+    <div className='mt-3 space-y-2 rounded-xl border border-border bg-muted/30 p-2'>
       {post.mediaPaths.length > 0 ? (
         <div className={`grid gap-2 ${post.mediaPaths.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {post.mediaPaths.slice(0, 4).map((p) => (
@@ -44,14 +45,14 @@ function ResultSection({ output }: { output: InstagramPostOutput }) {
         </div>
       ) : null}
       {post.caption ? (
-        <p className='line-clamp-3 text-xs leading-relaxed text-zinc-300'>{post.caption}</p>
+        <p className='line-clamp-3 text-xs leading-relaxed text-muted-foreground'>{post.caption}</p>
       ) : null}
       {(post.metrics || post.mediaErrors) ? (
-        <div className='flex flex-wrap gap-2 text-[10px] text-zinc-400'>
+        <div className='flex flex-wrap gap-2 text-[10px] text-muted-foreground'>
           {post.metrics?.likes != null && <span>♥ {post.metrics.likes}</span>}
           {post.metrics?.comments != null && <span>💬 {post.metrics.comments}</span>}
           {post.mediaErrors && post.mediaErrors.length > 0 && (
-            <span className='text-amber-400'>⚠ {post.mediaErrors.length} media error{post.mediaErrors.length > 1 ? 's' : ''}</span>
+            <span className='text-[#d99412]'>⚠ {post.mediaErrors.length} media error{post.mediaErrors.length > 1 ? 's' : ''}</span>
           )}
         </div>
       ) : null}
@@ -67,7 +68,7 @@ export const InstagramPostExecutableNode = memo(function InstagramPostExecutable
       icon={InstagramIcon}
       title='Instagram Post'
       subtitle={data.source === 'url' ? data.url ?? 'No URL' : data.postId ? `Captured: ${data.postId}` : 'No source selected'}
-      accent='from-[#fd551d] via-[#ff6b35] to-[#ff9b7a]'
+      accent={ACCENT_GRADIENTS.default}
       runStatus={runStatus}
       footer={
         <div className='flex flex-wrap gap-2'>
@@ -76,7 +77,7 @@ export const InstagramPostExecutableNode = memo(function InstagramPostExecutable
         </div>
       }
     >
-      <p className='text-xs text-zinc-300'>{data.source === 'url' ? 'Captures via research-crawler' : 'Reads from captured_posts table'}</p>
+      <p className='text-xs text-muted-foreground'>{data.source === 'url' ? 'Captures via research-crawler' : 'Reads from captured_posts table'}</p>
       {output?.kind === 'instagramPost' ? <ResultSection output={output} /> : null}
     </NodeShell>
   )

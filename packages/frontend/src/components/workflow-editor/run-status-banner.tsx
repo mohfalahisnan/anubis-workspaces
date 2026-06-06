@@ -1,10 +1,10 @@
 import { useEditorStore } from './editor-store'
 
 const TONE: Record<string, { dot: string; text: string; bg: string; border: string; label: string }> = {
-  running:   { dot: 'bg-[#fd551d] animate-pulse',          text: 'text-[#fd551d]', bg: 'bg-[#fd551d]/10', border: 'border-[#fd551d]/30', label: 'Running' },
-  succeeded: { dot: 'bg-[#22c55e]',                         text: 'text-[#22c55e]', bg: 'bg-[#22c55e]/10', border: 'border-[#22c55e]/30', label: 'Succeeded' },
-  failed:    { dot: 'bg-[#ef4444]',                         text: 'text-[#ef4444]', bg: 'bg-[#ef4444]/10', border: 'border-[#ef4444]/30', label: 'Failed' },
-  cancelled: { dot: 'bg-[#f59e0b]',                         text: 'text-[#f59e0b]', bg: 'bg-[#f59e0b]/10', border: 'border-[#f59e0b]/30', label: 'Cancelled' },
+  running:   { dot: 'bg-primary animate-pulse',  text: 'text-primary',         bg: 'bg-primary/10',         border: 'border-primary/30',         label: 'Running' },
+  succeeded: { dot: 'bg-anubis-success',         text: 'text-anubis-success',  bg: 'bg-anubis-success/10',  border: 'border-anubis-success/30',  label: 'Succeeded' },
+  failed:    { dot: 'bg-destructive',            text: 'text-destructive',     bg: 'bg-destructive/10',     border: 'border-destructive/30',     label: 'Failed' },
+  cancelled: { dot: 'bg-[#d99412]',              text: 'text-[#d99412]',       bg: 'bg-[#f59e0b]/10',       border: 'border-[#f59e0b]/30',       label: 'Cancelled' },
 }
 
 export function RunStatusBanner() {
@@ -38,12 +38,12 @@ export function RunStatusBanner() {
     <div className={`mx-6 my-2 flex items-center gap-3 rounded-lg border ${tone.border} ${tone.bg} px-3 py-2`}>
       <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
       <p className={`text-xs font-semibold ${tone.text}`}>Run {tone.label}</p>
-      {detail ? <p className='flex-1 truncate text-xs text-zinc-300'>{detail}</p> : null}
+      {detail ? <p className='flex-1 truncate text-xs text-muted-foreground'>{detail}</p> : null}
       {(run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') ? (
         <button
           type='button'
           onClick={() => dismiss(null)}
-          className='text-[10px] uppercase tracking-wider text-muted-foreground hover:text-white'
+          className='text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground'
         >
           Dismiss
         </button>

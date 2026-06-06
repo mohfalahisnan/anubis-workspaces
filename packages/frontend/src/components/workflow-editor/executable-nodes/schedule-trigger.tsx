@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Clock } from 'lucide-react'
 import { NodeShell, StatusBadge } from '@/components/workflow'
+import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 
@@ -22,12 +23,12 @@ export const ScheduleTriggerExecutableNode = memo(function ScheduleTriggerExecut
       icon={Clock}
       title='Schedule'
       subtitle={subtitle}
-      accent='from-[#fd551d] to-[#eab308]'
+      accent={ACCENT_GRADIENTS.warning}
       handles='out'
       runStatus={runStatus}
       footer={<div className='flex flex-wrap gap-2'><StatusBadge tone='info'>trigger</StatusBadge><RunStateBadge nodeId={id} /></div>}
     >
-      <p className='text-xs text-zinc-300'>Fires the workflow on a timer while armed.</p>
+      <p className='text-xs text-muted-foreground'>Fires the workflow on a timer while armed.</p>
     </NodeShell>
   )
 })

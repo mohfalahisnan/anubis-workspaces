@@ -14,11 +14,22 @@ function basename(path: string): string {
   return lastSlash >= 0 ? path.slice(lastSlash + 1) : path
 }
 
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`h-20 w-full animate-pulse rounded-lg bg-white/5 ${className ?? ''}`} />
+function Skeleton({ className, fill }: { className?: string; fill?: boolean }) {
+  return (
+    <div
+      className={`w-full animate-pulse bg-muted ${fill ? 'aspect-square' : 'h-20 rounded-lg'} ${className ?? ''}`}
+    />
+  )
 }
 
-export function FileThumb({ path, className = '' }: { path: string; className?: string }) {
+/**
+ * Renders an artifact path as an image / video thumbnail.
+ *
+ * `fill` mode shows the media at its natural aspect, full width, with no
+ * cropping, rounding, or chrome — used by the Media output node so the
+ * artifact reads as just the media itself.
+ */
+export function FileThumb({ path, className = '', fill = false }: { path: string; className?: string; fill?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -26,19 +37,23 @@ export function FileThumb({ path, className = '' }: { path: string; className?: 
     return () => { cancelled = true }
   }, [path])
 
+  const mediaClass = fill
+    ? `block h-auto w-full object-contain ${className}`
+    : `h-20 w-full rounded-lg object-cover ${className}`
+
   const ext = extOf(path)
   if (IMAGE_EXT.has(ext)) {
     return url ? (
-      <img src={url} alt={basename(path)} className={`h-20 w-full rounded-lg object-cover ${className}`} />
-    ) : <Skeleton className={className} />
+      <img src={url} alt={basename(path)} className={mediaClass} />
+    ) : <Skeleton className={className} fill={fill} />
   }
   if (VIDEO_EXT.has(ext)) {
     return url ? (
-      <video src={url} className={`h-20 w-full rounded-lg object-cover ${className}`} muted preload='metadata' />
-    ) : <Skeleton className={className} />
+      <video src={url} className={mediaClass} controls={fill} muted preload='metadata' />
+    ) : <Skeleton className={className} fill={fill} />
   }
   return (
-    <div className={`flex h-20 w-full items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[10px] text-zinc-400 ${className}`}>
+    <div className={`flex h-20 w-full items-center justify-center rounded-lg border border-border bg-muted text-[10px] text-muted-foreground ${className}`}>
       <span className='truncate px-2'>{basename(path)}</span>
     </div>
   )

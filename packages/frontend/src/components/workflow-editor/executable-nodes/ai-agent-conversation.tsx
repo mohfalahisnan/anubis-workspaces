@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { Bot } from 'lucide-react'
 import { NodeShell } from '@/components/workflow'
+import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
@@ -26,17 +27,17 @@ interface AiAgentOutput {
 function ResultSection({ output }: { output: AiAgentOutput }) {
   const { navigate } = useNavigation()
   return (
-    <div className='mt-3 space-y-2 rounded-xl border border-white/10 bg-black/30 p-2'>
+    <div className='mt-3 space-y-2 rounded-xl border border-border bg-muted/30 p-2'>
       {output.paths && output.paths.length > 0 ? (
         <div className={`grid gap-2 ${output.paths.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {output.paths.slice(0, 4).map((p) => <FileThumb key={p} path={p} />)}
         </div>
       ) : null}
-      <p className='line-clamp-4 text-xs leading-relaxed text-zinc-300'>{output.text || '(no text)'}</p>
+      <p className='line-clamp-4 text-xs leading-relaxed text-muted-foreground'>{output.text || '(no text)'}</p>
       <button
         type='button'
         onClick={() => navigate({ page: 'active-conversation', conversationId: output.conversationId })}
-        className='block text-[10px] font-medium text-[#fd551d] hover:underline'
+        className='block text-[10px] font-medium text-primary hover:underline'
       >
         Open chat →
       </button>
@@ -55,11 +56,11 @@ export const AiAgentConversationExecutableNode = memo(function AiAgentConversati
       icon={Bot}
       title='AI Agent · Conversation'
       subtitle={data.profileId ? `Profile: ${data.profileId} · reasoning: ${data.reasoning ?? 'default'}` : 'Pick a profile in the inspector'}
-      accent='from-[#fd551d] to-[#ff9b7a]'
+      accent={ACCENT_GRADIENTS.default}
       runStatus={runStatus}
       footer={<RunStateBadge nodeId={id} />}
     >
-      <pre className='text-[10px] text-zinc-300 whitespace-pre-wrap break-words'>{promptPreview}</pre>
+      <pre className='text-[10px] text-muted-foreground whitespace-pre-wrap break-words'>{promptPreview}</pre>
       {output?.kind === 'aiAgent' ? <ResultSection output={output} /> : null}
     </NodeShell>
   )

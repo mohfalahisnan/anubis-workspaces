@@ -10,7 +10,7 @@ export function NodePalette() {
           if (items.length === 0) return null
           return (
             <div key={category}>
-              <p className='mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[#fd551d]'>
+              <p className='mb-1.5 text-[10px] font-medium uppercase tracking-wider text-primary'>
                 {NODE_CATEGORY_LABELS[category]}
               </p>
               <div className='space-y-1.5'>
@@ -19,7 +19,7 @@ export function NodePalette() {
                     key={item.type}
                     draggable
                     onDragStart={(e) => { e.dataTransfer.setData('application/x-anubis-node', item.type); e.dataTransfer.effectAllowed = 'move' }}
-                    className='cursor-grab rounded-md border border-border bg-card px-3 py-2 text-xs hover:border-[#fd551d]/40'
+                    className='cursor-grab rounded-md border border-border bg-card px-3 py-2 text-xs transition-colors hover:border-primary/40 hover:bg-accent'
                   >
                     {item.label}
                   </div>

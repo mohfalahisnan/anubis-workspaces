@@ -70,7 +70,8 @@ export const workflowEdgeDefaults = {
   type: 'separated' as const,
   style: {
     strokeWidth: 2,
-    stroke: 'rgba(255, 255, 255, 0.78)',
+    stroke: 'var(--anubis-gold)',
+    strokeOpacity: 0.7,
     strokeDasharray: '10 8',
     animation: 'workflowLineDash 900ms linear infinite',
   } satisfies CSSProperties,
@@ -79,8 +80,8 @@ export const workflowEdgeDefaults = {
 export const workflowEdgeLabelDefaults = {
   labelBgPadding: [8, 4] as [number, number],
   labelBgBorderRadius: 8,
-  labelStyle: { fill: '#ffffff', fontSize: 11, fontWeight: 600 },
-  labelBgStyle: { fill: 'rgba(11, 11, 12, 0.94)', stroke: 'rgba(253, 85, 29, 0.24)' },
+  labelStyle: { fill: 'var(--foreground)', fontSize: 11, fontWeight: 600 },
+  labelBgStyle: { fill: 'var(--popover)', stroke: 'color-mix(in oklab, var(--anubis-gold) 28%, transparent)' },
 }
 
 type SeparatedEdgeData = Partial<RoutedEdgeData> & Record<string, unknown>
@@ -117,7 +118,7 @@ export function SeparatedEdge({
       {label != null ? (
         <EdgeLabelRenderer>
           <div
-            className='nodrag nopan absolute rounded-lg border border-[#fd551d]/25 bg-[#0b0b0c]/95 px-2 py-1 text-[11px] font-semibold text-white shadow-lg shadow-black/30'
+            className='nodrag nopan absolute rounded-lg border border-primary/25 bg-popover/95 px-2 py-1 text-[11px] font-semibold text-foreground shadow-lg shadow-black/30'
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           >
             {label as ReactNode}

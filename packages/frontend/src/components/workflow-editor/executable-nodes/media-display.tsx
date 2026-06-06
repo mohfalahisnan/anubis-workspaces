@@ -1,35 +1,47 @@
 import { memo } from 'react'
 import { Film } from 'lucide-react'
-import { NodeShell, StatusBadge } from '@/components/workflow'
+import { NodeShell } from '@/components/workflow'
+import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { FileThumb } from '@/components/workflow/file-thumb'
-import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 
 export interface MediaDisplayNodeData {}
 
+interface FileOutput { kind: 'file'; path: string; mimeType?: string }
+interface FilesOutput { kind: 'files'; files: Array<{ path: string }> }
+
 export const MediaDisplayExecutableNode = memo(function MediaDisplayExecutableNode(
   { id }: { id: string; data: MediaDisplayNodeData },
 ) {
   const runStatus = useNodeRunStatus(id)
-  const output = useNodeRunOutput(id) as { kind: 'file'; path: string; mimeType?: string } | undefined
+  const output = useNodeRunOutput(id) as FileOutput | FilesOutput | undefined
+
+  const paths =
+    output?.kind === 'file' ? [output.path]
+    : output?.kind === 'files' ? output.files.map((f) => f.path)
+    : []
+
+  const hasMedia = paths.length > 0
+
   return (
     <NodeShell
       icon={Film}
       title='Media'
-      subtitle='Passive — displays an upstream image / video'
-      accent='from-[#fd551d] to-[#8b5cf6]'
+      accent={ACCENT_GRADIENTS.media}
       handles='in'
       runStatus={runStatus}
-      footer={<div className='flex flex-wrap gap-2'><StatusBadge>output</StatusBadge><RunStateBadge nodeId={id} /></div>}
+      bleed={hasMedia}
     >
-      {output?.kind === 'file' ? (
-        <div className='mt-1 rounded-xl border border-white/10 bg-black/30 p-2'>
-          <FileThumb path={output.path} />
-          {output.mimeType ? <p className='mt-1 truncate text-[10px] text-zinc-500'>{output.mimeType}</p> : null}
+      {hasMedia ? (
+        // Full-bleed media grid — no padding, no captions, just the media.
+        <div className={`grid ${paths.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {paths.map((path) => (
+            <FileThumb key={path} path={path} fill />
+          ))}
         </div>
       ) : (
-        <p className='text-xs text-zinc-300'>Connect a node that outputs a file.</p>
+        <p className='text-xs text-muted-foreground'>Connect a node that outputs a file.</p>
       )}
     </NodeShell>
   )

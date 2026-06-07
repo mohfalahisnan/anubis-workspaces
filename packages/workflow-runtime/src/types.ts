@@ -76,6 +76,10 @@ export interface ExecutorContext {
   approvals: {
     waitFor(nodeId: string, opts: { title?: string; instructions?: string; upstream: unknown }): Promise<{ decision: 'approved' | 'rejected'; notes?: string }>
   }
+  /** Persistent store of workflow lessons, written as markdown and injected into agent prompts. */
+  lessons: {
+    write(input: { nodeId: string; lessonType: 'mistake' | 'lesson'; text: string; profileId?: string }): Promise<{ path: string }>
+  }
   runId:   string
   signal:  AbortSignal
   emit:    (event: NodeRunEvent) => void

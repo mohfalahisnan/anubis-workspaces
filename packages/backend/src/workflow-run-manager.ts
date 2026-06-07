@@ -13,6 +13,7 @@ import {
 } from '@anubis/workflow-runtime'
 import { captureInstagramData, silentReporter, type StandardCrawlerOutput } from '@anubis/research-crawler'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
+import { LessonStore } from './lesson-store.js'
 
 type Listener = (event: RunEvent) => void
 
@@ -36,11 +37,14 @@ const INLINE_OUTPUT_LIMIT = 256 * 1024
 export class WorkflowRunManager {
   private active = new Map<string, ActiveRun>()
   private runsByWorkflow = new Map<string, string>()
+  private lessons: LessonStore
 
   constructor(
     private stack: ConversationStack,
     private dataDir: string,
-  ) {}
+  ) {
+    this.lessons = new LessonStore(dataDir)
+  }
 
   async start(
     workflowId: string,
@@ -237,11 +241,14 @@ export class WorkflowRunManager {
             workflow?: { runId: string; nodeId: string }
           }) => {
             const override = input.reasoning ? { reasoningEffort: input.reasoning } : undefined
+            // Inject accumulated lessons into every workflow agent's first turn.
+            const lessons = await this.lessons.injectionText()
+            const content = lessons ? `${lessons}\n\n${input.content}` : input.content
             return this.stack.conversation.createAndAwaitFirstTurn({
               title: input.title,
               profileId: input.profileId,
               override,
-              content: input.content,
+              content,
               source: input.source,
               workflow: input.workflow,
               signal: active.controller.signal,
@@ -250,6 +257,10 @@ export class WorkflowRunManager {
           cancel: async (conversationId: string) => {
             await this.stack.conversation.cancel(conversationId)
           },
+        },
+        lessons: {
+          write: (input: { nodeId: string; lessonType: 'mistake' | 'lesson'; text: string; profileId?: string }) =>
+            this.lessons.write({ ...input, runId: active.runId }),
         },
         approvals: {
           waitFor: (nodeId: string, opts: { title?: string; instructions?: string; upstream: unknown }) =>

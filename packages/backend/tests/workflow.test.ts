@@ -56,6 +56,50 @@ describe('workflow REST', () => {
     expect(found.hasPublished).toBe(true)
   })
 
+  it('exports a workflow and re-imports it as a new unpublished workflow', async () => {
+    const app = await loadApp()
+    const created = await app.request('/workflows', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Exportable', description: 'desc' }),
+    })
+    const wf = await created.json()
+    const draft = JSON.stringify({
+      nodes: [{ id: 'n1', type: 'table', position: { x: 1, y: 2 }, data: { staticData: [{ k: 'v' }] } }],
+      edges: [],
+    })
+    await app.request(`/workflows/${wf.id}/draft`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ draftGraph: draft }),
+    })
+
+    const exportResp = await app.request(`/workflows/${wf.id}/export`)
+    expect(exportResp.status).toBe(200)
+    const exported = await exportResp.json()
+    expect(exported.anubisWorkflowExport).toBe(1)
+    expect(exported.name).toBe('Exportable')
+    expect(exported.graph.nodes[0].id).toBe('n1')
+
+    const importResp = await app.request('/workflows/import', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(exported),
+    })
+    expect(importResp.status).toBe(201)
+    const imported = await importResp.json()
+    expect(imported.id).not.toBe(wf.id)
+    expect(imported.name).toBe('Exportable')
+    expect(imported.publishedGraph).toBeUndefined()
+    expect(JSON.parse(imported.draftGraph).nodes[0].id).toBe('n1')
+  })
+
+  it('rejects an import with an invalid graph', async () => {
+    const app = await loadApp()
+    const resp = await app.request('/workflows/import', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bad', graph: { nodes: 'nope', edges: [] } }),
+    })
+    expect(resp.status).toBe(400)
+  })
+
   it('rejects run with no published version', async () => {
     const app = await loadApp()
     const created = await app.request('/workflows', {

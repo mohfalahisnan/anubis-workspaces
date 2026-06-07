@@ -28,6 +28,14 @@ export interface WorkflowDetail {
   armed?: boolean
 }
 
+export interface WorkflowExport {
+  anubisWorkflowExport: 1
+  exportedAt: number
+  name: string
+  description?: string
+  graph: { nodes: unknown[]; edges: unknown[] }
+}
+
 export type NodeRunEvent =
   | { kind: 'node-started';   nodeId: string; at: number }
   | { kind: 'node-succeeded'; nodeId: string; at: number; output: unknown }
@@ -59,6 +67,9 @@ export const workflowsApi = {
                   body: JSON.stringify({ name, description }),
                 }),
   get:         (id: string) => jsonFetch<WorkflowDetail>(`/workflows/${id}`),
+  export:      (id: string) => jsonFetch<WorkflowExport>(`/workflows/${id}/export`),
+  import:      (payload: { name?: string; description?: string | null; graph: unknown }) =>
+                jsonFetch<WorkflowDetail>('/workflows/import', { method: 'POST', body: JSON.stringify(payload) }),
   patchMeta:   (id: string, patch: { name?: string; description?: string | null }) =>
                 jsonFetch<WorkflowDetail>(`/workflows/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   saveDraft:   (id: string, draftGraph: string) =>

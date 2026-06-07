@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { workflowsApi, type WorkflowSummary } from '@/api/workflows'
 import { useNavigation } from '@/lib/navigation'
 import { Button } from '@/components/ui/button'
@@ -13,10 +13,47 @@ export function WorkflowsPage() {
   const [items, setItems] = useState<WorkflowSummary[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [draftName, setDraftName] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     workflowsApi.list().then((r) => setItems(r.items)).catch((e) => console.error(e))
   }, [])
+
+  async function handleExport(id: string, name: string) {
+    try {
+      const data = await workflowsApi.export(id)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${slugify(name)}.workflow.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    try {
+      const parsed = JSON.parse(await file.text()) as {
+        name?: string; description?: string | null; graph?: unknown
+      }
+      if (!parsed || typeof parsed !== 'object' || !parsed.graph) {
+        alert('That file is not a valid workflow export.')
+        return
+      }
+      const wf = await workflowsApi.import({
+        name: parsed.name,
+        description: parsed.description,
+        graph: parsed.graph,
+      })
+      navigate({ page: 'workflow-editor', workflowId: wf.id })
+    } catch (e) {
+      console.error(e)
+      alert('Could not import workflow: ' + (e instanceof Error ? e.message : String(e)))
+    }
+  }
 
   async function handleCreate() {
     if (!draftName.trim()) return
@@ -41,6 +78,10 @@ export function WorkflowsPage() {
     }
   }
 
+  function slugify(name: string): string {
+    return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'workflow'
+  }
+
   function statusLabel(item: WorkflowSummary): string {
     if (!item.hasPublished) return 'Draft only'
     if (item.draftAhead) return 'Draft ahead of published'
@@ -54,7 +95,21 @@ export function WorkflowsPage() {
           <p className='text-xs uppercase tracking-[0.3em] text-[#fd551d]'>Workflows</p>
           <h1 className='mt-2 text-2xl font-semibold tracking-tight'>Your workflows</h1>
         </div>
-        <Button onClick={() => setIsCreating(true)}>+ New workflow</Button>
+        <div className='flex items-center gap-2'>
+          <input
+            ref={fileInputRef}
+            type='file'
+            accept='application/json,.json'
+            className='hidden'
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleImportFile(file)
+              e.target.value = ''
+            }}
+          />
+          <Button variant='secondary' onClick={() => fileInputRef.current?.click()}>Import</Button>
+          <Button onClick={() => setIsCreating(true)}>+ New workflow</Button>
+        </div>
       </div>
       <div className='flex-1 overflow-auto p-6 grid gap-4 grid-cols-3'>
         {items.length === 0 ? (
@@ -76,6 +131,7 @@ export function WorkflowsPage() {
               <div className='flex flex-wrap gap-2'>
                 <Button size='sm' variant='secondary' onClick={() => navigate({ page: 'workflow-editor', workflowId: item.id })}>Open</Button>
                 <Button size='sm' disabled={!item.hasPublished} onClick={() => handleRun(item.id)}>Run</Button>
+                <Button size='sm' variant='ghost' onClick={() => handleExport(item.id, item.name)}>Export</Button>
                 <Button size='sm' variant='ghost' onClick={() => handleDelete(item.id)}>Delete</Button>
               </div>
             </div>

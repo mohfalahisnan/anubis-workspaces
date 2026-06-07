@@ -59,6 +59,25 @@ export class WorkflowsRepo {
     return this.getOrThrow(input.id)
   }
 
+  /**
+   * Create a workflow from an imported graph. Unlike `create` (which starts
+   * from an empty graph), this seeds the draft with `draftGraph` and leaves the
+   * workflow unpublished so the importer reviews before publishing.
+   */
+  importGraph(input: { id: string; name: string; description?: string; draftGraph: string; now: number }): Workflow {
+    this.db
+      .prepare(
+        `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
+          draft_updated_at, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+      )
+      .run(
+        input.id, input.name, input.description ?? null, input.draftGraph,
+        input.now, input.now, input.now,
+      )
+    return this.getOrThrow(input.id)
+  }
+
   list(): Workflow[] {
     const rows = this.db.prepare(`SELECT * FROM workflows ORDER BY updated_at DESC`).all() as WorkflowRow[]
     return rows.map(toWorkflow)

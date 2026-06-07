@@ -69,6 +69,15 @@ const PatchMetaBody = z.object({
 
 const DraftBody = z.object({ draftGraph: z.string().min(2) })
 
+/** Versioned envelope for a portable workflow file. */
+const EXPORT_VERSION = 1
+const ImportBody = z.object({
+  anubisWorkflowExport: z.literal(EXPORT_VERSION).optional(),
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  graph: WorkflowGraphSchema,
+})
+
 export const workflowRoutes = new Hono()
 
 workflowRoutes.post('/', async (c) => {
@@ -76,6 +85,19 @@ workflowRoutes.post('/', async (c) => {
   const stack = getStack()
   const now = Date.now()
   const wf = stack.workflows.create({ id: randomUUID(), name: body.name, description: body.description, now })
+  return c.json(wf, 201)
+})
+
+workflowRoutes.post('/import', async (c) => {
+  const body = ImportBody.parse(await c.req.json())
+  const stack = getStack()
+  const wf = stack.workflows.importGraph({
+    id: randomUUID(),
+    name: body.name?.trim() || 'Imported workflow',
+    description: body.description ?? undefined,
+    draftGraph: JSON.stringify(body.graph),
+    now: Date.now(),
+  })
   return c.json(wf, 201)
 })
 
@@ -112,6 +134,19 @@ workflowRoutes.get('/artifacts', (c) => {
   return c.body(stream as unknown as ReadableStream, 200, {
     'Content-Type': contentType,
     'Cache-Control': 'private, max-age=300',
+  })
+})
+
+workflowRoutes.get('/:id/export', (c) => {
+  const stack = getStack()
+  const wf = stack.workflows.get(c.req.param('id'))
+  if (!wf) return c.json({ error: 'not_found' }, 404)
+  return c.json({
+    anubisWorkflowExport: EXPORT_VERSION,
+    exportedAt: Date.now(),
+    name: wf.name,
+    description: wf.description,
+    graph: JSON.parse(wf.draftGraph),
   })
 })
 

@@ -28,11 +28,7 @@ function reviewerComment(upstream: Record<string, unknown>): string | null {
   return null
 }
 
-/**
- * Writes a lesson via an AI conversation and persists it to anubis-core
- * (`experience_memories`, as a `candidate`). The lesson `text` is also returned
- * so a loop-back edge can feed it into the Improve agent on the next iteration.
- */
+/** Writes a lesson via an AI conversation and returns the text for downstream nodes. */
 export const lessonWriterExecutor: Executor<LessonWriterConfig> = {
   type: 'lessonWriter',
   validateConfig(raw) {
@@ -57,21 +53,12 @@ export const lessonWriterExecutor: Executor<LessonWriterConfig> = {
       profileId: input.config.profileId,
       reasoning: input.config.reasoning,
       content,
+      source: 'workflow',
+      workflow: { runId: ctx.runId, nodeId: input.nodeId },
     })
     const env = parseEnvelope(result.text)
     const lessonText = env.text || result.text
 
-    const mem = ctx.experience.recordCandidate({
-      type: input.config.lessonType,
-      title: lessonText.slice(0, 80),
-      problem: lessonText,
-      correction: lessonText,
-      severity: 'medium',
-      workspaceId: ctx.workspaceId,
-      platform: null,
-      sourceRunId: ctx.runId,
-    })
-
-    return { kind: 'lesson', text: lessonText, memoryId: mem.id, conversationId: result.conversationId }
+    return { kind: 'lesson', text: lessonText, conversationId: result.conversationId }
   },
 }

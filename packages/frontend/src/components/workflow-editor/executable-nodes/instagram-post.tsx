@@ -5,6 +5,7 @@ import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 import { FileThumb } from '@/components/workflow/file-thumb'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -16,7 +17,7 @@ function InstagramIcon({ className }: { className?: string }) {
   )
 }
 
-export interface InstagramPostNodeData {
+export interface InstagramPostNodeData extends TitledNodeData {
   source?: 'existing' | 'url'
   postId?: string
   url?: string
@@ -66,7 +67,7 @@ export const InstagramPostExecutableNode = memo(function InstagramPostExecutable
   return (
     <NodeShell
       icon={InstagramIcon}
-      title='Instagram Post'
+      title={nodeTitle(data, 'Instagram Post')}
       subtitle={data.source === 'url' ? data.url ?? 'No URL' : data.postId ? `Captured: ${data.postId}` : 'No source selected'}
       accent={ACCENT_GRADIENTS.default}
       runStatus={runStatus}

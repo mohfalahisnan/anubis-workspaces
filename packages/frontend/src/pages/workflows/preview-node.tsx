@@ -9,6 +9,10 @@ const TYPE_LABELS: Record<string, string> = {
   ocrExtractor: 'OCR',
   table: 'Table',
   aiAgentConversation: 'AI Agent',
+  jsonTransformer: 'JSON',
+  markdownDisplay: 'Markdown',
+  humanApproval: 'Human Review',
+  lessonWriter: 'Lesson',
   originalCopy: 'Original Copy',
 }
 
@@ -20,11 +24,28 @@ const TYPE_DOTS: Record<string, string> = {
   ocrExtractor: 'bg-[#22c55e]',
   table: 'bg-[#22c55e]',
   aiAgentConversation: 'bg-white',
+  jsonTransformer: 'bg-[#22c55e]',
+  markdownDisplay: 'bg-[#d9a441]',
+  humanApproval: 'bg-[#d9a441]',
+  lessonWriter: 'bg-[#d9a441]',
   originalCopy: 'bg-[#22c55e]',
 }
 
-export const PreviewNode = memo(function PreviewNode({ type }: { type?: string }) {
-  const label = TYPE_LABELS[type ?? ''] ?? type ?? 'Node'
+interface PreviewNodeData {
+  title?: string
+  label?: string
+  name?: string
+  titleTemplate?: string
+  type?: string
+}
+
+function titleFromData(data: PreviewNodeData | undefined, type?: string): string {
+  const configured = data?.title ?? data?.label ?? data?.name ?? data?.titleTemplate
+  return configured?.trim() || TYPE_LABELS[type ?? ''] || type || 'Node'
+}
+
+export const PreviewNode = memo(function PreviewNode({ type, data }: { type?: string; data?: PreviewNodeData }) {
+  const label = titleFromData(data, type)
   const dot = TYPE_DOTS[type ?? ''] ?? 'bg-zinc-400'
   return (
     <>

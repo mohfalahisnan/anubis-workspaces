@@ -8,8 +8,8 @@ describe('migration 017 — workflow run pause statuses', () => {
     const db = openDatabase(':memory:')
     runMigrations(db, MIGRATIONS)
     db.prepare(
-      `INSERT INTO workflows (id,name,draft_graph,draft_updated_at,created_at,updated_at,workspace_id)
-       VALUES ('w','n','{}',0,0,0,'default-workspace')`,
+      `INSERT INTO workflows (id,name,draft_graph,draft_updated_at,created_at,updated_at)
+       VALUES ('w','n','{}',0,0,0)`,
     ).run()
     expect(() => db.prepare(
       `INSERT INTO workflow_runs (id,workflow_id,status,graph_snapshot,started_at)

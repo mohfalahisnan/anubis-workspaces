@@ -5,14 +5,15 @@ import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { FileThumb } from '@/components/workflow/file-thumb'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface MediaDisplayNodeData {}
+export interface MediaDisplayNodeData extends TitledNodeData {}
 
 interface FileOutput { kind: 'file'; path: string; mimeType?: string }
 interface FilesOutput { kind: 'files'; files: Array<{ path: string }> }
 
 export const MediaDisplayExecutableNode = memo(function MediaDisplayExecutableNode(
-  { id }: { id: string; data: MediaDisplayNodeData },
+  { id, data }: { id: string; data: MediaDisplayNodeData },
 ) {
   const runStatus = useNodeRunStatus(id)
   const output = useNodeRunOutput(id) as FileOutput | FilesOutput | undefined
@@ -27,7 +28,7 @@ export const MediaDisplayExecutableNode = memo(function MediaDisplayExecutableNo
   return (
     <NodeShell
       icon={Film}
-      title='Media'
+      title={nodeTitle(data, 'Media')}
       accent={ACCENT_GRADIENTS.media}
       handles='in'
       runStatus={runStatus}

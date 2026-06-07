@@ -1,5 +1,6 @@
 import type { InstagramCompetitorCandidate, InstagramCompetitorDiscoveryResult } from './services/instagram-competitor-discovery.service.js'
 import type { InstagramCdpCaptureResult } from './services/instagram-cdp-capture.service.js'
+import { calculateAvgLikesSummary } from './instagram/avg-likes.js'
 
 export type StandardCrawlerInput = {
   target: 'instagram'
@@ -241,8 +242,41 @@ function successOutput(
     meta: stripEmpty({
       ...meta,
       profileCount: profiles.length,
-      postCount: posts.length
+      postCount: posts.length,
+      avgLikes: buildAvgLikesMeta(input, profiles, posts)
     })
+  }
+}
+
+function buildAvgLikesMeta(
+  input: StandardCrawlerInput,
+  profiles: ProfileData[],
+  posts: PostData[],
+): StandardCrawlerOutput['meta']['avgLikes'] | undefined {
+  const minPosts = normalizePositiveInteger(input.minPosts, 20)
+  const usernames = new Set<string>()
+  if (input.username) usernames.add(normalizeUsername(input.username))
+  for (const profile of profiles) usernames.add(normalizeUsername(profile.username))
+  for (const post of posts) {
+    const username = normalizeUsername(post.username ?? usernameFromProfileUrl(post.sourceProfileUrl) ?? '')
+    if (username) usernames.add(username)
+  }
+
+  const perProfile = [...usernames]
+    .map((username) => {
+      const profilePosts = posts.filter((post) => {
+        const postUsername = normalizeUsername(post.username ?? usernameFromProfileUrl(post.sourceProfileUrl) ?? '')
+        return postUsername === username
+      })
+      return calculateAvgLikesSummary(username, profilePosts, minPosts)
+    })
+    .filter((summary): summary is NonNullable<typeof summary> => Boolean(summary))
+
+  if (perProfile.length === 0) return undefined
+  return {
+    method: 'modal_cluster_mean',
+    minPosts,
+    perProfile,
   }
 }
 
@@ -278,6 +312,24 @@ function getOutputTypes(profiles: ProfileData[], posts: PostData[]): StandardCra
 
 function normalizeUrl(value: string | undefined): string {
   return value?.replace(/\/+$/, '') ?? ''
+}
+
+function normalizeUsername(value: string): string {
+  return value.trim().replace(/^@/, '').toLowerCase()
+}
+
+function usernameFromProfileUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  try {
+    const url = new URL(value)
+    return url.pathname.split('/').filter(Boolean)[0]
+  } catch {
+    return undefined
+  }
+}
+
+function normalizePositiveInteger(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value) && value && value > 0 ? Math.floor(value) : fallback
 }
 
 function stripEmpty<T extends Record<string, unknown>>(record: T): T {

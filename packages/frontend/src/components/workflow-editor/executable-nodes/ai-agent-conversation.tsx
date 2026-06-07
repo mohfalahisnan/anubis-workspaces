@@ -7,8 +7,9 @@ import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 import { FileThumb } from '@/components/workflow/file-thumb'
 import { useNavigation } from '@/lib/navigation'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface AiAgentConversationNodeData {
+export interface AiAgentConversationNodeData extends TitledNodeData {
   profileId?: string
   reasoning?: 'minimal' | 'low' | 'medium' | 'high'
   prompt?: string
@@ -54,7 +55,7 @@ export const AiAgentConversationExecutableNode = memo(function AiAgentConversati
   return (
     <NodeShell
       icon={Bot}
-      title='AI Agent · Conversation'
+      title={nodeTitle(data, 'AI Agent · Conversation')}
       subtitle={data.profileId ? `Profile: ${data.profileId} · reasoning: ${data.reasoning ?? 'default'}` : 'Pick a profile in the inspector'}
       accent={ACCENT_GRADIENTS.default}
       runStatus={runStatus}

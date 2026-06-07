@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useActiveWorkspace } from '@/lib/workspace'
 import {
   ArrowDownToLineIcon,
   ArrowUpRightIcon,
@@ -24,7 +23,13 @@ import {
 import type { CapturedPostSummary, CompetitorSummary } from '@anubis/shared'
 import { effectiveLevel, multiplierRatingFor } from '@anubis/shared'
 
-import { captureCompetitor, deletePost, listPosts, updatePost } from '@/api'
+import {
+  captureCompetitorPreview,
+  deletePost,
+  importCapturedPosts,
+  listPosts,
+  updatePost,
+} from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
@@ -162,6 +167,9 @@ export function ContentPage() {
   const [busy, setBusy] = useState(false)
   const [capturing, setCapturing] = useState<CaptureProgress | null>(null)
   const [selectionOpen, setSelectionOpen] = useState(false)
+  const [reviewPosts, setReviewPosts] = useState<CapturedPostSummary[]>([])
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [importingPosts, setImportingPosts] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [stars, setStars] = useState<Record<string, boolean>>({})
@@ -177,13 +185,12 @@ export function ContentPage() {
   const [multiplierFilter, setMultiplierFilter] = useState<MultiplierFilter>('all')
   const { config: levelsCfg } = useCompetitorLevels()
   const multipliersCfg = useLevelMultipliers()
-  const { activeWorkspaceId } = useActiveWorkspace()
 
   async function refresh() {
     setBusy(true)
     try {
-      const items = await listPosts({ limit: 120, orderBy: 'recent', workspaceId: activeWorkspaceId })
-      setPosts(items)
+      const items = await listPosts({ limit: 120, orderBy: 'recent' })
+      setPosts(dedupeCapturedPosts(items))
     } catch {
       // Backend offline or request failed → show the empty state, not stale data.
       setPosts([])
@@ -195,7 +202,7 @@ export function ContentPage() {
   useEffect(() => {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId])
+  }, [])
 
   function toggleStar(key: string) {
     setStars((s) => ({ ...s, [key]: !s[key] }))
@@ -297,6 +304,7 @@ export function ContentPage() {
     // would step on each other. Showing live "X of N" progress is the
     // right UX for a serial run anyway.
     const errors: { handle: string; message: string }[] = []
+    const candidates: CapturedPostSummary[] = []
     let capturedSoFar = 0
     setCapturing({ done: 0, total: competitors.length, capturedSoFar, errors })
 
@@ -310,12 +318,14 @@ export function ContentPage() {
         errors,
       })
       try {
-        const result = await captureCompetitor(competitor.id, {
+        const result = await captureCompetitorPreview(competitor.id, {
           profile: options.profile,
           headless: options.headless,
           forceHeadless: options.forceHeadless,
+          targetPosts: options.targetPostsPerProfile,
         })
-        capturedSoFar += result.capturedCount
+        candidates.push(...result.posts)
+        capturedSoFar = dedupeCapturedPosts(candidates).length
       } catch (e) {
         errors.push({
           handle: competitor.handle,
@@ -325,12 +335,16 @@ export function ContentPage() {
     }
 
     setCapturing(null)
-    await refresh()
 
-    if (errors.length === 0) {
+    if (candidates.length > 0) {
+      setReviewPosts(dedupeCapturedPosts(candidates))
+      setReviewOpen(true)
+    }
+
+    if (errors.length === 0 && candidates.length > 0) {
       setBanner({
         kind: 'success',
-        message: `Captured ${capturedSoFar} post${capturedSoFar === 1 ? '' : 's'} across ${competitors.length} competitor${competitors.length === 1 ? '' : 's'}.`,
+        message: `Found ${capturedSoFar} candidate post${capturedSoFar === 1 ? '' : 's'} across ${competitors.length} competitor${competitors.length === 1 ? '' : 's'}. Select which ones to add.`,
       })
     } else if (errors.length === competitors.length) {
       setBanner({
@@ -341,13 +355,39 @@ export function ContentPage() {
       const okCount = competitors.length - errors.length
       setBanner({
         kind: 'warning',
-        message: `Captured ${capturedSoFar} posts from ${okCount} competitor${okCount === 1 ? '' : 's'}; ${errors.length} failed.`,
+        message: `Found ${capturedSoFar} candidate posts from ${okCount} competitor${okCount === 1 ? '' : 's'}; ${errors.length} failed.`,
         errors,
       })
     }
   }
 
-  const allCards = (posts ?? []).map(realPostToCard)
+  async function handleImportPosts(selectedPosts: CapturedPostSummary[]) {
+    const uniquePosts = dedupeCapturedPosts(selectedPosts)
+    if (uniquePosts.length === 0) return
+    setImportingPosts(true)
+    setBanner(null)
+    try {
+      const result = await importCapturedPosts({
+        posts: uniquePosts.map(postToImportInput),
+      })
+      setReviewOpen(false)
+      setReviewPosts([])
+      await refresh()
+      setBanner({
+        kind: 'success',
+        message: `Added ${result.importedCount} post${result.importedCount === 1 ? '' : 's'} to Content.`,
+      })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not add selected posts.',
+      })
+    } finally {
+      setImportingPosts(false)
+    }
+  }
+
+  const allCards = dedupeCapturedPosts(posts ?? []).map(realPostToCard)
   const cards = allCards
     .filter((card) => matchesFilters(card, {
       query,
@@ -584,6 +624,17 @@ export function ContentPage() {
           setSelectionOpen(false)
           void handleCaptureFor(picked, options)
         }}
+      />
+
+      <CaptureReviewDialog
+        open={reviewOpen}
+        posts={reviewPosts}
+        importing={importingPosts}
+        onClose={() => {
+          if (importingPosts) return
+          setReviewOpen(false)
+        }}
+        onImport={(selectedPosts) => void handleImportPosts(selectedPosts)}
       />
 
       <EditPostDialog
@@ -988,6 +1039,296 @@ function IconButton({
   )
 }
 
+function CaptureReviewDialog({
+  open,
+  posts,
+  importing,
+  onClose,
+  onImport,
+}: {
+  open: boolean
+  posts: CapturedPostSummary[]
+  importing: boolean
+  onClose: () => void
+  onImport: (selectedPosts: CapturedPostSummary[]) => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [query, setQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState<'all' | 'week' | 'month'>('all')
+
+  useEffect(() => {
+    if (!open) return
+    setSelected(new Set(posts.map((post) => post.id)))
+    setQuery('')
+    setDateFilter('all')
+  }, [open, posts])
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const post of visiblePosts) next.add(post.id)
+      return next
+    })
+  }
+
+  function clearVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const post of visiblePosts) next.delete(post.id)
+      return next
+    })
+  }
+
+  const visiblePosts = posts.filter((post) => matchesReviewFilters(post, query, dateFilter))
+  const selectedPosts = posts.filter((post) => selected.has(post.id))
+  const allVisibleSelected = visiblePosts.length > 0 && visiblePosts.every((post) => selected.has(post.id))
+  const visibleSelectedCount = visiblePosts.filter((post) => selected.has(post.id)).length
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent className='max-h-[92vh] overflow-hidden bg-card p-0 sm:max-w-3xl'>
+        <DialogHeader className='border-b border-border px-6 py-4'>
+          <DialogTitle>Review captured posts</DialogTitle>
+          <DialogDescription>
+            Select the posts you want to add to Content. Unselected candidates are discarded.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className='grid gap-3 border-b border-border px-6 py-3'>
+          <div className='flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'>
+            <label className='flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-background px-3 text-muted-foreground lg:max-w-[420px]'>
+              <SearchIcon className='size-[15px]' strokeWidth={2} />
+              <input
+                type='text'
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder='Filter handle, caption, URL...'
+                className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground'
+              />
+            </label>
+            <div className='flex flex-wrap items-center gap-2'>
+              <span className='inline-flex items-center gap-1.5 text-[12px] text-muted-foreground'>
+                <CalendarIcon className='size-3.5' strokeWidth={2} />
+                Date
+              </span>
+              {[
+                ['all', 'All'],
+                ['week', '1 week'],
+                ['month', '1 month'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type='button'
+                  onClick={() => setDateFilter(value as 'all' | 'week' | 'month')}
+                  className={cn(
+                    'inline-flex h-8 items-center rounded-md border px-3 text-[12.5px] font-medium transition-colors',
+                    dateFilter === value
+                      ? 'border-[color-mix(in_oklab,var(--anubis-gold)_58%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_12%,transparent)] text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+            <span className='font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground'>
+              {visiblePosts.length} showing · {visibleSelectedCount} visible selected · {selected.size} of {posts.length} total selected
+            </span>
+            <div className='flex items-center gap-2 text-[12px]'>
+              <button
+                type='button'
+                onClick={selectVisible}
+                disabled={allVisibleSelected || visiblePosts.length === 0 || importing}
+                className='text-[var(--anubis-gold)] hover:underline disabled:opacity-45'
+              >
+                Select visible
+              </button>
+              <span className='text-muted-foreground'>·</span>
+              <button
+                type='button'
+                onClick={clearVisible}
+                disabled={visibleSelectedCount === 0 || importing}
+                className='text-muted-foreground hover:text-foreground hover:underline disabled:opacity-45'
+              >
+                Clear visible
+              </button>
+              <span className='text-muted-foreground'>·</span>
+              <button
+                type='button'
+                onClick={() => setSelected(new Set())}
+                disabled={selected.size === 0 || importing}
+                className='text-muted-foreground hover:text-foreground hover:underline disabled:opacity-45'
+              >
+                Clear all
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className='max-h-[min(58vh,560px)] overflow-auto px-3 py-3'>
+          {posts.length === 0 ? (
+            <p className='px-3 py-8 text-center text-[13px] text-muted-foreground'>
+              No candidate posts came back from this capture.
+            </p>
+          ) : visiblePosts.length === 0 ? (
+            <p className='px-3 py-8 text-center text-[13px] text-muted-foreground'>
+              No candidate posts match these filters.
+            </p>
+          ) : (
+            <div className='min-w-[860px] overflow-hidden rounded-md border border-border bg-background'>
+              <table className='w-full border-collapse text-left text-[12.5px]'>
+                <thead className='sticky top-0 z-[1] bg-card text-[11px] uppercase tracking-[0.08em] text-muted-foreground'>
+                  <tr className='border-b border-border'>
+                    <th className='w-12 px-3 py-2.5 font-medium'>Add</th>
+                    <th className='w-[74px] px-2 py-2.5 font-medium'>Media</th>
+                    <th className='w-[150px] px-3 py-2.5 font-medium'>Profile</th>
+                    <th className='w-[112px] px-3 py-2.5 font-medium'>Date</th>
+                    <th className='px-3 py-2.5 font-medium'>Caption</th>
+                    <th className='w-[150px] px-3 py-2.5 text-right font-medium'>Metrics</th>
+                  </tr>
+                </thead>
+                <tbody className='divide-y divide-border'>
+                  {visiblePosts.map((post) => {
+                    const isSelected = selected.has(post.id)
+                    const card = realPostToCard(post)
+                    return (
+                      <tr
+                        key={post.id}
+                        onClick={() => !importing && toggle(post.id)}
+                        className={cn(
+                          'cursor-pointer transition-colors',
+                          isSelected
+                            ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]'
+                            : 'hover:bg-muted/70',
+                          importing && 'cursor-not-allowed opacity-70',
+                        )}
+                      >
+                        <td className='px-3 py-2 align-middle'>
+                          <label className='flex size-[22px] items-center justify-center'>
+                            <input
+                              type='checkbox'
+                              checked={isSelected}
+                              disabled={importing}
+                              onChange={() => toggle(post.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select ${card.handle} post`}
+                              className='peer sr-only'
+                            />
+                            <span
+                              aria-hidden
+                              className={cn(
+                                'flex size-[18px] items-center justify-center rounded-[5px] border transition-colors',
+                                isSelected
+                                  ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
+                                  : 'border-border bg-card text-transparent',
+                              )}
+                            >
+                              <CheckIcon className='size-3' strokeWidth={3.2} />
+                            </span>
+                          </label>
+                        </td>
+                        <td className='px-2 py-2 align-middle'>
+                          <span
+                            aria-hidden
+                            className='relative flex size-12 overflow-hidden rounded-md border border-border'
+                            style={{ background: card.tint }}
+                          >
+                            {card.mediaUrl ? (
+                              <img
+                                src={card.mediaUrl}
+                                alt=''
+                                loading='lazy'
+                                referrerPolicy='no-referrer'
+                                className='size-full object-cover'
+                              />
+                            ) : (
+                              <span className='flex size-full items-center justify-center'>
+                                <FormatGlyph format={card.format} />
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className='px-3 py-2 align-middle'>
+                          <div className='min-w-0'>
+                            <div className='truncate font-mono text-[12px] text-foreground'>{card.handle}</div>
+                            <div className='mt-1 inline-flex rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground'>
+                              {card.chip}
+                            </div>
+                          </div>
+                        </td>
+                        <td className='px-3 py-2 align-middle font-mono text-[11.5px] text-muted-foreground'>
+                          <span title={absolutePostDate(post)}>{card.date}</span>
+                        </td>
+                        <td className='px-3 py-2 align-middle'>
+                          <div className='line-clamp-2 max-w-[470px] text-[12.5px] leading-relaxed text-foreground/90'>
+                            {card.caption}
+                          </div>
+                          {card.postUrl && (
+                            <a
+                              href={card.postUrl}
+                              target='_blank'
+                              rel='noreferrer'
+                              onClick={(e) => e.stopPropagation()}
+                              className='mt-1 inline-flex items-center gap-1 text-[11.5px] text-muted-foreground hover:text-foreground hover:underline'
+                            >
+                              Open post
+                              <ArrowUpRightIcon className='size-3' strokeWidth={2} />
+                            </a>
+                          )}
+                        </td>
+                        <td className='px-3 py-2 align-middle text-right font-mono text-[11.5px] text-muted-foreground'>
+                          <div>{card.likes} likes</div>
+                          <div>{card.comments} comments</div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className='border-t border-border px-6 py-3'>
+          <button
+            type='button'
+            onClick={onClose}
+            disabled={importing}
+            className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+          >
+            Cancel
+          </button>
+          <button
+            type='button'
+            onClick={() => onImport(selectedPosts)}
+            disabled={importing || selectedPosts.length === 0}
+            className={cn(
+              'inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13.5px] font-semibold transition-colors',
+              importing || selectedPosts.length === 0
+                ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-50'
+                : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+            )}
+          >
+            <ArrowDownToLineIcon className={cn('size-[15px]', importing && 'animate-pulse')} strokeWidth={2.2} />
+            {importing ? 'Adding...' : `Add ${selectedPosts.length}`}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function EditPostDialog({
   post,
   onClose,
@@ -1143,7 +1484,7 @@ function CaptureProgressPanel({ progress }: { progress: CaptureProgress }) {
           </span>
         </div>
         <span className='font-mono text-[11px] tabular-nums text-muted-foreground'>
-          {progress.capturedSoFar} post{progress.capturedSoFar === 1 ? '' : 's'} so far
+          {progress.capturedSoFar} candidate post{progress.capturedSoFar === 1 ? '' : 's'} so far
         </span>
       </div>
       <div className='h-1 w-full bg-[color-mix(in_oklab,var(--anubis-gold)_16%,transparent)]'>
@@ -1266,6 +1607,102 @@ function realPostToCard(p: CapturedPostSummary): CardModel {
     mediaUrl: p.mediaUrl,
     post: p,
   }
+}
+
+function postToImportInput(post: CapturedPostSummary) {
+  return {
+    id: post.id,
+    competitorId: post.competitorId,
+    username: post.username,
+    postUrl: post.postUrl,
+    caption: post.caption,
+    likes: post.likes,
+    comments: post.comments,
+    postedAt: post.postedAt,
+    mediaKind: post.mediaKind,
+    mediaUrl: post.mediaUrl,
+    carouselCount: post.carouselCount,
+    capturedAt: post.capturedAt,
+  }
+}
+
+function normalisePostUrl(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim()
+  if (!trimmed) return undefined
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.search = ''
+    url.hostname = url.hostname.toLowerCase()
+    url.pathname = url.pathname.replace(/\/+$/, '')
+    return url.toString()
+  } catch {
+    return trimmed.replace(/[?#].*$/, '').replace(/\/+$/, '')
+  }
+}
+
+function normaliseUsername(raw: string | undefined): string {
+  return raw?.trim().replace(/^@/, '').toLowerCase() ?? ''
+}
+
+function postDedupeKey(post: CapturedPostSummary): string {
+  const url = normalisePostUrl(post.postUrl)
+  if (url) return `url:${url}`
+  return [
+    'content',
+    normaliseUsername(post.username),
+    post.caption?.trim().toLowerCase() ?? '',
+    normalisePostUrl(post.mediaUrl) ?? '',
+  ].join(':')
+}
+
+function dedupeCapturedPosts(posts: CapturedPostSummary[]): CapturedPostSummary[] {
+  const seen = new Set<string>()
+  const out: CapturedPostSummary[] = []
+  for (const post of posts) {
+    const key = postDedupeKey(post)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(post)
+  }
+  return out
+}
+
+function matchesReviewFilters(
+  post: CapturedPostSummary,
+  query: string,
+  dateFilter: 'all' | 'week' | 'month',
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (q) {
+    const haystack = [
+      post.caption,
+      post.competitorHandle,
+      post.username,
+      post.postUrl,
+      post.mediaKind,
+    ].filter(Boolean).join(' ').toLowerCase()
+    if (!haystack.includes(q)) return false
+  }
+
+  if (dateFilter !== 'all') {
+    const ms = postTimeMs(post)
+    if (ms === undefined) return false
+    const days = dateFilter === 'week' ? 7 : 30
+    if (ms < Date.now() - days * 24 * 60 * 60 * 1000) return false
+  }
+
+  return true
+}
+
+function absolutePostDate(post: CapturedPostSummary): string {
+  const ms = postTimeMs(post)
+  if (ms === undefined) return ''
+  return new Date(ms).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 function matchesFilters(

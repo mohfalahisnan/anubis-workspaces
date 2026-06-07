@@ -41,6 +41,37 @@ describe('backend smoke — profiles + conversation create', () => {
     expect(body.conversation.agent).toBe('claude')
   })
 
+  it('GET /conversations filters workflow-created conversations', async () => {
+    const { default: app } = await import('../src/app.js')
+    const { getStack } = await import('../src/services.js')
+    const stack = getStack()
+
+    const manual = stack.conversation.create({
+      title: 'manual-filter-smoke',
+      profileId: 'claude-coding',
+      workspacePath: process.cwd(),
+    })
+    const workflow = stack.conversation.create({
+      title: 'workflow-filter-smoke',
+      profileId: 'claude-coding',
+      workspacePath: process.cwd(),
+      source: 'workflow',
+      workflow: { runId: 'run-smoke', nodeId: 'ai-smoke' },
+    })
+
+    const manualList = await app.request('/conversations?source=manual').then((r) => r.json()) as { items: Array<{ id: string }> }
+    const workflowList = await app.request('/conversations?source=workflow').then((r) => r.json()) as { items: Array<{ id: string; extra: { workflow?: unknown } }> }
+
+    expect(manualList.items.map((c) => c.id)).toContain(manual.id)
+    expect(manualList.items.map((c) => c.id)).not.toContain(workflow.id)
+    expect(workflowList.items.map((c) => c.id)).toContain(workflow.id)
+    expect(workflowList.items.map((c) => c.id)).not.toContain(manual.id)
+    expect(workflowList.items.find((c) => c.id === workflow.id)?.extra.workflow).toEqual({
+      runId: 'run-smoke',
+      nodeId: 'ai-smoke',
+    })
+  })
+
   it('GET /skills returns the cron-helper builtin', async () => {
     const { default: app } = await import('../src/app.js')
     const res = await app.request('/skills')

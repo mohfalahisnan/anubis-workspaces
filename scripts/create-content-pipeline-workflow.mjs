@@ -8,13 +8,13 @@
 // Shape (matches the hand-drawn diagram, achievable subset):
 //
 //   Instagram Post ─▶ JSON Transformer ─┬─▶ Image/Video (save media) ─┐
-//                                       │                             ├─▶ AI: Analyze ─▶ MD
-//                                       └─────────────────────────────┘        │
+//          │                            │                             ├─▶ AI: Analyze ─▶ MD
+//          └─▶ Original Copy            └─────────────────────────────┘        │
 //                                                                              ▼
 //   (original caption) ───────────────────────────────────────────▶  AI: Improve ─▶ MD
 //                                                                              │
 //                                                                              ▼
-//                                                                       AI: Review ─▶ MD
+//                                                                       AI: Review ─▶ Human Review
 //
 //   - OCR / Transcript nodes are intentionally skipped (per request): media is
 //     saved, then passed toward the AI directly.
@@ -150,13 +150,14 @@ const graph = {
       id: 'instagram-post',
       type: 'instagramPost',
       position: { x: 80, y: 320 },
-      data: { source: 'existing', postId: post.id },
+      data: { title: 'Source Instagram Post', source: 'existing', postId: post.id },
     },
     {
       id: 'extract-json',
       type: 'jsonTransformer',
       position: { x: 460, y: 320 },
       data: {
+        title: 'Extract Caption + Metrics',
         template: JSON.stringify({
           caption: '{{input.post.caption}}',
           mediaPaths: '{{input.post.mediaPaths}}',
@@ -172,13 +173,20 @@ const graph = {
       id: 'save-media',
       type: 'imageVideo',
       position: { x: 860, y: 140 },
-      data: { source: 'upstream' },
+      data: { title: 'Save Post Media', source: 'upstream' },
+    },
+    {
+      id: 'original-copy',
+      type: 'originalCopy',
+      position: { x: 860, y: 520 },
+      data: { title: 'Original Post Copy' },
     },
     {
       id: 'ai-analyze',
       type: 'aiAgentConversation',
       position: { x: 1240, y: 320 },
       data: {
+        title: 'Analyze Original Post',
         profileId: 'claude-research',
         reasoning: 'medium',
         titleTemplate: 'Pipeline · Analyze',
@@ -189,13 +197,14 @@ const graph = {
       id: 'md-analysis',
       type: 'markdownDisplay',
       position: { x: 1620, y: 320 },
-      data: {},
+      data: { title: 'Analysis Brief' },
     },
     {
       id: 'ai-improve',
       type: 'aiAgentConversation',
       position: { x: 2000, y: 320 },
       data: {
+        title: 'Improve Post Copy',
         profileId: 'claude-research',
         reasoning: 'medium',
         titleTemplate: 'Pipeline · Improve',
@@ -206,13 +215,20 @@ const graph = {
       id: 'md-improved',
       type: 'markdownDisplay',
       position: { x: 2380, y: 320 },
-      data: {},
+      data: { title: 'Improved Draft' },
+    },
+    {
+      id: 'md-final-improved',
+      type: 'markdownDisplay',
+      position: { x: 2760, y: 140 },
+      data: { title: 'Final Improved Content' },
     },
     {
       id: 'ai-review',
       type: 'aiAgentConversation',
       position: { x: 2760, y: 320 },
       data: {
+        title: 'Review Improved Copy',
         profileId: 'claude-research',
         reasoning: 'medium',
         titleTemplate: 'Pipeline · Review',
@@ -233,23 +249,24 @@ const graph = {
       id: 'md-final',
       type: 'markdownDisplay',
       position: { x: 3560, y: 180 },
-      data: {},
+      data: { title: 'Approved Final Copy' },
     },
     {
       id: 'lesson-approved',
       type: 'lessonWriter',
       position: { x: 3560, y: 440 },
-      data: { profileId: 'claude-research', reasoning: 'medium', lessonType: 'lesson' },
+      data: { title: 'Save Winning Lesson', profileId: 'claude-research', reasoning: 'medium', lessonType: 'lesson' },
     },
     {
       id: 'lesson-rejected',
       type: 'lessonWriter',
       position: { x: 3140, y: 620 },
-      data: { profileId: 'claude-research', reasoning: 'medium', lessonType: 'mistake' },
+      data: { title: 'Save Rejection Lesson', profileId: 'claude-research', reasoning: 'medium', lessonType: 'mistake' },
     },
   ],
   edges: [
     { id: 'e-ig-extract',        source: 'instagram-post', target: 'extract-json' },
+    { id: 'e-ig-original',       source: 'instagram-post', target: 'original-copy' },
     { id: 'e-extract-media',     source: 'extract-json',   target: 'save-media' },
     { id: 'e-extract-analyze',   source: 'extract-json',   target: 'ai-analyze' },
     { id: 'e-media-analyze',     source: 'save-media',     target: 'ai-analyze' },
@@ -258,7 +275,9 @@ const graph = {
     { id: 'e-extract-improve',   source: 'extract-json',   target: 'ai-improve' },
     { id: 'e-improve-md',        source: 'ai-improve',     target: 'md-improved' },
     { id: 'e-md-review',         source: 'md-improved',    target: 'ai-review' },
+    { id: 'e-md-final-improved', source: 'md-improved',    target: 'md-final-improved' },
     { id: 'e-analysis-review',   source: 'md-analysis',    target: 'ai-review' },
+    { id: 'e-final-improved-approval', source: 'md-final-improved', target: 'human-approval' },
     { id: 'e-review-approval',   source: 'ai-review',      target: 'human-approval' },
     // approved → publish + capture "what good looks like"
     { id: 'e-approve-final',     source: 'human-approval', target: 'md-final',         sourceHandle: 'approved' },
@@ -272,8 +291,7 @@ const graph = {
 const NAME = 'Real: IG content pipeline (analyze → improve → review)'
 const DESCRIPTION =
   'Real captured Instagram post → JSON Transformer → save media, then three ISOLATED AI agents: ' +
-  'Analyze (topic/target/pain/hook/weaknesses) → Improve (rewrite; instructed to use anubis-core ' +
-  'similarity/knowledge/lessons — prompt-only until the retrieval node is wired) → Review (validation + verdict) ' +
+  'Analyze (topic/target/pain/hook/weaknesses) → Improve (rewrite) → Review (validation + verdict) ' +
   '→ Human Review. Approved → Markdown + a "what worked" lesson; rejected → a "what to avoid" lesson that loops ' +
   'back into Improve (bounded to 3 iterations). Each markdown checkpoint is shown between agents.'
 
@@ -283,14 +301,11 @@ if (removed.changes > 0) console.log(`[seed] Replaced ${removed.changes} prior c
 const id = randomUUID()
 const now = Date.now()
 const graphJson = JSON.stringify(graph)
-// workspace_id MUST be set — the Workflows page is workspace-scoped, so a NULL
-// workspace_id row is invisible in the app. Default to the well-known brand.
-const WORKSPACE_ID = process.env.ANUBIS_WORKSPACE_ID || 'default-workspace'
 db.prepare(
   `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
-                          draft_updated_at, published_at, created_at, updated_at, workspace_id)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-).run(id, NAME, DESCRIPTION, graphJson, graphJson, now, now, now, now, WORKSPACE_ID)
+                          draft_updated_at, published_at, created_at, updated_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+).run(id, NAME, DESCRIPTION, graphJson, graphJson, now, now, now, now)
 
 db.close()
 

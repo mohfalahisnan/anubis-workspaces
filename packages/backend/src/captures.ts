@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
+  calculateAvgLikesSummary,
   captureInstagramData,
   silentReporter,
   type PostData,
@@ -11,6 +12,14 @@ import {
 import type { CapturedPost } from '@anubis/conversation'
 import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
+
+type PostOwner = {
+  handle?: string
+  tint?: string
+  followers?: number
+  avgLikes?: number
+  level?: 'black' | 'green' | 'yellow' | 'red'
+}
 
 /* -----------------------------------------------------------
    Capture orchestration
@@ -30,6 +39,8 @@ const CaptureBody = z.object({
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
   maxResponses: z.number().int().positive().max(120).optional(),
+  targetPosts: z.number().int().positive().max(120).optional(),
+  preview: z.boolean().optional(),
   timeoutMs: z.number().int().positive().max(180_000).optional(),
 }).strict()
 
@@ -44,6 +55,7 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const usernameNoAt = competitor.handle.replace(/^@/, '')
   const selectedProfile = body.profile ?? 'public'
   const cfg = stack.appConfig.get()
+  const targetPosts = body.targetPosts ?? body.maxResponses ?? 30
 
   let result: StandardCrawlerOutput
   try {
@@ -53,7 +65,7 @@ captureRoutes.post('/competitors/:id', async (c) => {
       chromePath: cfg.chromePath,
       headless: body.headless,
       forceHeadless: body.forceHeadless,
-      maxResponses: body.maxResponses ?? 30,
+      maxResponses: targetPosts,
       timeoutMs: body.timeoutMs ?? 90_000,
       reporter: silentReporter(),
     }, selectedProfile, cfg, getDataDir()))
@@ -86,10 +98,10 @@ captureRoutes.post('/competitors/:id', async (c) => {
 
   // Persist posts
   const now = Date.now()
-  const posts: CapturedPost[] = result.output.posts
+  const posts: CapturedPost[] = uniqueCapturedPosts(result.output.posts
     .filter((p) => Boolean(p.postUrl))
-    .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now))
-  stack.capturedPosts.upsertMany(posts)
+    .slice(0, targetPosts)
+    .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now)))
 
   const profileEntry =
     result.output.profiles.find((p) => p.username === usernameNoAt) ??
@@ -97,13 +109,26 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const avgLikesEntry =
     result.meta.avgLikes?.perProfile.find((entry) => entry.username === usernameNoAt) ??
     result.meta.avgLikes?.perProfile[0]
+  const avgLikesSummary =
+    avgLikesEntry ?? calculateAvgLikesSummary(usernameNoAt, posts.map(capturedPostToPostData))
 
+  if (body.preview) {
+    return c.json({
+      ok: true,
+      competitor,
+      posts: posts.map((post) => enrichPostForOwner(post, competitor)),
+      candidateCount: posts.length,
+      warnings: result.meta.warnings,
+    })
+  }
+
+  stack.capturedPosts.upsertMany(posts)
   const totalPostsInDb = stack.capturedPosts.countForCompetitor(competitor.id)
   stack.competitors.update(competitor.id, {
     displayName: deriveDisplayName(competitor.displayName, profileEntry),
     bio: deriveBio(competitor.bio, profileEntry),
     followers: profileEntry?.followers,
-    avgLikes: avgLikesEntry?.avgLikes ?? profileEntry?.avgLikes,
+    avgLikes: avgLikesSummary?.avgLikes ?? profileEntry?.avgLikes,
     postCount: totalPostsInDb,
   })
   stack.competitors.markRefreshedAt(competitor.id, now)
@@ -121,7 +146,6 @@ const ListQuery = z.object({
   competitorId: z.string().optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
   orderBy: z.enum(['recent', 'engagement']).optional(),
-  workspaceId: z.string().optional(),
 }).strict()
 
 const UpdatePostBody = z.object({
@@ -132,6 +156,24 @@ const UpdatePostBody = z.object({
   mediaKind: z.enum(['image', 'video', 'carousel']).optional(),
   mediaUrl: z.string().optional(),
   carouselCount: z.number().int().nonnegative().optional(),
+}).strict()
+
+const ImportPostsBody = z.object({
+  posts: z.array(z.object({
+    id: z.string().min(1).optional(),
+    competitorId: z.string().min(1),
+    username: z.string().min(1),
+    postUrl: z.string().min(1),
+    caption: z.string().optional(),
+    likes: z.number().int().nonnegative().optional(),
+    comments: z.number().int().nonnegative().optional(),
+    postedAt: z.string().optional(),
+    mediaKind: z.enum(['image', 'video', 'carousel']).optional(),
+    mediaUrl: z.string().optional(),
+    carouselCount: z.number().int().nonnegative().optional(),
+    capturedAt: z.number().int().positive().optional(),
+    raw: z.record(z.string(), z.unknown()).optional(),
+  })).max(500),
 }).strict()
 
 export const postRoutes = new Hono()
@@ -152,7 +194,6 @@ postRoutes.get('/', (c) => {
     competitorId: opts.competitorId,
     limit: opts.limit ?? 60,
     orderBy: opts.orderBy ?? 'recent',
-    workspaceId: opts.workspaceId,
   })
 
   const competitorsById = new Map(stack.competitors.list().map((c) => [c.id, c]))
@@ -168,6 +209,38 @@ postRoutes.get('/', (c) => {
     }
   })
   return c.json({ ok: true, items })
+})
+
+postRoutes.post('/import', async (c) => {
+  const stack = getStack()
+  const body = ImportPostsBody.parse(await c.req.json())
+  const now = Date.now()
+  const posts: CapturedPost[] = uniqueCapturedPosts(body.posts.map((post) => {
+    const owner = stack.competitors.get(post.competitorId)
+    if (!owner) throw new Error(`Competitor not found: ${post.competitorId}`)
+    return {
+      id: post.id ?? randomUUID(),
+      competitorId: post.competitorId,
+      username: post.username,
+      postUrl: post.postUrl,
+      caption: post.caption,
+      likes: post.likes,
+      comments: post.comments,
+      postedAt: post.postedAt,
+      mediaKind: post.mediaKind,
+      mediaUrl: post.mediaUrl,
+      carouselCount: post.carouselCount,
+      capturedAt: post.capturedAt ?? now,
+      raw: post.raw,
+    }
+  }))
+
+  const result = stack.capturedPosts.upsertMany(posts)
+  for (const competitorId of new Set(posts.map((post) => post.competitorId))) {
+    refreshCompetitorPostStats(competitorId)
+  }
+
+  return c.json({ ok: true, importedCount: result.inserted })
 })
 
 postRoutes.patch('/:id', async (c) => {
@@ -214,6 +287,69 @@ function postDataToCapturedPost(
   }
 }
 
+function capturedPostToPostData(post: CapturedPost): PostData {
+  return {
+    platform: 'instagram',
+    postUrl: post.postUrl,
+    username: post.username,
+    likes: post.likes,
+    comments: post.comments,
+    timestamp: post.postedAt,
+    caption: post.caption,
+    media: post.mediaKind
+      ? {
+          kind: post.mediaKind,
+          urls: post.mediaUrl ? [post.mediaUrl] : [],
+        }
+      : undefined,
+    sourceProfileUrl: post.username ? `https://www.instagram.com/${post.username.replace(/^@/, '')}/` : undefined,
+  }
+}
+
+function normalisePostUrl(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return trimmed
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.search = ''
+    url.hostname = url.hostname.toLowerCase()
+    url.pathname = url.pathname.replace(/\/+$/, '')
+    return url.toString()
+  } catch {
+    return trimmed.replace(/[?#].*$/, '').replace(/\/+$/, '')
+  }
+}
+
+function uniqueCapturedPosts(posts: CapturedPost[]): CapturedPost[] {
+  const unique = new Map<string, CapturedPost>()
+  for (const post of posts) {
+    const key = `${post.competitorId}\u0000${normalisePostUrl(post.postUrl)}`
+    unique.set(key, { ...post, postUrl: normalisePostUrl(post.postUrl) })
+  }
+  return [...unique.values()]
+}
+
+function refreshCompetitorPostStats(competitorId: string) {
+  const stack = getStack()
+  const competitor = stack.competitors.get(competitorId)
+  if (!competitor) return
+
+  const posts = stack.capturedPosts.list({
+    competitorId,
+    limit: 500,
+    orderBy: 'recent',
+  })
+  const avgLikesSummary = calculateAvgLikesSummary(
+    competitor.handle.replace(/^@/, ''),
+    posts.map(capturedPostToPostData),
+  )
+  stack.competitors.update(competitorId, {
+    postCount: posts.length,
+    ...(avgLikesSummary ? { avgLikes: avgLikesSummary.avgLikes } : {}),
+  })
+}
+
 function deriveDisplayName(
   existing: string | undefined,
   profile: ProfileData | undefined,
@@ -230,6 +366,13 @@ function deriveBio(
 
 function enrichPost(post: CapturedPost) {
   const owner = getStack().competitors.get(post.competitorId)
+  return owner ? enrichPostForOwner(post, owner) : post
+}
+
+function enrichPostForOwner(
+  post: CapturedPost,
+  owner: PostOwner,
+) {
   return {
     ...post,
     competitorHandle: owner?.handle,

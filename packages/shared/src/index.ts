@@ -58,6 +58,11 @@ export interface ConversationExtra {
   skills: string[]
   overrides?: Record<string, unknown>
   archived?: boolean
+  source?: 'workflow'
+  workflow?: {
+    runId: string
+    nodeId: string
+  }
 }
 
 export interface ConversationSummary {
@@ -145,7 +150,6 @@ export interface CreateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
-  workspaceId?: string
 }
 
 export interface UpdateCompetitorInput {
@@ -384,29 +388,6 @@ export type MessageListResponse = ListResponse<MessageSummary>
 export type CompetitorListResponse = ListResponse<CompetitorSummary>
 export type WorkspaceListResponse = ListResponse<WorkspaceSummary>
 
-/* Brand workspace (content-memory) — distinct from the filesystem WorkspaceSummary above. */
-export interface BrandWorkspaceSummary {
-  id: string
-  name: string
-  brandSummary?: string | null
-  status: 'active' | 'archived'
-  createdAt: number
-  updatedAt: number
-}
-
-export type BrandWorkspaceListResponse = ListResponse<BrandWorkspaceSummary>
-
-export interface CreateBrandWorkspaceInput {
-  name: string
-  brandSummary?: string
-}
-
-export interface UpdateBrandWorkspaceInput {
-  name?: string
-  brandSummary?: string | null
-  status?: 'active' | 'archived'
-}
-
 export interface CapturedPostSummary {
   id: string
   competitorId: string
@@ -435,69 +416,37 @@ export interface CapturedPostSummary {
 
 export type CapturedPostListResponse = ListResponse<CapturedPostSummary>
 
-/* Content-memory: experience memories + agent-run log (read views). */
-
-export interface ExperienceMemorySummary {
-  id: string
-  scope: 'global' | 'workspace' | 'platform' | 'campaign' | 'agent'
-  workspaceId: string | null
-  platform: string | null
-  campaignId: string | null
-  agentId: string | null
-  type:
-    | 'mistake' | 'correction' | 'workflow_rule'
-    | 'validation_rule' | 'preference' | 'anti_pattern' | 'lesson'
-  title: string
-  problem: string
-  cause: string | null
-  correction: string
-  triggerPattern: string | null
-  preventionRule: string | null
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  status: 'candidate' | 'active' | 'reinforced' | 'deprecated' | 'rejected'
-  usageCount: number
-  successCount: number
-  failureCount: number
-  confidence: number
-  sourceRunId: string | null
-  sourceDocumentId: string | null
-  createdAt: number
-  updatedAt: number
-}
-
-export type ExperienceMemoryListResponse = ListResponse<ExperienceMemorySummary>
-
-export interface AgentRunSummary {
-  id: string
-  workspaceId: string
-  platform: string | null
-  campaignId: string | null
-  agentId: string
-  workflowId: string | null
-  taskType: string
-  userInput: string
-  intent: string
-  retrievedChunkIds: string[]
-  retrievedDecisionIds: string[]
-  retrievedExperienceMemoryIds: string[]
-  retrievedSimilarityItemIds: string[]
-  contextPackId: string | null
-  plan: string | null
-  output: string
-  validationStatus: 'passed' | 'failed' | 'needs_review'
-  humanFeedback: string | null
-  errorType: string | null
-  errorSummary: string | null
-  createdAt: number
-}
-
-export type AgentRunListResponse = ListResponse<AgentRunSummary>
-
 export interface CaptureResultPayload {
   ok: true
   competitor: CompetitorSummary
   capturedCount: number
   warnings: string[]
+}
+
+export interface CapturePreviewPayload {
+  ok: true
+  competitor: CompetitorSummary
+  posts: CapturedPostSummary[]
+  candidateCount: number
+  warnings: string[]
+}
+
+export interface ImportCapturedPostsInput {
+  posts: Array<{
+    id?: string
+    competitorId: string
+    username: string
+    postUrl: string
+    caption?: string
+    likes?: number
+    comments?: number
+    postedAt?: string
+    mediaKind?: 'image' | 'video' | 'carousel'
+    mediaUrl?: string
+    carouselCount?: number
+    capturedAt?: number
+    raw?: Record<string, unknown>
+  }>
 }
 
 export interface ConversationCreateResponse {

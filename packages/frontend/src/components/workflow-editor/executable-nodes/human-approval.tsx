@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { workflowsApi } from '@/api/workflows'
 import { useEditorStore } from '../editor-store'
 import { useNodeRunStatus } from './_use-run-status'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface HumanApprovalNodeData { title?: string; instructions?: string; maxIterations?: number }
+export interface HumanApprovalNodeData extends TitledNodeData { instructions?: string; maxIterations?: number }
 
 export const HumanApprovalExecutableNode = memo(function HumanApprovalExecutableNode(
   { id, data }: { id: string; data: HumanApprovalNodeData },
@@ -30,7 +31,7 @@ export const HumanApprovalExecutableNode = memo(function HumanApprovalExecutable
   return (
     <NodeShell
       icon={ShieldCheck}
-      title={data.title ?? 'Human Review'}
+      title={nodeTitle(data, 'Human Review')}
       subtitle={data.instructions ?? 'Approve or reject the content'}
       accent={ACCENT_GRADIENTS.review}
       runStatus={status}

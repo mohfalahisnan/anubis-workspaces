@@ -21,7 +21,6 @@ type Decision = { decision: 'approved' | 'rejected'; notes?: string }
 interface ActiveRun {
   runId: string
   workflowId: string
-  workspaceId: string
   controller: AbortController
   listeners: Set<Listener>
   buffered: RunEvent[]
@@ -67,7 +66,7 @@ export class WorkflowRunManager {
     const listeners = new Set<Listener>()
     const buffered: RunEvent[] = []
     const active: ActiveRun = {
-      runId, workflowId, workspaceId: workflow.workspaceId ?? 'default-workspace',
+      runId, workflowId,
       controller, listeners, buffered, finished: false, pendingApprovals: new Map(),
     }
     this.active.set(runId, active)
@@ -234,6 +233,8 @@ export class WorkflowRunManager {
             profileId: string
             reasoning?: 'minimal' | 'low' | 'medium' | 'high'
             content: string
+            source?: 'workflow'
+            workflow?: { runId: string; nodeId: string }
           }) => {
             const override = input.reasoning ? { reasoningEffort: input.reasoning } : undefined
             return this.stack.conversation.createAndAwaitFirstTurn({
@@ -241,6 +242,8 @@ export class WorkflowRunManager {
               profileId: input.profileId,
               override,
               content: input.content,
+              source: input.source,
+              workflow: input.workflow,
               signal: active.controller.signal,
             })
           },
@@ -258,15 +261,6 @@ export class WorkflowRunManager {
               else active.controller.signal.addEventListener('abort', onAbort, { once: true })
             }),
         },
-        experience: {
-          recordCandidate: (input: {
-            type: 'mistake' | 'lesson'
-            title: string; problem: string; correction: string
-            preventionRule?: string | null; severity?: 'low' | 'medium' | 'high' | 'critical'
-            workspaceId?: string | null; platform?: string | null; sourceRunId?: string | null
-          }) => ({ id: this.stack.experience.recordCandidate(input as never).id }),
-        },
-        workspaceId: active.workspaceId,
         runId: active.runId,
         signal: active.controller.signal,
         emit: (e: NodeRunEvent) => { void wrappedEmit(e) },

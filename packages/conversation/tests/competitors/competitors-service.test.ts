@@ -22,9 +22,10 @@ describe('CompetitorsService', () => {
     expect(c.postCount).toBe(0)
   })
 
-  it('create rejects a duplicate handle (case sensitive)', () => {
+  it('create rejects a duplicate handle case-insensitively', () => {
     svc.create({ handle: '@kayla.studio' })
-    expect(() => svc.create({ handle: '@kayla.studio' })).toThrow(/already/i)
+    expect(() => svc.create({ handle: '@KAYLA.STUDIO' })).toThrow(/already/i)
+    expect(svc.list().map((c) => c.handle)).toEqual(['@kayla.studio'])
   })
 
   it('list returns most-recently-added first', () => {

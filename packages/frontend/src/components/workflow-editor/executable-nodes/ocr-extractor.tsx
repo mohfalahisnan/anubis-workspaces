@@ -5,8 +5,9 @@ import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface OcrExtractorNodeData { imagePath?: string }
+export interface OcrExtractorNodeData extends TitledNodeData { imagePath?: string }
 
 export const OcrExtractorExecutableNode = memo(function OcrExtractorExecutableNode({ id, data }: { id: string; data: OcrExtractorNodeData }) {
   const runStatus = useNodeRunStatus(id)
@@ -14,7 +15,7 @@ export const OcrExtractorExecutableNode = memo(function OcrExtractorExecutableNo
   return (
     <NodeShell
       icon={Search}
-      title='OCR Extractor'
+      title={nodeTitle(data, 'OCR Extractor')}
       subtitle={data.imagePath ?? 'Falls back to upstream file path'}
       accent={ACCENT_GRADIENTS.data}
       runStatus={runStatus}

@@ -14,7 +14,6 @@ export interface Competitor {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
-  workspaceId?: string
   addedAt: number
   updatedAt: number
   deletedAt?: number
@@ -33,7 +32,6 @@ interface Row {
   notes: string | null
   bio: string | null
   level: string | null
-  workspace_id: string | null
   added_at: number
   updated_at: number
   deleted_at: number | null
@@ -53,7 +51,6 @@ function toCompetitor(r: Row): Competitor {
     notes: r.notes ?? undefined,
     bio: r.bio ?? undefined,
     level: (r.level as CompetitorLevelOverride | null) ?? undefined,
-    workspaceId: r.workspace_id ?? undefined,
     addedAt: r.added_at,
     updatedAt: r.updated_at,
     deletedAt: r.deleted_at ?? undefined,
@@ -67,11 +64,11 @@ export class CompetitorsRepo {
     this.db.prepare(`
       INSERT INTO competitors (
         id, handle, display_name, niche, tint, followers, avg_likes,
-        post_count, last_refreshed_at, notes, bio, level, workspace_id,
+        post_count, last_refreshed_at, notes, bio, level,
         added_at, updated_at, deleted_at
       ) VALUES (
         @id, @handle, @displayName, @niche, @tint, @followers, @avgLikes,
-        @postCount, @lastRefreshedAt, @notes, @bio, @level, @workspaceId,
+        @postCount, @lastRefreshedAt, @notes, @bio, @level,
         @addedAt, @updatedAt, @deletedAt
       )
     `).run({
@@ -87,7 +84,6 @@ export class CompetitorsRepo {
       notes: c.notes ?? null,
       bio: c.bio ?? null,
       level: c.level ?? null,
-      workspaceId: c.workspaceId ?? 'default-workspace',
       addedAt: c.addedAt,
       updatedAt: c.updatedAt,
       deletedAt: c.deletedAt ?? null,
@@ -103,21 +99,15 @@ export class CompetitorsRepo {
 
   findByHandle(handle: string): Competitor | null {
     const r = this.db
-      .prepare('SELECT * FROM competitors WHERE handle = ? AND deleted_at IS NULL')
+      .prepare('SELECT * FROM competitors WHERE lower(handle) = lower(?) AND deleted_at IS NULL')
       .get(handle) as Row | undefined
     return r ? toCompetitor(r) : null
   }
 
-  list(workspaceId?: string): Competitor[] {
-    const rows = workspaceId
-      ? (this.db
-          .prepare(
-            'SELECT * FROM competitors WHERE deleted_at IS NULL AND workspace_id = ? ORDER BY added_at DESC',
-          )
-          .all(workspaceId) as Row[])
-      : (this.db
-          .prepare('SELECT * FROM competitors WHERE deleted_at IS NULL ORDER BY added_at DESC')
-          .all() as Row[])
+  list(): Competitor[] {
+    const rows = this.db
+      .prepare('SELECT * FROM competitors WHERE deleted_at IS NULL ORDER BY added_at DESC')
+      .all() as Row[]
     return rows.map(toCompetitor)
   }
 

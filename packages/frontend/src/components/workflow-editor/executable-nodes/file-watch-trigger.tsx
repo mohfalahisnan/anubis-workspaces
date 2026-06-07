@@ -4,8 +4,9 @@ import { NodeShell, StatusBadge } from '@/components/workflow'
 import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface FileWatchTriggerNodeData {
+export interface FileWatchTriggerNodeData extends TitledNodeData {
   path?: string
   watchKind?: 'file' | 'folder'
   glob?: string
@@ -19,7 +20,7 @@ export const FileWatchTriggerExecutableNode = memo(function FileWatchTriggerExec
   return (
     <NodeShell
       icon={FolderSearch}
-      title='File watcher'
+      title={nodeTitle(data, 'File watcher')}
       subtitle={data.path ?? 'No path set'}
       accent={ACCENT_GRADIENTS.data}
       handles='out'

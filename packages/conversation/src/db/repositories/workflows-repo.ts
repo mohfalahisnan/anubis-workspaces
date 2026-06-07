@@ -12,7 +12,6 @@ export interface WorkflowRow {
   published_at: number | null
   created_at: number
   updated_at: number
-  workspace_id: string | null
 }
 
 export interface Workflow {
@@ -25,7 +24,6 @@ export interface Workflow {
   publishedAt?: number
   createdAt: number
   updatedAt: number
-  workspaceId?: string
 }
 
 function toWorkflow(r: WorkflowRow): Workflow {
@@ -39,7 +37,6 @@ function toWorkflow(r: WorkflowRow): Workflow {
     publishedAt: r.published_at ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
-    workspaceId: r.workspace_id ?? undefined,
   }
 }
 
@@ -48,25 +45,22 @@ const EMPTY_GRAPH = JSON.stringify({ nodes: [], edges: [] })
 export class WorkflowsRepo {
   constructor(private db: Db) {}
 
-  create(input: { id: string; name: string; description?: string; now: number; workspaceId?: string }): Workflow {
+  create(input: { id: string; name: string; description?: string; now: number }): Workflow {
     this.db
       .prepare(
         `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
-          draft_updated_at, published_at, created_at, updated_at, workspace_id)
-         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?)`,
+          draft_updated_at, published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
       )
       .run(
         input.id, input.name, input.description ?? null, EMPTY_GRAPH,
-        input.now, input.now, input.now, input.workspaceId ?? 'default-workspace',
+        input.now, input.now, input.now,
       )
     return this.getOrThrow(input.id)
   }
 
-  list(workspaceId?: string): Workflow[] {
-    const rows = workspaceId
-      ? (this.db.prepare(`SELECT * FROM workflows WHERE workspace_id = ? ORDER BY updated_at DESC`)
-          .all(workspaceId) as WorkflowRow[])
-      : (this.db.prepare(`SELECT * FROM workflows ORDER BY updated_at DESC`).all() as WorkflowRow[])
+  list(): Workflow[] {
+    const rows = this.db.prepare(`SELECT * FROM workflows ORDER BY updated_at DESC`).all() as WorkflowRow[]
     return rows.map(toWorkflow)
   }
 
@@ -123,11 +117,11 @@ export class WorkflowsRepo {
     const now = nowMs()
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO workflows (id, name, description, draft_graph, published_graph,
-        draft_updated_at, published_at, created_at, updated_at, workspace_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        draft_updated_at, published_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     for (const w of BUILTIN_WORKFLOWS) {
-      stmt.run(w.id, w.name, w.description, w.graph, w.graph, now, now, now, now, w.workspaceId)
+      stmt.run(w.id, w.name, w.description, w.graph, w.graph, now, now, now, now)
     }
   }
 }

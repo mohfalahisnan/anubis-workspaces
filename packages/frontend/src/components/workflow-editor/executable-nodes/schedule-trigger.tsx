@@ -4,8 +4,9 @@ import { NodeShell, StatusBadge } from '@/components/workflow'
 import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface ScheduleTriggerNodeData {
+export interface ScheduleTriggerNodeData extends TitledNodeData {
   everyValue?: number
   everyUnit?: 'minute' | 'hour'
   cron?: string
@@ -21,7 +22,7 @@ export const ScheduleTriggerExecutableNode = memo(function ScheduleTriggerExecut
   return (
     <NodeShell
       icon={Clock}
-      title='Schedule'
+      title={nodeTitle(data, 'Schedule')}
       subtitle={subtitle}
       accent={ACCENT_GRADIENTS.warning}
       handles='out'

@@ -68,22 +68,14 @@ export interface ExecutorContext {
       profileId: string
       reasoning?: 'minimal' | 'low' | 'medium' | 'high'
       content: string
+      source?: 'workflow'
+      workflow?: { runId: string; nodeId: string }
     }): Promise<{ conversationId: string; messageId: string; text: string }>
     cancel(conversationId: string): Promise<void>
   }
   approvals: {
     waitFor(nodeId: string, opts: { title?: string; instructions?: string; upstream: unknown }): Promise<{ decision: 'approved' | 'rejected'; notes?: string }>
   }
-  experience: {
-    recordCandidate(input: {
-      type: 'mistake' | 'lesson'
-      title: string; problem: string; correction: string
-      preventionRule?: string | null; severity?: 'low' | 'medium' | 'high' | 'critical'
-      workspaceId?: string | null; platform?: string | null; sourceRunId?: string | null
-    }): { id: string }
-  }
-  /** The run's brand workspace (default 'default-workspace'). */
-  workspaceId: string
   runId:   string
   signal:  AbortSignal
   emit:    (event: NodeRunEvent) => void

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useActiveWorkspace } from '@/lib/workspace'
 import {
   ArrowDownToLineIcon,
   ChevronDownIcon,
@@ -52,6 +51,8 @@ export interface CaptureRunOptions {
   headless: boolean
   /** Required only when profile=login and headless=true. */
   forceHeadless: boolean
+  /** Maximum candidate posts to fetch per selected profile before review. */
+  targetPostsPerProfile: number
 }
 
 export function CaptureSelectionDialog({
@@ -70,6 +71,7 @@ export function CaptureSelectionDialog({
   // Toggle to 'login' if you want authenticated captures.
   const [runMode, setRunMode] = useState<RunMode>('public')
   const [headless, setHeadless] = useState(true)
+  const [targetPostsPerProfile, setTargetPostsPerProfile] = useState(12)
 
   useEffect(() => {
     if (!open) return
@@ -79,15 +81,17 @@ export function CaptureSelectionDialog({
     setError(null)
     setRunMode('public')
     setHeadless(true)
+    setTargetPostsPerProfile(12)
     listCompetitors()
       .then((rows) => {
         if (!active) return
-        setItems(rows)
+        const uniqueRows = dedupeCompetitors(rows)
+        setItems(uniqueRows)
         // Default selection: previously-refreshed competitors only,
         // so the most common use ("update what I've already pulled")
         // is one click after opening.
         const seed = new Set<string>()
-        for (const row of rows) {
+        for (const row of uniqueRows) {
           if (row.lastRefreshedAt) seed.add(row.id)
         }
         setSelected(seed)
@@ -211,17 +215,39 @@ export function CaptureSelectionDialog({
         </div>
 
         <div className='border-t border-border px-6 py-4'>
-          <RunOptionsPanel
-            profile={runMode}
-            headless={headless}
-            onProfileChange={(p) => {
-              setRunMode(p)
-              // Sensible default: login → window opens; public → headless.
-              setHeadless(p === 'public')
-            }}
-            onHeadlessChange={setHeadless}
-            allowProfilePick
-          />
+          <div className='flex flex-col gap-4'>
+            <Field
+              label='Target posts per profile'
+              htmlFor='capture-target-posts'
+              hint='Candidates are shown for review before anything is saved.'
+            >
+              <input
+                id='capture-target-posts'
+                type='number'
+                min={1}
+                max={120}
+                value={targetPostsPerProfile}
+                onChange={(e) => {
+                  const n = Number(e.target.value)
+                  setTargetPostsPerProfile(
+                    Number.isFinite(n) ? Math.min(120, Math.max(1, Math.floor(n))) : 12,
+                  )
+                }}
+                className={textInput}
+              />
+            </Field>
+            <RunOptionsPanel
+              profile={runMode}
+              headless={headless}
+              onProfileChange={(p) => {
+                setRunMode(p)
+                // Sensible default: login -> window opens; public -> headless.
+                setHeadless(p === 'public')
+              }}
+              onHeadlessChange={setHeadless}
+              allowProfilePick
+            />
+          </div>
         </div>
 
         <DialogFooter className='border-t border-border px-6 py-3'>
@@ -242,6 +268,7 @@ export function CaptureSelectionDialog({
                 profile: runMode,
                 headless,
                 forceHeadless: runMode === 'login' && headless,
+                targetPostsPerProfile,
               })
             }}
             className={cn(
@@ -285,6 +312,15 @@ interface DiscoveryFormState {
   headless: boolean
 }
 
+type FollowersFilter = 'all' | 'under50k' | '50kPlus' | '100kPlus'
+
+const FOLLOWER_FILTERS: { value: FollowersFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'under50k', label: '<50K' },
+  { value: '50kPlus', label: '50K+' },
+  { value: '100kPlus', label: '100K+' },
+]
+
 const DEFAULT_FORM: DiscoveryFormState = {
   source: 'explore',
   hashtag: '',
@@ -309,9 +345,10 @@ export function FindCompetitorsDialog({
   const [stage, setStage] = useState<'form' | 'running' | 'results'>('form')
   const [candidates, setCandidates] = useState<DiscoveredCandidate[]>([])
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [candidateQuery, setCandidateQuery] = useState('')
+  const [followersFilter, setFollowersFilter] = useState<FollowersFilter>('all')
   const [error, setError] = useState<string | null>(null)
   const [addingErrors, setAddingErrors] = useState<string[]>([])
-  const { activeWorkspaceId } = useActiveWorkspace()
 
   useEffect(() => {
     if (!open) {
@@ -319,6 +356,8 @@ export function FindCompetitorsDialog({
       setStage('form')
       setCandidates([])
       setSelected(new Set())
+      setCandidateQuery('')
+      setFollowersFilter('all')
       setError(null)
       setAddingErrors([])
     }
@@ -350,13 +389,22 @@ export function FindCompetitorsDialog({
       if (form.source === 'hashtag') input.hashtag = form.hashtag.trim().replace(/^#/, '')
       if (form.source === 'keyword') input.keyword = form.keyword.trim()
       const found = await discoverCompetitors(input)
+      const tracked = new Set(
+        (await listCompetitors()).map((competitor) => usernameKey(competitor.handle)),
+      )
       // Dedupe by username (the crawler sometimes returns the same
       // handle twice when it surfaces them through different paths).
       const uniq = new Map<string, DiscoveredCandidate>()
-      for (const candidate of found) uniq.set(candidate.username, candidate)
+      for (const candidate of found) {
+        const key = usernameKey(candidate.username)
+        if (!key || tracked.has(key)) continue
+        uniq.set(key, { ...candidate, username: key })
+      }
       const list = [...uniq.values()]
       setCandidates(list)
       setSelected(new Set(list.map((c) => c.username)))
+      setCandidateQuery('')
+      setFollowersFilter('all')
       setStage('results')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Discovery failed.')
@@ -373,7 +421,8 @@ export function FindCompetitorsDialog({
         await createCompetitor({
           handle: candidate.username,
           displayName: candidate.fullName?.trim() || undefined,
-          workspaceId: activeWorkspaceId,
+          followers: candidate.followers,
+          bio: candidate.bio?.trim() || undefined,
         })
         added++
       } catch (e) {
@@ -401,17 +450,43 @@ export function FindCompetitorsDialog({
     })
   }
 
-  function selectAll() {
-    setSelected(new Set(candidates.map((c) => c.username)))
-  }
-
   function deselectAll() {
     setSelected(new Set())
   }
 
+  function selectVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const candidate of visibleCandidates) next.add(candidate.username)
+      return next
+    })
+  }
+
+  function clearVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const candidate of visibleCandidates) next.delete(candidate.username)
+      return next
+    })
+  }
+
+  const visibleCandidates = candidates.filter((candidate) =>
+    matchesCandidateFilters(candidate, candidateQuery, followersFilter),
+  )
+  const visibleSelectedCount = visibleCandidates.filter((candidate) => selected.has(candidate.username)).length
+  const allVisibleSelected =
+    visibleCandidates.length > 0 && visibleCandidates.every((candidate) => selected.has(candidate.username))
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className='max-w-lg bg-card p-0'>
+      <DialogContent
+        className={cn(
+          'bg-card p-0',
+          stage === 'results'
+            ? 'max-h-[92vh] overflow-hidden sm:max-w-3xl'
+            : 'max-w-lg',
+        )}
+      >
         <DialogHeader className='border-b border-border px-6 py-4'>
           <DialogTitle>
             {stage === 'results' ? 'Pick competitors to track' : 'Find competitors'}
@@ -546,82 +621,156 @@ export function FindCompetitorsDialog({
 
         {stage === 'results' && (
           <>
-            <div className='max-h-[min(50vh,360px)] overflow-y-auto px-2 py-2'>
+            <div className='grid gap-3 border-b border-border px-6 py-3'>
+              <div className='flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'>
+                <label className='flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-background px-3 text-muted-foreground lg:max-w-[360px]'>
+                  <SearchIcon className='size-[15px]' strokeWidth={2} />
+                  <input
+                    type='text'
+                    value={candidateQuery}
+                    onChange={(e) => setCandidateQuery(e.target.value)}
+                    placeholder='Filter handle, name, bio...'
+                    className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground'
+                  />
+                </label>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='text-[12px] text-muted-foreground'>Followers</span>
+                  {FOLLOWER_FILTERS.map((filter) => (
+                    <button
+                      key={filter.value}
+                      type='button'
+                      onClick={() => setFollowersFilter(filter.value)}
+                      className={cn(
+                        'inline-flex h-8 items-center rounded-md border px-3 text-[12.5px] font-medium transition-colors',
+                        followersFilter === filter.value
+                          ? 'border-[color-mix(in_oklab,var(--anubis-gold)_58%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_12%,transparent)] text-foreground'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                <span className='font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground'>
+                  {visibleCandidates.length} showing · {visibleSelectedCount} visible selected · {selected.size} of {candidates.length} total selected
+                </span>
+                <div className='flex items-center gap-2 text-[12px]'>
+                  <button
+                    type='button'
+                    onClick={selectVisible}
+                    disabled={allVisibleSelected || visibleCandidates.length === 0}
+                    className='text-[var(--anubis-gold)] hover:underline disabled:opacity-45'
+                  >
+                    Select visible
+                  </button>
+                  <span className='text-muted-foreground'>·</span>
+                  <button
+                    type='button'
+                    onClick={clearVisible}
+                    disabled={visibleSelectedCount === 0}
+                    className='text-muted-foreground hover:text-foreground hover:underline disabled:opacity-45'
+                  >
+                    Clear visible
+                  </button>
+                  <span className='text-muted-foreground'>·</span>
+                  <button
+                    type='button'
+                    onClick={deselectAll}
+                    disabled={selected.size === 0}
+                    className='text-muted-foreground hover:text-foreground hover:underline disabled:opacity-45'
+                  >
+                    Clear all
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className='max-h-[min(58vh,560px)] overflow-auto px-3 py-3'>
               {candidates.length === 0 ? (
                 <p className='m-4 text-[13px] text-muted-foreground'>
                   Nothing came back. Try a different source or hashtag.
                 </p>
+              ) : visibleCandidates.length === 0 ? (
+                <p className='m-4 text-center text-[13px] text-muted-foreground'>
+                  No candidate competitors match these filters.
+                </p>
               ) : (
-                <>
-                  <div className='flex items-center justify-between px-3 pb-1 pt-2'>
-                    <span className='font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground'>
-                      {selected.size} of {candidates.length} selected
-                    </span>
-                    <div className='flex items-center gap-2 text-[12px]'>
-                      <button
-                        type='button'
-                        onClick={selectAll}
-                        className='text-[var(--anubis-gold)] hover:underline'
-                      >
-                        Select all
-                      </button>
-                      <span className='text-muted-foreground'>·</span>
-                      <button
-                        type='button'
-                        onClick={deselectAll}
-                        className='text-muted-foreground hover:text-foreground hover:underline'
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                  <ul className='py-1'>
-                    {candidates.map((candidate) => (
-                      <li key={candidate.username}>
-                        <button
-                          type='button'
-                          onClick={() => toggle(candidate.username)}
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors',
-                            selected.has(candidate.username)
-                              ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_10%,transparent)]'
-                              : 'hover:bg-muted',
-                          )}
-                        >
-                          <Checkbox checked={selected.has(candidate.username)} />
-                          <span
-                            aria-hidden
-                            className='flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground'
+                <div className='min-w-[720px] overflow-hidden rounded-md border border-border bg-background'>
+                  <table className='w-full border-collapse text-left text-[12.5px]'>
+                    <thead className='sticky top-0 z-[1] bg-card text-[11px] uppercase tracking-[0.08em] text-muted-foreground'>
+                      <tr className='border-b border-border'>
+                        <th className='w-12 px-3 py-2.5 font-medium'>Add</th>
+                        <th className='w-[72px] px-2 py-2.5 font-medium'>Profile</th>
+                        <th className='w-[190px] px-3 py-2.5 font-medium'>Handle</th>
+                        <th className='w-[130px] px-3 py-2.5 text-right font-medium'>Followers</th>
+                        <th className='px-3 py-2.5 font-medium'>Bio</th>
+                      </tr>
+                    </thead>
+                    <tbody className='divide-y divide-border'>
+                      {visibleCandidates.map((candidate) => {
+                        const isSelected = selected.has(candidate.username)
+                        return (
+                          <tr
+                            key={candidate.username}
+                            onClick={() => toggle(candidate.username)}
+                            className={cn(
+                              'cursor-pointer transition-colors',
+                              isSelected
+                                ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]'
+                                : 'hover:bg-muted/70',
+                            )}
                           >
-                            <UserRoundIcon className='size-4' strokeWidth={1.5} />
-                          </span>
-                          <div className='min-w-0 flex-1'>
-                            <div className='flex items-center gap-2'>
-                              <span className='truncate font-mono text-[12.5px] text-foreground'>
-                                @{candidate.username}
+                            <td className='px-3 py-2 align-middle'>
+                              <label className='flex size-[22px] items-center justify-center'>
+                                <input
+                                  type='checkbox'
+                                  checked={isSelected}
+                                  onChange={() => toggle(candidate.username)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Select @${candidate.username}`}
+                                  className='peer sr-only'
+                                />
+                                <Checkbox checked={isSelected} />
+                              </label>
+                            </td>
+                            <td className='px-2 py-2 align-middle'>
+                              <span
+                                aria-hidden
+                                className='flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground'
+                              >
+                                <UserRoundIcon className='size-4' strokeWidth={1.5} />
                               </span>
-                              {candidate.followers !== undefined && (
-                                <span className='shrink-0 font-mono text-[10.5px] text-muted-foreground tabular-nums'>
-                                  {formatBigNumber(candidate.followers)} followers
-                                </span>
-                              )}
-                            </div>
-                            {candidate.fullName && (
-                              <div className='truncate text-[11.5px] text-foreground/80'>
-                                {candidate.fullName}
+                            </td>
+                            <td className='px-3 py-2 align-middle'>
+                              <div className='min-w-0'>
+                                <div className='truncate font-mono text-[12.5px] text-foreground'>
+                                  @{candidate.username}
+                                </div>
+                                {candidate.fullName && (
+                                  <div className='mt-1 truncate text-[11.5px] text-foreground/80'>
+                                    {candidate.fullName}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                            {candidate.bio && (
-                              <div className='line-clamp-1 text-[11.5px] text-muted-foreground'>
-                                {candidate.bio}
+                            </td>
+                            <td className='px-3 py-2 align-middle text-right font-mono text-[11.5px] tabular-nums text-muted-foreground'>
+                              {candidate.followers === undefined
+                                ? '—'
+                                : `${formatBigNumber(candidate.followers)} followers`}
+                            </td>
+                            <td className='px-3 py-2 align-middle'>
+                              <div className='line-clamp-2 max-w-[360px] text-[12.5px] leading-relaxed text-muted-foreground'>
+                                {candidate.bio || 'No bio captured'}
                               </div>
-                            )}
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
               {addingErrors.length > 0 && (
                 <div className='m-2 rounded-md border border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] px-3 py-2 text-[12px] text-destructive'>
@@ -670,6 +819,22 @@ export function FindCompetitorsDialog({
 }
 
 /* ---------- shared bits ---------- */
+
+function usernameKey(raw: string): string {
+  return raw.trim().replace(/^@/, '').toLowerCase()
+}
+
+function dedupeCompetitors(items: CompetitorSummary[]): CompetitorSummary[] {
+  const seen = new Set<string>()
+  const out: CompetitorSummary[] = []
+  for (const item of items) {
+    const key = usernameKey(item.handle)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out
+}
 
 /**
  * Run options block — exposes the two knobs the user actually
@@ -914,6 +1079,28 @@ function formatBigNumber(n: number | undefined): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return n.toLocaleString()
+}
+
+function matchesCandidateFilters(
+  candidate: DiscoveredCandidate,
+  query: string,
+  followersFilter: FollowersFilter,
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (q) {
+    const haystack = [
+      candidate.username,
+      candidate.fullName,
+      candidate.bio,
+    ].filter(Boolean).join(' ').toLowerCase()
+    if (!haystack.includes(q)) return false
+  }
+
+  const followers = candidate.followers
+  if (followersFilter === 'under50k') return followers !== undefined && followers < 50_000
+  if (followersFilter === '50kPlus') return followers !== undefined && followers >= 50_000
+  if (followersFilter === '100kPlus') return followers !== undefined && followers >= 100_000
+  return true
 }
 
 function relativeTime(ms: number): string {

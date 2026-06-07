@@ -6,6 +6,7 @@ import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 import { FileThumb } from '@/components/workflow/file-thumb'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
 interface FileOutput {
   kind: 'file'
@@ -14,7 +15,7 @@ interface FileOutput {
   sizeBytes?: number
 }
 
-export interface TransformerMediaNodeData { url?: string }
+export interface TransformerMediaNodeData extends TitledNodeData { url?: string }
 
 export const TransformerMediaExecutableNode = memo(function TransformerMediaExecutableNode({ id, data }: { id: string; data: TransformerMediaNodeData }) {
   const runStatus = useNodeRunStatus(id)
@@ -22,7 +23,7 @@ export const TransformerMediaExecutableNode = memo(function TransformerMediaExec
   return (
     <NodeShell
       icon={ImageIcon}
-      title='Transformer · Media'
+      title={nodeTitle(data, 'Transformer · Media')}
       subtitle={data.url ? `URL: ${data.url}` : 'Pulls upstream media URL'}
       accent={ACCENT_GRADIENTS.media}
       runStatus={runStatus}

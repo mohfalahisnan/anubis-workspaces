@@ -38,7 +38,9 @@ conversationRoutes.get('/', (c) => {
   const limit = Number(c.req.query('limit') ?? 50)
   const archivedRaw = c.req.query('archived')
   const archived = archivedRaw === undefined ? undefined : archivedRaw === 'true'
-  return c.json({ ok: true, items: getStack().conversation.list({ limit, archived }) })
+  const sourceRaw = c.req.query('source')
+  const source = sourceRaw === 'manual' || sourceRaw === 'workflow' ? sourceRaw : undefined
+  return c.json({ ok: true, items: getStack().conversation.list({ limit, archived, source }) })
 })
 
 conversationRoutes.get('/:id', (c) => {

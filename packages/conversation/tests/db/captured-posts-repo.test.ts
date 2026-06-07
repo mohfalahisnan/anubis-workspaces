@@ -41,6 +41,16 @@ describe('CapturedPostsRepo', () => {
     expect(repo.list({ competitorId })[0]!.likes).toBe(250)
   })
 
+  it('normalises post URLs so query strings and trailing slashes do not duplicate posts', () => {
+    repo.upsert(post(competitorId, 'https://instagram.com/p/AAA/?igsh=one', 100))
+    repo.upsert(post(competitorId, 'https://instagram.com/p/AAA', 250))
+    expect(repo.countForCompetitor(competitorId)).toBe(1)
+    expect(repo.list({ competitorId })[0]).toMatchObject({
+      postUrl: 'https://instagram.com/p/AAA',
+      likes: 250,
+    })
+  })
+
   it('list ordered by recent uses posted_at first then captured_at', () => {
     repo.upsert(post(competitorId, '/p/A', 10, '2026-01-01T00:00:00Z'))
     repo.upsert(post(competitorId, '/p/B', 20, '2026-06-01T00:00:00Z'))

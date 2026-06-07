@@ -15,7 +15,6 @@ import { configRoutes } from './config.js'
 import { systemRoutes } from './system.js'
 import { workflowRoutes } from './workflow.js'
 import { workspaceRoutes } from './workspaces.js'
-import { contentMemoryRoutes } from './content-memory.js'
 
 const app = new Hono()
 
@@ -60,7 +59,6 @@ app.route('/config', configRoutes)
 app.route('/system', systemRoutes)
 app.route('/workflows', workflowRoutes)
 app.route('/workspaces', workspaceRoutes)
-app.route('/content-memory', contentMemoryRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

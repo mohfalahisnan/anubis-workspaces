@@ -51,15 +51,18 @@ export class ConversationsRepo {
     return r ? toConv(r) : null
   }
 
-  list(opts: { limit: number; archived?: boolean }): Conversation[] {
+  list(opts: { limit: number; archived?: boolean; source?: 'manual' | 'workflow' }): Conversation[] {
     const rows = this.db.prepare(`
-      SELECT * FROM conversations WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT ?
-    `).all(opts.limit) as Row[]
+      SELECT * FROM conversations WHERE deleted_at IS NULL ORDER BY updated_at DESC
+    `).all() as Row[]
     let convs = rows.map(toConv)
     if (opts.archived !== undefined) {
       convs = convs.filter(c => (c.extra.archived ?? false) === opts.archived)
     }
-    return convs
+    if (opts.source !== undefined) {
+      convs = convs.filter(c => (c.extra.source ?? 'manual') === opts.source)
+    }
+    return convs.slice(0, opts.limit)
   }
 
   updateStatus(id: string, status: ConversationStatus): void {

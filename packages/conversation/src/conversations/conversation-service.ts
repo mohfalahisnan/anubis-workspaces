@@ -44,6 +44,8 @@ export interface CreateConversationInput {
   override?: ProfileOverride
   workspacePath?: string
   agent?: 'claude' | 'codex' | 'antigravity'
+  source?: 'workflow'
+  workflow?: { runId: string; nodeId: string }
 }
 
 export interface SendMessageInput {
@@ -58,6 +60,8 @@ export interface CreateAndAwaitFirstTurnInput {
   content: string
   workspacePath?: string
   signal?: AbortSignal
+  source?: 'workflow'
+  workflow?: { runId: string; nodeId: string }
 }
 
 export interface CreateAndAwaitFirstTurnResult {
@@ -121,7 +125,12 @@ export class ConversationService {
       status: 'pending',
       profileId: input.profileId,
       workspacePath,
-      extra: { skills, overrides: input.override },
+      extra: {
+        skills,
+        overrides: input.override,
+        source: input.source,
+        workflow: input.workflow,
+      },
       createdAt: now,
       updatedAt: now,
     }
@@ -143,8 +152,12 @@ export class ConversationService {
     this.deps.knownWorkspaces.remember(path)
   }
 
-  list(opts: { limit?: number; archived?: boolean } = {}): Conversation[] {
-    return this.deps.conversations.list({ limit: opts.limit ?? 50, archived: opts.archived })
+  list(opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow' } = {}): Conversation[] {
+    return this.deps.conversations.list({
+      limit: opts.limit ?? 50,
+      archived: opts.archived,
+      source: opts.source,
+    })
   }
 
   get(id: string): Conversation | null {
@@ -243,7 +256,7 @@ export class ConversationService {
       writeProfileInstructions(path, profileInstructions)
     }
     // Materialise active skills into the conversation workspace (the agent's
-    // cwd) so the relative `skills/<name>/SKILL.md` pointer resolves for every
+    // cwd) so the relative `.agents/skills/<name>/SKILL.md` pointer resolves for every
     // agent — Claude and Codex alike — regardless of which config dir each one
     // auto-scans.
     writeProfileSkills(cur.workspacePath, skillDefs)
@@ -289,6 +302,8 @@ export class ConversationService {
       profileId: input.profileId,
       override: input.override,
       workspacePath: input.workspacePath,
+      source: input.source,
+      workflow: input.workflow,
     })
     let done: Promise<void>
     try {

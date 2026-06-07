@@ -23,6 +23,14 @@ test('dominant-cluster mean ignores viral and minor high-engagement outliers', (
   assert.equal(summary.method, 'modal_cluster_mean')
 })
 
+test('dominant-cluster mean follows the most common like band', () => {
+  const summary = calculateAvgLikesSummary('x', posts([230, 210, 804, 302, 203, 240]))
+  assert.equal(summary?.avgLikes, 221)
+  assert.equal(summary?.avgLikesRangeLow, 203)
+  assert.equal(summary?.avgLikesRangeHigh, 240)
+  assert.equal(summary?.avgLikesCentralSampleSize, 4)
+})
+
 test('single smooth cluster falls back to the mean of all posts', () => {
   const summary = calculateAvgLikesSummary('x', posts([100, 110, 120, 130, 140]))
   assert.equal(summary?.avgLikes, 120)

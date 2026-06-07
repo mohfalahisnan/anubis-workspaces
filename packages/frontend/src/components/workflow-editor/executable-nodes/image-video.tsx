@@ -5,6 +5,7 @@ import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 import { FileThumb } from '@/components/workflow/file-thumb'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
 interface FileOutput {
   kind: 'file'
@@ -18,14 +19,14 @@ interface FilesOutput {
   files: FileOutput[]
 }
 
-export interface ImageVideoNodeData {
+export interface ImageVideoNodeData extends TitledNodeData {
   source?: 'url' | 'local' | 'upstream'
   url?: string
   path?: string
   inputPath?: string
 }
 
-export const ImageVideoExecutableNode = memo(function ImageVideoExecutableNode({ id }: { id: string; data: ImageVideoNodeData }) {
+export const ImageVideoExecutableNode = memo(function ImageVideoExecutableNode({ id, data }: { id: string; data: ImageVideoNodeData }) {
   const runStatus = useNodeRunStatus(id)
   const output = useNodeRunOutput(id) as FileOutput | FilesOutput | undefined
 
@@ -38,10 +39,10 @@ export const ImageVideoExecutableNode = memo(function ImageVideoExecutableNode({
   return (
     <NodeShell
       icon={ImageIcon}
-      title='Image / Video'
+      title={nodeTitle(data, 'Image / Video')}
       accent={ACCENT_GRADIENTS.media}
       runStatus={runStatus}
-      chromeless={hasMedia}
+      bleed={hasMedia}
     >
       {hasMedia ? (
         // Pure media viewer — every file at its natural aspect ratio (no crop),

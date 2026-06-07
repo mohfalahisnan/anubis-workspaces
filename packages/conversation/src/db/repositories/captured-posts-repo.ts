@@ -50,11 +50,29 @@ function toPost(r: Row): CapturedPost {
   }
 }
 
+function normalisePostUrl(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return trimmed
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.search = ''
+    url.hostname = url.hostname.toLowerCase()
+    url.pathname = url.pathname.replace(/\/+$/, '')
+    return url.toString()
+  } catch {
+    return trimmed.replace(/[?#].*$/, '').replace(/\/+$/, '')
+  }
+}
+
+function postKey(post: Pick<CapturedPost, 'competitorId' | 'postUrl'>): string {
+  return `${post.competitorId}\u0000${normalisePostUrl(post.postUrl)}`
+}
+
 export interface ListPostsOpts {
   competitorId?: string
   limit?: number
   orderBy?: 'recent' | 'engagement'
-  workspaceId?: string
 }
 
 export interface UpdateCapturedPostPatch {
@@ -71,6 +89,7 @@ export class CapturedPostsRepo {
   constructor(private db: Db) {}
 
   upsert(p: CapturedPost): void {
+    const postUrl = normalisePostUrl(p.postUrl)
     this.db
       .prepare(`
         INSERT INTO captured_posts (
@@ -95,7 +114,7 @@ export class CapturedPostsRepo {
         id: p.id,
         competitorId: p.competitorId,
         username: p.username,
-        postUrl: p.postUrl,
+        postUrl,
         caption: p.caption ?? null,
         likes: p.likes ?? null,
         comments: p.comments ?? null,
@@ -109,11 +128,14 @@ export class CapturedPostsRepo {
   }
 
   upsertMany(posts: CapturedPost[]): { inserted: number } {
+    const unique = new Map<string, CapturedPost>()
+    for (const p of posts) unique.set(postKey(p), p)
     const tx = this.db.transaction((items: CapturedPost[]) => {
       for (const p of items) this.upsert(p)
     })
-    tx(posts)
-    return { inserted: posts.length }
+    const items = [...unique.values()]
+    tx(items)
+    return { inserted: items.length }
   }
 
   list(opts: ListPostsOpts = {}): CapturedPost[] {
@@ -126,14 +148,21 @@ export class CapturedPostsRepo {
     const where: string[] = []
     const params: unknown[] = []
     if (opts.competitorId) { where.push('cp.competitor_id = ?'); params.push(opts.competitorId) }
-    const join = opts.workspaceId ? 'JOIN competitors c ON c.id = cp.competitor_id' : ''
-    if (opts.workspaceId) { where.push('c.workspace_id = ?'); params.push(opts.workspaceId) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
-    const sql = `SELECT cp.* FROM captured_posts cp ${join} ${whereSql} ORDER BY ${order} LIMIT ?`
-    params.push(limit)
+    const sql = `SELECT cp.* FROM captured_posts cp ${whereSql} ORDER BY ${order}`
     const rows = this.db.prepare(sql).all(...params) as Row[]
-    return rows.map(toPost)
+    const seen = new Set<string>()
+    const out: CapturedPost[] = []
+    for (const row of rows) {
+      const post = toPost(row)
+      const key = opts.competitorId ? postKey(post) : normalisePostUrl(post.postUrl)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(post)
+      if (out.length >= limit) break
+    }
+    return out
   }
 
   findById(id: string): CapturedPost | null {
@@ -182,16 +211,10 @@ export class CapturedPostsRepo {
   }
 
   countForCompetitor(competitorId: string): number {
-    const r = this.db
-      .prepare('SELECT count(*) AS n FROM captured_posts WHERE competitor_id = ?')
-      .get(competitorId) as { n: number }
-    return r.n
+    return this.list({ competitorId, limit: 10_000 }).length
   }
 
   countAll(): number {
-    const r = this.db
-      .prepare('SELECT count(*) AS n FROM captured_posts')
-      .get() as { n: number }
-    return r.n
+    return this.list({ limit: 10_000 }).length
   }
 }

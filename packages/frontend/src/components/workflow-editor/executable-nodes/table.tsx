@@ -5,8 +5,9 @@ import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface TableNodeData { staticData?: Array<Record<string, unknown>> }
+export interface TableNodeData extends TitledNodeData { staticData?: Array<Record<string, unknown>> }
 
 function previewCell(value: unknown): string {
   if (value == null) return '—'
@@ -22,7 +23,7 @@ export const TableExecutableNode = memo(function TableExecutableNode({ id, data 
   return (
     <NodeShell
       icon={TableIcon}
-      title='Table'
+      title={nodeTitle(data, 'Table')}
       subtitle='Passive — displays input or static rows'
       accent={ACCENT_GRADIENTS.review}
       runStatus={runStatus}

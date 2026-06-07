@@ -5,7 +5,7 @@ import type { ExecutorContext } from '../../src/types.js'
 function ctx(decision: 'approved' | 'rejected'): ExecutorContext {
   return {
     approvals: { waitFor: async () => ({ decision, notes: 'ok' }) },
-    signal: new AbortController().signal, emit: () => {}, runId: 'r', workspaceId: 'w',
+    signal: new AbortController().signal, emit: () => {}, runId: 'r',
   } as unknown as ExecutorContext
 }
 

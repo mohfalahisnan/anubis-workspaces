@@ -2,28 +2,6 @@ import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { type AiAgentService, createAiAgentService } from '@anubis/ai-agent'
-import {
-  AgentRunService,
-  AgentRunsRepo,
-  BrandRuleValidator,
-  ContentContextPacksRepo,
-  ContentMemoryService,
-  ContentSimilarityItemsRepo,
-  ContextPackService,
-  BrandWorkspacesRepo,
-  BrandWorkspacesService,
-  ExperienceIndexService,
-  ExperienceMemoriesRepo,
-  KnowledgeDocumentsRepo,
-  PlatformRuleValidator,
-  RepeatedMistakeValidator,
-  SimilarityIngestionService,
-  ValidationService,
-  WorkspaceLeakageValidator,
-  XenovaEmbedder,
-  bundledModelCacheDir,
-} from '@anubis/content-memory'
-import { CapturedPostsSimilarityIngestor } from './competitors/similarity-ingestor.js'
 import { openDatabase } from './db/client.js'
 import { runMigrations } from './db/migrate.js'
 import { MIGRATIONS } from './db/migrations/index.js'
@@ -71,15 +49,6 @@ export interface ConversationStack {
   taskManager: TaskManager
   aiAgent: AiAgentService
   knownWorkspaces: KnownWorkspacesRepo
-  brandWorkspaces: BrandWorkspacesService
-  knowledgeDocuments: KnowledgeDocumentsRepo
-  similarityItems: ContentSimilarityItemsRepo
-  similarityIngestion: SimilarityIngestionService
-  capturedPostsSimilarity: CapturedPostsSimilarityIngestor
-  contentMemory: ContentMemoryService
-  experience: ExperienceIndexService
-  validation: ValidationService
-  agentRuns: AgentRunService
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -101,38 +70,6 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const sessionsRepo = new AgentSessionsRepo(db)
   const cronRepo = new CronJobsRepo(db)
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
-  const brandWorkspaces = new BrandWorkspacesService(new BrandWorkspacesRepo(db))
-  const knowledgeDocuments = new KnowledgeDocumentsRepo(db)
-  // Offline-first: load the bundled model, never hit the network.
-  // bundledModelCacheDir() resolves to the package-relative models/ dir in
-  // dev/tsx and to ANUBIS_MODELS_DIR (resources/models) in the packaged app.
-  const contentEmbedder = new XenovaEmbedder({
-    cacheDir: bundledModelCacheDir(),
-    allowRemoteModels: false,
-  })
-  const similarityItems = new ContentSimilarityItemsRepo(db)
-  const similarityIngestion = new SimilarityIngestionService(similarityItems, contentEmbedder)
-  const capturedPostsSimilarity = new CapturedPostsSimilarityIngestor(db, similarityIngestion)
-  const experience = new ExperienceIndexService(new ExperienceMemoriesRepo(db))
-  const contextPack = new ContextPackService({
-    brands: new BrandWorkspacesRepo(db),
-    docs: knowledgeDocuments,
-    items: similarityItems,
-    embedder: contentEmbedder,
-    experience,
-  })
-  const contentMemory = new ContentMemoryService({
-    contextPack,
-    packs: new ContentContextPacksRepo(db),
-  })
-  const brandWorkspacesRepo = new BrandWorkspacesRepo(db)
-  const validation = new ValidationService([
-    new WorkspaceLeakageValidator(brandWorkspacesRepo),
-    new BrandRuleValidator(),
-    new PlatformRuleValidator(),
-    new RepeatedMistakeValidator(experience),
-  ])
-  const agentRuns = new AgentRunService(new AgentRunsRepo(db))
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -188,15 +125,6 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     workflowTriggers: workflowTriggersRepo,
     appConfig, skills, sse, cron, taskManager: tm, aiAgent,
     knownWorkspaces: knownWorkspacesRepo,
-    brandWorkspaces,
-    knowledgeDocuments,
-    similarityItems,
-    similarityIngestion,
-    capturedPostsSimilarity,
-    contentMemory,
-    experience,
-    validation,
-    agentRuns,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()
@@ -247,5 +175,3 @@ export type { ImportSkillOpts, ImportSkillResult, SkillCategory } from './skills
 export { CronService } from './cron/cron-service.js'
 export { SseBroadcaster } from './sse/broadcaster.js'
 export type { SseEvent } from './sse/broadcaster.js'
-export type { BrandWorkspace, KnowledgeDocument, ScoredDocument } from '@anubis/content-memory'
-export { DEFAULT_WORKSPACE_ID } from '@anubis/content-memory'

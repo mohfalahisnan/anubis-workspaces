@@ -195,13 +195,13 @@ describe('writeProfileSkills', () => {
     return { name, description: '', source: 'user', path: file, body }
   }
 
-  it('materialises each skill under skills/<name>/ including helper files', () => {
+  it('materialises each skill under .agents/skills/<name>/ including helper files', () => {
     const home = join(root, 'p1', 'claude')
     const a = makeSkill('alpha', '# Alpha', { 'run.js': 'console.log(1)' })
     const changed = writeProfileSkills(home, [a])
     expect(changed).toBe(true)
-    expect(readFileSync(join(home, 'skills', 'alpha', 'SKILL.md'), 'utf8')).toBe('# Alpha')
-    expect(existsSync(join(home, 'skills', 'alpha', 'run.js'))).toBe(true)
+    expect(readFileSync(join(home, '.agents', 'skills', 'alpha', 'SKILL.md'), 'utf8')).toBe('# Alpha')
+    expect(existsSync(join(home, '.agents', 'skills', 'alpha', 'run.js'))).toBe(true)
   })
 
   it('is idempotent when skill bodies are unchanged', () => {
@@ -216,12 +216,12 @@ describe('writeProfileSkills', () => {
     const a = makeSkill('alpha', '# Alpha')
     const b = makeSkill('beta', '# Beta')
     writeProfileSkills(home, [a, b])
-    expect(existsSync(join(home, 'skills', 'beta'))).toBe(true)
+    expect(existsSync(join(home, '.agents', 'skills', 'beta'))).toBe(true)
 
     const changed = writeProfileSkills(home, [a])
     expect(changed).toBe(true)
-    expect(existsSync(join(home, 'skills', 'beta'))).toBe(false)
-    expect(existsSync(join(home, 'skills', 'alpha'))).toBe(true)
+    expect(existsSync(join(home, '.agents', 'skills', 'beta'))).toBe(false)
+    expect(existsSync(join(home, '.agents', 'skills', 'alpha'))).toBe(true)
   })
 
   it('re-copies when a skill body changes', () => {
@@ -229,6 +229,6 @@ describe('writeProfileSkills', () => {
     writeProfileSkills(home, [makeSkill('alpha', '# Alpha v1')])
     const changed = writeProfileSkills(home, [makeSkill('alpha', '# Alpha v2')])
     expect(changed).toBe(true)
-    expect(readFileSync(join(home, 'skills', 'alpha', 'SKILL.md'), 'utf8')).toBe('# Alpha v2')
+    expect(readFileSync(join(home, '.agents', 'skills', 'alpha', 'SKILL.md'), 'utf8')).toBe('# Alpha v2')
   })
 })

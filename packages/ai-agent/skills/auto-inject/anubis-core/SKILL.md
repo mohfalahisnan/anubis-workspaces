@@ -1,7 +1,7 @@
 ---
 name: anubis-core
-description: Drive the Anubis backend HTTP API to manage competitors, captures, posts, conversations, AI-agent runs, profiles, skills, config, cron jobs, Chrome profiles, and brand-scoped content memory (context packs, output validation, experience/feedback).
-when_to_use: User asks to list/add/edit/delete competitors, capture or discover Instagram profiles, open Chrome, manage conversations or messages, run a Claude/Codex agent, import a skill, edit app config, list cron jobs, inspect local Chrome profiles, or build a content context pack, validate generated content against a brand, or record content feedback/experience.
+description: Drive the Anubis backend HTTP API to manage competitors, captures, posts, conversations, AI-agent runs, profiles, skills, config, cron jobs, Chrome profiles, and workflows.
+when_to_use: User asks to list/add/edit/delete competitors, capture or discover Instagram profiles, open Chrome, manage conversations or messages, run a Claude/Codex agent, import a skill, edit app config, list cron jobs, inspect local Chrome profiles, or manage workflows.
 ---
 
 # Anubis Core
@@ -61,7 +61,6 @@ Each sub-file is materialised next to this SKILL.md (the skill folder is copied 
 | Competitors, captures, posts | `skills/anubis-core/competitors.md` |
 | Conversations, messages, AI agent runs | `skills/anubis-core/conversations.md` |
 | Profiles, skills, config, cron-jobs, system | `skills/anubis-core/admin.md` |
-| Content memory: context packs, output validation, experience/feedback | `skills/anubis-core/content-memory.md` |
 
 Open the sub-file before crafting the request. Don't guess schemas.
 

@@ -5,8 +5,9 @@ import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface LessonWriterNodeData {
+export interface LessonWriterNodeData extends TitledNodeData {
   profileId?: string
   reasoning?: 'minimal' | 'low' | 'medium' | 'high'
   prompt?: string
@@ -14,7 +15,7 @@ export interface LessonWriterNodeData {
   titleTemplate?: string
 }
 
-interface LessonOutput { kind: 'lesson'; text: string; memoryId?: string }
+interface LessonOutput { kind: 'lesson'; text: string }
 
 export const LessonWriterExecutableNode = memo(function LessonWriterExecutableNode(
   { id, data }: { id: string; data: LessonWriterNodeData },
@@ -24,7 +25,7 @@ export const LessonWriterExecutableNode = memo(function LessonWriterExecutableNo
   return (
     <NodeShell
       icon={GraduationCap}
-      title='Lesson Writer'
+      title={nodeTitle(data, 'Lesson Writer')}
       subtitle={data.profileId ? `${data.lessonType ?? 'lesson'} · ${data.profileId}` : 'Pick a profile in the inspector'}
       accent={ACCENT_GRADIENTS.review}
       runStatus={runStatus}

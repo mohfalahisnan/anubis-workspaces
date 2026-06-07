@@ -6,8 +6,9 @@ import { RunStateBadge } from './_run-state-badge'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
 import { JsonFallback } from './_json-fallback'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface JsonTransformerNodeData {
+export interface JsonTransformerNodeData extends TitledNodeData {
   sourcePath?: string
   template?: string
 }
@@ -22,7 +23,7 @@ export const JsonTransformerExecutableNode = memo(function JsonTransformerExecut
   return (
     <NodeShell
       icon={Braces}
-      title='JSON Transformer'
+      title={nodeTitle(data, 'JSON Transformer')}
       subtitle={`Reshape ${source} with a JSON template`}
       accent={ACCENT_GRADIENTS.data}
       runStatus={runStatus}

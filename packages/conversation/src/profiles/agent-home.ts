@@ -190,9 +190,9 @@ export function writeProfileInstructions(
 
    Rather than inlining every active skill's full body into the
    instruction file (paid in always-on context), we materialise
-   each skill as files under `<targetDir>/skills/<name>/`. The
+   each skill as files under `<targetDir>/.agents/skills/<name>/`. The
    instruction file keeps only a short pointer (see
-   buildSkillsPointer) that references `skills/<name>/SKILL.md`.
+   buildSkillsPointer) that references `.agents/skills/<name>/SKILL.md`.
 
    We write these into the conversation workspace (the agent's
    cwd), so that relative pointer resolves for every agent —
@@ -205,11 +205,11 @@ export function writeProfileInstructions(
    the common (unchanged) case touches nothing.
    ============================================================ */
 
-const SKILLS_DIR = 'skills'
+const SKILLS_DIR = join('.agents', 'skills')
 const SKILL_FILE = 'SKILL.md'
 
 /**
- * Materialise the given skills under `{targetDir}/skills/<name>/`,
+ * Materialise the given skills under `{targetDir}/.agents/skills/<name>/`,
  * pruning any skill dirs that are no longer in the active set.
  * Returns true when anything was written or removed.
  */

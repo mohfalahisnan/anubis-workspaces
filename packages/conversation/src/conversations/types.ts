@@ -11,6 +11,11 @@ export const ConversationExtraSchema = z.object({
   skills: z.array(z.string()).default([]),
   overrides: ProfileOverrideSchema.optional(),
   archived: z.boolean().optional(),
+  source: z.enum(['workflow']).optional(),
+  workflow: z.object({
+    runId: z.string().min(1),
+    nodeId: z.string().min(1),
+  }).optional(),
 }).strict()
 export type ConversationExtra = z.infer<typeof ConversationExtraSchema>
 

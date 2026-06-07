@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@anubis/ai-agent": "workspace:*",
-    "@anubis/content-memory": "workspace:*",
     "@anubis/shared": "workspace:*",
     "better-sqlite3": "^12.10.0",
     "fflate": "^0.8.2",

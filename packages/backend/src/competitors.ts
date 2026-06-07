@@ -14,7 +14,6 @@ const CreateBody = z.object({
   notes: z.string().optional(),
   bio: z.string().optional(),
   level: z.enum(['black', 'green', 'yellow', 'red']).optional(),
-  workspaceId: z.string().min(1).optional(),
 }).strict()
 
 const UpdateBody = z.object({
@@ -32,8 +31,7 @@ const UpdateBody = z.object({
 export const competitorRoutes = new Hono()
 
 competitorRoutes.get('/', (c) => {
-  const workspaceId = c.req.query('workspaceId')
-  return c.json({ ok: true, items: getStack().competitors.list(workspaceId) })
+  return c.json({ ok: true, items: getStack().competitors.list() })
 })
 
 competitorRoutes.get('/:id', (c) => {

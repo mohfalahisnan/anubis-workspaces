@@ -13,7 +13,6 @@ export interface CreateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
-  workspaceId?: string
 }
 
 export interface UpdateCompetitorInput {
@@ -46,9 +45,13 @@ const DEFAULT_TINTS = [
 ] as const
 
 function normaliseHandle(raw: string): string {
-  const trimmed = raw.trim()
+  const trimmed = raw.trim().toLowerCase()
   if (trimmed.length === 0) throw new Error('Handle is required')
   return trimmed.startsWith('@') ? trimmed : `@${trimmed}`
+}
+
+function handleKey(handle: string): string {
+  return normaliseHandle(handle)
 }
 
 function pickTintFor(handle: string): string {
@@ -60,8 +63,16 @@ function pickTintFor(handle: string): string {
 export class CompetitorsService {
   constructor(private repo: CompetitorsRepo) {}
 
-  list(workspaceId?: string): Competitor[] {
-    return this.repo.list(workspaceId)
+  list(): Competitor[] {
+    const seen = new Set<string>()
+    const out: Competitor[] = []
+    for (const competitor of this.repo.list()) {
+      const key = handleKey(competitor.handle)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ ...competitor, handle: key })
+    }
+    return out
   }
 
   get(id: string): Competitor | null {
@@ -86,7 +97,6 @@ export class CompetitorsService {
       notes: input.notes?.trim() || undefined,
       bio: input.bio?.trim() || undefined,
       level: input.level ?? undefined,
-      workspaceId: input.workspaceId,
       addedAt: now,
       updatedAt: now,
     }

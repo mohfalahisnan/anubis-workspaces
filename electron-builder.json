@@ -23,9 +23,6 @@
     "packages/conversation/dist",
     "packages/conversation/package.json",
     "packages/conversation/node_modules/**",
-    "packages/content-memory/dist",
-    "packages/content-memory/package.json",
-    "packages/content-memory/node_modules/**",
     "packages/research-crawler/dist",
     "packages/research-crawler/package.json",
     "packages/research-crawler/node_modules/**",
@@ -38,9 +35,7 @@
     "!packages/*/node_modules/.vite-temp/**",
     "!**/node_modules/.bin/**"
   ],
-  "extraResources": [
-    { "from": "packages/content-memory/models", "to": "models" }
-  ],
+  "extraResources": [],
   "asarUnpack": [
     "packages/backend/dist/**",
     "packages/backend/node_modules/**",
@@ -54,9 +49,6 @@
     "packages/conversation/dist/**",
     "packages/conversation/package.json",
     "packages/conversation/node_modules/**",
-    "packages/content-memory/dist/**",
-    "packages/content-memory/package.json",
-    "packages/content-memory/node_modules/**",
     "packages/research-crawler/dist/**",
     "packages/research-crawler/package.json",
     "packages/research-crawler/node_modules/**",

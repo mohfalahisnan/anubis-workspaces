@@ -72,7 +72,6 @@ export interface BuiltinWorkflow {
   name: string
   description: string
   graph: string
-  workspaceId: string
 }
 
 export const BUILTIN_WORKFLOWS: BuiltinWorkflow[] = [
@@ -81,6 +80,5 @@ export const BUILTIN_WORKFLOWS: BuiltinWorkflow[] = [
     name: 'IG Content Pipeline',
     description: 'Analyze a post, improve its copy, then review before publishing. Set the Instagram Post URL to run.',
     graph: JSON.stringify(IG_CONTENT_PIPELINE_GRAPH),
-    workspaceId: 'default-workspace',
   },
 ]

@@ -11,11 +11,16 @@ interface WorkflowGraph {
 const previewNodeTypes: NodeTypes = {
   instagramPost: PreviewNode as never,
   imageVideo: PreviewNode as never,
+  jsonTransformer: PreviewNode as never,
   transformerMedia: PreviewNode as never,
   transformerBrief: PreviewNode as never,
   ocrExtractor: PreviewNode as never,
   table: PreviewNode as never,
   aiAgentConversation: PreviewNode as never,
+  markdownDisplay: PreviewNode as never,
+  humanApproval: PreviewNode as never,
+  lessonWriter: PreviewNode as never,
+  originalCopy: PreviewNode as never,
 }
 
 function EmptyPreview({ label = 'No nodes yet' }: { label?: string }) {
@@ -42,7 +47,7 @@ export function WorkflowCardPreview({ graphJson }: { graphJson?: string }) {
     id: n.id,
     type: n.type,
     position: n.position,
-    data: { type: n.type },
+    data: { ...(typeof n.data === 'object' && n.data ? n.data : {}), type: n.type },
     draggable: false,
     selectable: false,
     connectable: false,

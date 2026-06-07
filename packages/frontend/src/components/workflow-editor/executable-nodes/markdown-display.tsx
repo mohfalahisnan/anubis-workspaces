@@ -5,8 +5,9 @@ import { ACCENT_GRADIENTS } from '@/components/workflow/theme'
 import { MessageResponse } from '@/components/ai-elements/message'
 import { useNodeRunStatus } from './_use-run-status'
 import { useNodeRunOutput } from './_use-run-output'
+import { nodeTitle, type TitledNodeData } from './_node-title'
 
-export interface MarkdownDisplayNodeData { staticText?: string }
+export interface MarkdownDisplayNodeData extends TitledNodeData { staticText?: string }
 
 export const MarkdownDisplayExecutableNode = memo(function MarkdownDisplayExecutableNode(
   { id, data }: { id: string; data: MarkdownDisplayNodeData },
@@ -18,14 +19,14 @@ export const MarkdownDisplayExecutableNode = memo(function MarkdownDisplayExecut
   return (
     <NodeShell
       icon={FileText}
-      title='Markdown'
+      title={nodeTitle(data, 'Markdown')}
       accent={ACCENT_GRADIENTS.review}
       handles='both'
       runStatus={runStatus}
-      chromeless={hasText}
+      bleed={hasText}
     >
       {hasText ? (
-        // Full rendered markdown — fills the card, no max-height scroll.
+        // Full rendered markdown with the node title retained for orientation.
         <div className='bg-muted/20 p-4 text-xs'>
           <MessageResponse>{text}</MessageResponse>
         </div>

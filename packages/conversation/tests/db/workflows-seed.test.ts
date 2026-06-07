@@ -19,7 +19,6 @@ describe('WorkflowsRepo.seedBuiltins', () => {
     const wf = repo.get('builtin-ig-content-pipeline')
     expect(wf).not.toBeNull()
     expect(wf!.name).toBe('IG Content Pipeline')
-    expect(wf!.workspaceId).toBe('default-workspace')
     // Ships pre-published so it's runnable once configured.
     expect(wf!.publishedGraph).toBeTruthy()
     expect(wf!.draftGraph).toBe(wf!.publishedGraph)
@@ -52,7 +51,7 @@ describe('WorkflowsRepo.seedBuiltins', () => {
     const repo = freshRepo()
     repo.seedBuiltins()
     repo.seedBuiltins()
-    expect(repo.list('default-workspace')).toHaveLength(BUILTIN_WORKFLOWS.length)
+    expect(repo.list()).toHaveLength(BUILTIN_WORKFLOWS.length)
   })
 
   it('is edit-safe — a user edit survives a re-seed', () => {

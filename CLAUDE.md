@@ -25,7 +25,6 @@ pnpm workspaces (`pnpm-workspace.yaml`): `apps/*` and `packages/*`.
 - `packages/research-crawler` (`@anubis/research-crawler`) — internal crawler core. No HTTP/MCP server and no standalone binary packaging.
 - `packages/ai-agent` (`@anubis/ai-agent`) — internal Codex/Claude agent core used by backend HTTP routes. No MCP, CLI, or bundled binaries.
 - `packages/shared` (`@anubis/shared`) — types shared between frontend and backend (e.g. `ApiHealthResponse`).
-- `packages/content-memory` (`@anubis/content-memory`) — internal brand-scoped content-memory core: brand workspaces, scoped knowledge/similarity retrieval, local offline embeddings, context pack, experience memories, and output validators. Owns SQL migrations 008/009/011–015 (spliced into conversation's runner); `conversation → content-memory` is one-way. See `packages/content-memory/README.md`.
 
 Internal deps use `workspace:*`. Package imports inside `@anubis/research-crawler` use explicit
 `.js` extensions (ESM/`isolatedModules`), even though sources are `.ts`.
@@ -53,7 +52,8 @@ pnpm --filter @anubis/backend dev:server     # run backend alone (tsx, watch-fre
 ```
 
 Build order is load-bearing: `@anubis/research-crawler` → `@anubis/ai-agent` →
-`@anubis/backend` → `@anubis/frontend` → root `vite build`
+`@anubis/workflow-runtime` → `@anubis/conversation` → `@anubis/backend` →
+`@anubis/frontend` → root `vite build`
 (electron main/preload) → `electron-builder`. `pretest` builds the first four
 plus `vite build --mode=test` before tests run.
 

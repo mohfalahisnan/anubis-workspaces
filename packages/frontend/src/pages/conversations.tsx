@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { ArrowUpRightIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 
 import type { ConversationSummary } from '@anubis/shared'
@@ -14,18 +14,21 @@ type Row = {
   profile: string
   time: string
   status: 'idle' | 'running' | 'error'
+  source: 'manual' | 'workflow'
 }
 
 const FALLBACK_ROWS: Row[] = [
-  { id: 'mock-1', title: "Audit @kayla.studio's last 30 posts",        profile: 'Claude · Research', time: '2m',        status: 'running' },
-  { id: 'mock-2', title: 'Draft June content calendar from brief',     profile: 'Claude · Writing',  time: '18m',       status: 'idle' },
-  { id: 'mock-3', title: 'Refactor the StreamRelay flush logic',       profile: 'Codex · Coding',    time: '1h',        status: 'idle' },
-  { id: 'mock-4', title: 'Compare top 5 productivity creators',        profile: 'Claude · Research', time: '3h',        status: 'idle' },
-  { id: 'mock-5', title: 'Migrate auth to the new token schema',       profile: 'Codex · Coding',    time: '5h',        status: 'error' },
-  { id: 'mock-6', title: 'Pull weekly research digest',                profile: 'Claude · Research', time: 'Yesterday', status: 'idle' },
-  { id: 'mock-7', title: 'Spike: try Codex on the design system PR',   profile: 'Codex · Coding',    time: 'Yesterday', status: 'running' },
-  { id: 'mock-8', title: 'Investigate the flaky stream-relay test',    profile: 'Codex · Coding',    time: '2d',        status: 'idle' },
+  { id: 'mock-1', title: "Audit @kayla.studio's last 30 posts",        profile: 'Claude · Research', time: '2m',        status: 'running', source: 'manual' },
+  { id: 'mock-2', title: 'Draft June content calendar from brief',     profile: 'Claude · Writing',  time: '18m',       status: 'idle', source: 'manual' },
+  { id: 'mock-3', title: 'Refactor the StreamRelay flush logic',       profile: 'Codex · Coding',    time: '1h',        status: 'idle', source: 'manual' },
+  { id: 'mock-4', title: 'Compare top 5 productivity creators',        profile: 'Workflow · Claude', time: '3h',        status: 'idle', source: 'workflow' },
+  { id: 'mock-5', title: 'Migrate auth to the new token schema',       profile: 'Codex · Coding',    time: '5h',        status: 'error', source: 'manual' },
+  { id: 'mock-6', title: 'Pull weekly research digest',                profile: 'Claude · Research', time: 'Yesterday', status: 'idle', source: 'manual' },
+  { id: 'mock-7', title: 'Spike: try Codex on the design system PR',   profile: 'Codex · Coding',    time: 'Yesterday', status: 'running', source: 'manual' },
+  { id: 'mock-8', title: 'Investigate the flaky stream-relay test',    profile: 'Workflow · Claude', time: '2d',        status: 'idle', source: 'workflow' },
 ]
+
+type ConversationFilter = 'all' | 'manual' | 'workflow'
 
 function statusFromConversation(c: ConversationSummary): Row['status'] {
   if (c.status === 'running' || c.status === 'pending') return 'running'
@@ -47,13 +50,20 @@ function shortRelative(updatedAt: number): string {
 
 function rowFromSummary(c: ConversationSummary): Row {
   const profile = c.profileId ?? `${c.agent}`
+  const source = c.extra.source ?? 'manual'
   return {
     id: c.id,
     title: c.title,
-    profile,
+    profile: source === 'workflow' ? `Workflow · ${profile}` : profile,
     time: shortRelative(c.updatedAt),
     status: statusFromConversation(c),
+    source,
   }
+}
+
+function fallbackRows(filter: ConversationFilter): Row[] {
+  if (filter === 'all') return FALLBACK_ROWS
+  return FALLBACK_ROWS.filter((row) => row.source === filter)
 }
 
 export function ConversationsPage() {
@@ -61,6 +71,7 @@ export function ConversationsPage() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all')
 
   function openConversation(id: string) {
     setSelectedId(id)
@@ -71,7 +82,7 @@ export function ConversationsPage() {
     const ok = window.confirm(`Delete "${title}"? This cannot be undone.`)
     if (!ok) return
     // Optimistic: drop locally first so the row vanishes immediately.
-    setRows((prev) => (prev ?? FALLBACK_ROWS).filter((r) => r.id !== id))
+    setRows((prev) => (prev ?? fallbackRows(conversationFilter)).filter((r) => r.id !== id))
     if (selectedId === id) setSelectedId(null)
     if (id.startsWith('mock-')) return
     try {
@@ -79,18 +90,21 @@ export function ConversationsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       // Re-fetch on failure so the UI matches server state.
-      const items = await listConversations({ limit: 50 }).catch(() => [])
+      const source = conversationFilter === 'all' ? undefined : conversationFilter
+      const items = await listConversations({ limit: 50, source }).catch(() => [])
       if (items.length > 0) setRows(items.map(rowFromSummary))
     }
   }
 
   useEffect(() => {
     let active = true
-    listConversations({ limit: 50 })
+    setError(null)
+    const source = conversationFilter === 'all' ? undefined : conversationFilter
+    listConversations({ limit: 50, source })
       .then((items) => {
         if (!active) return
         if (items.length === 0) {
-          setRows(FALLBACK_ROWS)
+          setRows(conversationFilter === 'all' ? FALLBACK_ROWS : [])
         } else {
           setRows(items.map(rowFromSummary))
         }
@@ -98,23 +112,27 @@ export function ConversationsPage() {
       .catch((e: unknown) => {
         if (!active) return
         setError(e instanceof Error ? e.message : String(e))
-        setRows(FALLBACK_ROWS)
+        setRows(fallbackRows(conversationFilter))
       })
     return () => {
       active = false
     }
-  }, [])
+  }, [conversationFilter])
 
-  const displayRows = rows ?? FALLBACK_ROWS
+  const displayRows = rows ?? fallbackRows(conversationFilter)
 
   // Auto-pick the 4th row by default when first loaded (matches mockup)
   useEffect(() => {
-    if (selectedId === null && displayRows.length >= 4) {
+    if (displayRows.length === 0) {
+      setSelectedId(null)
+    } else if (selectedId && displayRows.some((row) => row.id === selectedId)) {
+      return
+    } else if (selectedId === null && displayRows.length >= 4 && conversationFilter === 'all') {
       setSelectedId(displayRows[3]!.id)
-    } else if (selectedId === null && displayRows[0]) {
+    } else if (displayRows[0]) {
       setSelectedId(displayRows[0].id)
     }
-  }, [displayRows, selectedId])
+  }, [conversationFilter, displayRows, selectedId])
 
   const count = displayRows.length
 
@@ -129,6 +147,24 @@ export function ConversationsPage() {
           <span className='inline-flex h-5 min-w-[20px] items-center justify-center rounded-md border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground'>
             {count}
           </span>
+        </div>
+        <div className='flex h-10 flex-shrink-0 items-center border-b border-border px-3'>
+          <div className='grid h-7 w-full grid-cols-3 rounded-md border border-border bg-muted/45 p-0.5'>
+            {(['all', 'manual', 'workflow'] as const).map((filter) => (
+              <button
+                key={filter}
+                type='button'
+                onClick={() => setConversationFilter(filter)}
+                className={cn(
+                  'rounded-[5px] px-2 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--anubis-gold-hi)]',
+                  conversationFilter === filter &&
+                    'bg-background text-foreground shadow-[0_1px_0_rgba(0,0,0,0.05)]',
+                )}
+              >
+                {filter === 'workflow' ? 'Workflows' : filter}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className='flex-1 overflow-y-auto overflow-x-hidden'>
@@ -150,6 +186,11 @@ export function ConversationsPage() {
               />
             )
           })}
+          {displayRows.length === 0 && (
+            <div className='px-4 py-8 text-center text-[12px] leading-relaxed text-muted-foreground'>
+              No conversations match this filter.
+            </div>
+          )}
         </div>
       </aside>
 

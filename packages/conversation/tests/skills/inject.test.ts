@@ -14,15 +14,15 @@ describe('buildSkillsPointer', () => {
   it('emits a header and one pointer line per skill (no bodies)', () => {
     const out = buildSkillsPointer([skill('a', 'does A'), skill('b', 'does B')])
     expect(out).toContain('## Available Skills')
-    expect(out).toContain('- **a** (`skills/a/SKILL.md`) — does A')
-    expect(out).toContain('- **b** (`skills/b/SKILL.md`) — does B')
+    expect(out).toContain('- **a** (`.agents/skills/a/SKILL.md`) — does A')
+    expect(out).toContain('- **b** (`.agents/skills/b/SKILL.md`) — does B')
     expect(out).not.toContain('BODY')
   })
 
   it('omits the dash when a skill has no description', () => {
     const out = buildSkillsPointer([skill('a')])
-    expect(out).toContain('- **a** (`skills/a/SKILL.md`)')
-    expect(out).not.toMatch(/skills\/a\/SKILL\.md`\) —/)
+    expect(out).toContain('- **a** (`.agents/skills/a/SKILL.md`)')
+    expect(out).not.toMatch(/\.agents\/skills\/a\/SKILL\.md`\) —/)
   })
 })
 

@@ -60,7 +60,6 @@ export function shutdownTriggers(): void {
 const CreateBody = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  workspaceId: z.string().min(1).optional(),
 })
 
 const PatchMetaBody = z.object({
@@ -76,13 +75,13 @@ workflowRoutes.post('/', async (c) => {
   const body = CreateBody.parse(await c.req.json())
   const stack = getStack()
   const now = Date.now()
-  const wf = stack.workflows.create({ id: randomUUID(), name: body.name, description: body.description, now, workspaceId: body.workspaceId })
+  const wf = stack.workflows.create({ id: randomUUID(), name: body.name, description: body.description, now })
   return c.json(wf, 201)
 })
 
 workflowRoutes.get('/', (c) => {
   const stack = getStack()
-  const items = stack.workflows.list(c.req.query('workspaceId')).map((wf) => {
+  const items = stack.workflows.list().map((wf) => {
     const lastRun = stack.workflowRuns.listRunsForWorkflow(wf.id, 1)[0]
     return {
       id: wf.id, name: wf.name, description: wf.description,

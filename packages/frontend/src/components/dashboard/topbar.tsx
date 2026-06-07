@@ -2,15 +2,12 @@ import { BellIcon, PlusIcon, SearchIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
-import { WorkspaceSwitcher } from './workspace-switcher'
 
 export function TopBar({ breadcrumb }: { breadcrumb?: string }) {
   return (
     <header className='sticky top-0 z-10 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur sm:px-6'>
-      <WorkspaceSwitcher />
       {breadcrumb && (
         <div className='hidden items-center gap-2.5 sm:flex'>
-          <span className='h-4 w-px bg-border' aria-hidden />
           <span className='text-[13px] tracking-[-0.01em] text-muted-foreground'>
             {breadcrumb}
           </span>

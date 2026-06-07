@@ -163,6 +163,8 @@ describe('aiAgentConversationExecutor', () => {
     )
     expect(spy.mock.calls[0]![0].reasoning).toBe('high')
     expect(spy.mock.calls[0]![0].title).toBe('Run X')
+    expect(spy.mock.calls[0]![0].source).toBe('workflow')
+    expect(spy.mock.calls[0]![0].workflow).toEqual({ runId: 'run-1', nodeId: 'n1' })
 
     spy.mockClear()
     await aiAgentConversationExecutor.run(

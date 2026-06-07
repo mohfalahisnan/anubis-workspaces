@@ -239,10 +239,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 In `packages/workflow-runtime/tests/executors/lesson-writer.test.ts`, change `ctx` to capture the prompt content, and add a test asserting the reviewer comment is surfaced. Replace the `ctx` factory with one that records the content:
 
 ```ts
-function ctx(recordCandidate: ReturnType<typeof vi.fn>, capture?: (content: string) => void): ExecutorContext {
+function ctx(capture?: (content: string) => void): ExecutorContext {
   return {
-    workspaceId: 'brand-1', runId: 'run-9', signal: new AbortController().signal, emit: () => {},
-    experience: { recordCandidate },
+    runId: 'run-9', signal: new AbortController().signal, emit: () => {},
     conversations: {
       createAndAwaitFirstTurn: async (input: { content: string }) => {
         capture?.(input.content)

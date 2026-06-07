@@ -138,6 +138,8 @@ export const aiAgentConversationExecutor: Executor<AiAgentConversationConfig> = 
       profileId: input.config.profileId,
       reasoning: input.config.reasoning,
       content,
+      source: 'workflow',
+      workflow: { runId: ctx.runId, nodeId: input.nodeId },
     })
     const envelope = parseEnvelope(result.text)
     return {

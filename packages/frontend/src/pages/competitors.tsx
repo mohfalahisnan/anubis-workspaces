@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useActiveWorkspace } from '@/lib/workspace'
 import {
   CheckIcon,
   CheckSquareIcon,
@@ -65,7 +64,6 @@ export function CompetitorsPage() {
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
   const [view, setView] = useState<ViewMode>('grid')
   const { config: levelsCfg } = useCompetitorLevels()
-  const { activeWorkspaceId } = useActiveWorkspace()
 
   const visibleItems = items?.filter((c) =>
     matchesLevelFilter(effectiveLevel(c.level, c.followers, levelsCfg), levelFilter),
@@ -73,7 +71,7 @@ export function CompetitorsPage() {
 
   async function refresh() {
     try {
-      setItems(await listCompetitors(activeWorkspaceId))
+      setItems(dedupeCompetitors(await listCompetitors()))
     } catch (e) {
       setItems([])
       setBanner({
@@ -86,7 +84,7 @@ export function CompetitorsPage() {
   useEffect(() => {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId])
+  }, [])
 
   async function handleCapture(c: CompetitorSummary) {
     setCapturing((prev) => new Set(prev).add(c.id))
@@ -835,7 +833,6 @@ function AddCompetitorDialog({
   const [niche, setNiche] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const { activeWorkspaceId } = useActiveWorkspace()
 
   useEffect(() => {
     if (!open) {
@@ -860,7 +857,6 @@ function AddCompetitorDialog({
         handle: handle.trim(),
         displayName: displayName.trim() || undefined,
         niche: niche.trim() || undefined,
-        workspaceId: activeWorkspaceId,
       })
       onCreated()
     } catch (e) {
@@ -1132,6 +1128,22 @@ function EditCompetitorDialog({
 }
 
 /* ---------- Helpers ---------- */
+
+function competitorKey(competitor: Pick<CompetitorSummary, 'handle'>): string {
+  return competitor.handle.trim().replace(/^@/, '').toLowerCase()
+}
+
+function dedupeCompetitors(items: CompetitorSummary[]): CompetitorSummary[] {
+  const seen = new Set<string>()
+  const out: CompetitorSummary[] = []
+  for (const item of items) {
+    const key = competitorKey(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out
+}
 
 const textInput =
   'h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))] focus:ring-1 focus:ring-[var(--anubis-gold-hi)]'

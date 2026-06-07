@@ -10,11 +10,9 @@ import {
 } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation, type PageKey } from '@/lib/navigation'
-import { useActiveWorkspace } from '@/lib/workspace'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { ConversationsPage } from '@/pages/conversations'
-import { MemoryPage } from '@/pages/memory'
 import { PlaceholderPage } from '@/pages/placeholder'
 import { CompetitorsPage } from '@/pages/competitors'
 import { ProfileEditorPage } from '@/pages/profile-editor'
@@ -35,7 +33,6 @@ const BREADCRUMBS: Record<PageKey, string> = {
   conversations: 'Conversations',
   'active-conversation': 'Conversations',
   content: 'Content',
-  memory: 'Memory',
   profiles: 'Profiles',
   'profile-editor': 'Profiles · Edit',
   skills: 'Skills',
@@ -105,7 +102,7 @@ function LiveStatusRow({ counts }: { counts: LiveCounts }) {
   )
 }
 
-function useLiveCounts(workspaceId: string): LiveCounts {
+function useLiveCounts(): LiveCounts {
   const [counts, setCounts] = useState<LiveCounts>({})
 
   useEffect(() => {
@@ -117,7 +114,7 @@ function useLiveCounts(workspaceId: string): LiveCounts {
         listConversations({ limit: 200 }),
         listSkills(),
         listCronJobs(),
-        listCompetitors(workspaceId),
+        listCompetitors(),
       ])
       if (!active) return
       setCounts({
@@ -135,15 +132,14 @@ function useLiveCounts(workspaceId: string): LiveCounts {
     return () => {
       active = false
     }
-  }, [workspaceId])
+  }, [])
 
   return counts
 }
 
 function HomePage() {
   const { navigate } = useNavigation()
-  const { activeWorkspaceId } = useActiveWorkspace()
-  const counts = useLiveCounts(activeWorkspaceId)
+  const counts = useLiveCounts()
 
   function handleAction(action: Action) {
     switch (action.id) {
@@ -201,8 +197,6 @@ function CurrentPage() {
       return <ActiveConversationPage conversationId={route.conversationId} />
     case 'content':
       return <ContentPage />
-    case 'memory':
-      return <MemoryPage />
     case 'profiles':
       return <ProfilesPage />
     case 'profile-editor':

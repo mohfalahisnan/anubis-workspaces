@@ -93,6 +93,22 @@ describe('ConversationService', () => {
     expect(c.extra.skills).toEqual([])
   })
 
+  it('marks and filters conversations created by workflows', () => {
+    const manual = ctx.svc.create({ title: 'Manual', profileId: 'claude-coding', workspacePath: '/tmp/manual' })
+    const workflow = ctx.svc.create({
+      title: 'Workflow',
+      profileId: 'claude-coding',
+      workspacePath: '/tmp/workflow',
+      source: 'workflow',
+      workflow: { runId: 'run-1', nodeId: 'ai-1' },
+    })
+
+    expect(workflow.extra.source).toBe('workflow')
+    expect(workflow.extra.workflow).toEqual({ runId: 'run-1', nodeId: 'ai-1' })
+    expect(ctx.svc.list({ source: 'manual' }).map((c) => c.id)).toEqual([manual.id])
+    expect(ctx.svc.list({ source: 'workflow' }).map((c) => c.id)).toEqual([workflow.id])
+  })
+
   it('create auto-fills workspacePath when omitted', () => {
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding' })
     expect(c.workspacePath.startsWith(ctx.workspacesRoot)).toBe(true)

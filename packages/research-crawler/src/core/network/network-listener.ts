@@ -1,6 +1,38 @@
 import type { CdpSession } from "../chrome/cdp-session.js";
 import { isLikelyInstagramDataResponse, isLikelyChatGPTDataResponse } from "./response-filter.js";
 
+const CDP_DEBUG = !!process.env.ANUBIS_DEBUG_CDP;
+
+/** A single network response the listener observed (before/after filtering). */
+export type ObservedResponse = {
+  url: string;
+  status?: number;
+  contentType?: string;
+  matched: boolean;
+  bodySize?: number;
+  bodyOk?: boolean;
+};
+
+/**
+ * Collects a human-readable timeline plus every observed response so callers can
+ * surface why a capture failed (e.g. the body was empty, or the request never fired).
+ * Mutated in place by the listener; read it back after the call returns.
+ */
+export type CdpDebugCollector = {
+  events: string[];
+  responses: ObservedResponse[];
+};
+
+export function createCdpDebugCollector(): CdpDebugCollector {
+  return { events: [], responses: [] };
+}
+
+function cdpDebug(collector: CdpDebugCollector | undefined, ...args: unknown[]): void {
+  const line = args.map(String).join(" ");
+  if (CDP_DEBUG) process.stderr.write(`[cdp] ${line}\n`);
+  if (collector) collector.events.push(`${new Date().toISOString()} ${line}`);
+}
+
 export type CapturedNetworkResponse = {
   requestId: string;
   responseUrl: string;
@@ -16,6 +48,7 @@ export type CaptureNetworkResponsesOptions = {
   navigateUrl?: string;
   scrollIntervalMs?: number;
   initialDelayMs?: number;
+  debug?: CdpDebugCollector;
   onCaptured?: (captured: CapturedNetworkResponse[]) => void;
   shouldStop?: (captured: CapturedNetworkResponse[]) => boolean | Promise<boolean>;
 };
@@ -123,18 +156,24 @@ export async function captureChatGPTNetworkResponses(
   }>();
   const captured: CapturedNetworkResponse[] = [];
   const pendingReads = new Set<Promise<void>>();
+  const debug = options.debug;
+  const observedByRequestId = new Map<string, ObservedResponse>();
 
   session.on("Network.responseReceived", (params) => {
     const event = params as CdpResponseReceivedParams;
     const requestId = typeof event.requestId === "string" ? event.requestId : "";
     const responseUrl = typeof event.response?.url === "string" ? event.response.url : "";
     const contentType = getContentType(event.response);
-    if (!requestId || !isLikelyChatGPTDataResponse(responseUrl, contentType)) return;
-    responses.set(requestId, {
-      responseUrl,
-      statusCode: typeof event.response?.status === "number" ? event.response.status : undefined,
-      contentType
-    });
+    const status = typeof event.response?.status === "number" ? event.response.status : undefined;
+    const matched = isLikelyChatGPTDataResponse(responseUrl, contentType);
+    if (responseUrl.includes("chatgpt.com") || responseUrl.includes("openai.com")) {
+      const observed: ObservedResponse = { url: responseUrl, status, contentType, matched };
+      if (debug) debug.responses.push(observed);
+      if (requestId) observedByRequestId.set(requestId, observed);
+      cdpDebug(debug, matched ? "MATCH" : "skip", status, contentType || "?", responseUrl);
+    }
+    if (!requestId || !matched) return;
+    responses.set(requestId, { responseUrl, statusCode: status, contentType });
   });
 
   session.on("Network.loadingFinished", (params) => {
@@ -143,11 +182,17 @@ export async function captureChatGPTNetworkResponses(
     const response = responses.get(requestId);
     if (!requestId || !response || captured.length >= options.maxResponses) return;
 
+    const observed = observedByRequestId.get(requestId);
     const read = readResponseBody(session, requestId, response)
       .then((item) => {
         if (item && captured.length < options.maxResponses) {
           captured.push(item);
+          if (observed) { observed.bodyOk = true; observed.bodySize = item.bodySize; }
+          cdpDebug(debug, "body ok", item.bodySize, "bytes", item.responseUrl);
           options.onCaptured?.(captured);
+        } else if (!item) {
+          if (observed) observed.bodyOk = false;
+          cdpDebug(debug, "body EMPTY/failed for", response.responseUrl);
         }
       })
       .finally(() => pendingReads.delete(read));
@@ -158,6 +203,7 @@ export async function captureChatGPTNetworkResponses(
   try {
     await session.send("Network.setCacheDisabled", { cacheDisabled: true });
   } catch {}
+  if (options.navigateUrl) cdpDebug(debug, "navigating to", options.navigateUrl);
   if (options.navigateUrl) {
     await session.send("Page.enable");
     await session.send("Page.navigate", { url: options.navigateUrl });
@@ -183,6 +229,7 @@ export async function captureChatGPTNetworkResponses(
   }
 
   await Promise.allSettled([...pendingReads]);
+  cdpDebug(debug, "finished:", captured.length, "captured of", (debug?.responses.length ?? "?"), "observed chatgpt responses");
   return captured;
 }
 

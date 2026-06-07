@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import {
   captureInstagramData,
@@ -179,6 +180,51 @@ researchCrawlerRoutes.post('/chatgpt/prompt', async (c) => {
       reporter: silentReporter(),
     }, profile, cfg, getDataDir())),
   )
+})
+
+// Streaming variant: emits Server-Sent Events as the assistant response renders.
+//   event: delta  data: { text }   (full assistant text so far)
+//   event: done   data: <StandardCrawlerOutput>
+//   event: error  data: { message }
+researchCrawlerRoutes.post('/chatgpt/prompt/stream', async (c) => {
+  const input = sendChatGPTPromptSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return streamSSE(c, async (stream) => {
+    // Buffer deltas across the async boundary so we never miss one between writes.
+    let latest: string | null = null
+    let lastSent: string | null = null
+    let finished = false
+
+    const pump = (async () => {
+      while (!finished) {
+        if (latest !== null && latest !== lastSent) {
+          lastSent = latest
+          await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: lastSent }) })
+        }
+        await stream.sleep(150)
+      }
+    })()
+
+    try {
+      const result = await sendChatGPTPrompt(withCrawlerProfileDefaults({
+        ...input,
+        chromePath: input.chromePath ?? cfg.chromePath,
+        reporter: silentReporter(),
+        onDelta: (text) => { latest = text },
+      }, profile, cfg, getDataDir()))
+      finished = true
+      await pump
+      if (latest !== null && latest !== lastSent) {
+        await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: latest }) })
+      }
+      await stream.writeSSE({ event: 'done', data: JSON.stringify(result) })
+    } catch (err) {
+      finished = true
+      await pump.catch(() => {})
+      await stream.writeSSE({ event: 'error', data: JSON.stringify({ message: err instanceof Error ? err.message : 'stream failed' }) })
+    }
+  })
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {

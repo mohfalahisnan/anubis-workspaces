@@ -61,6 +61,8 @@ export type SendChatGPTPromptInput = {
   includeRaw?: boolean
   prompt: string
   conversationId?: string
+  /** Called with the full assistant text so far as it streams in from the page. */
+  onDelta?: (text: string) => void
 }
 
 export async function captureChatGPTConversations(input: CaptureChatGPTConversationsInput = {}): Promise<StandardCrawlerOutput> {
@@ -103,13 +105,13 @@ export async function captureChatGPTConversations(input: CaptureChatGPTConversat
   const result = await service.capture({
     chromeOrigin,
     timeoutMs: input.timeoutMs,
-    openNewTab: input.openNewTab ?? true,
+    openNewTab: input.openNewTab ?? false,
     keepTabOpen: input.keepTabOpen ?? true,
     reporter
   })
 
   const output = standardizeChatGPTResult(normalizedInput, result)
-  if (!launchResult.reused && !input.keepChromeOpen) {
+  if (!launchResult.reused && input.keepChromeOpen === false) {
     await killChrome(port)
   }
   return output
@@ -157,13 +159,13 @@ export async function captureChatGPTConversationDetails(input: CaptureChatGPTCon
     chromeOrigin,
     conversationId: input.conversationId,
     timeoutMs: input.timeoutMs,
-    openNewTab: input.openNewTab ?? true,
+    openNewTab: input.openNewTab ?? false,
     keepTabOpen: input.keepTabOpen ?? true,
     reporter
   })
 
   const output = standardizeChatGPTDetailsResult(normalizedInput, result)
-  if (!launchResult.reused && !input.keepChromeOpen) {
+  if (!launchResult.reused && input.keepChromeOpen === false) {
     await killChrome(port)
   }
   return output
@@ -214,13 +216,14 @@ export async function sendChatGPTPrompt(input: SendChatGPTPromptInput): Promise<
     prompt: input.prompt,
     conversationId: input.conversationId,
     timeoutMs: input.timeoutMs,
-    openNewTab: input.openNewTab ?? true,
+    openNewTab: input.openNewTab ?? false,
     keepTabOpen: input.keepTabOpen ?? true,
+    ...(input.onDelta ? { onDelta: input.onDelta } : {}),
     reporter
   })
 
   const output = standardizeChatGPTPromptResult(normalizedInput, result)
-  if (!launchResult.reused && !input.keepChromeOpen) {
+  if (!launchResult.reused && input.keepChromeOpen === false) {
     await killChrome(port)
   }
   return output

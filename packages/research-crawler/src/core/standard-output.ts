@@ -136,11 +136,25 @@ export type StandardCrawlerOutput = {
       }>
     }
     loginAuthenticated?: boolean
+    debug?: CdpDebugInfo
   }
   error?: {
     code: string
     message: string
   }
+}
+
+/** CDP capture diagnostics surfaced to the playground for debugging. */
+export type CdpDebugInfo = {
+  events: string[]
+  responses: Array<{
+    url: string
+    status?: number
+    contentType?: string
+    matched: boolean
+    bodySize?: number
+    bodyOk?: boolean
+  }>
 }
 
 export function standardizeInstagramCaptureResult(
@@ -370,6 +384,7 @@ export function standardizeChatGPTResult(
       code: string;
       message: string;
     };
+    debug?: CdpDebugInfo;
     meta?: {
       startedAt: string;
       completedAt: string;
@@ -392,6 +407,7 @@ export function standardizeChatGPTResult(
         profileCount: 0,
         postCount: 0,
         warnings: [result.error?.message ?? 'ChatGPT crawler failed.'],
+        debug: result.debug,
         raw: input.includeRaw ? result : undefined
       },
       error: {
@@ -425,6 +441,7 @@ export function standardizeChatGPTResult(
       finishedAt: result.meta.completedAt,
       sourceUrl: result.meta.tabUrl,
       warnings: conversations.length === 0 ? ['No conversation history found.'] : [],
+      debug: result.debug,
       raw: input.includeRaw ? result : undefined
     }
   }
@@ -436,6 +453,7 @@ export function standardizeChatGPTDetailsResult(
     ok: boolean;
     messages?: ChatGPTMessage[];
     error?: { code: string; message: string };
+    debug?: CdpDebugInfo;
     meta?: { startedAt: string; completedAt: string; tabUrl: string };
   }
 ): StandardCrawlerOutput {
@@ -450,6 +468,7 @@ export function standardizeChatGPTDetailsResult(
         profileCount: 0,
         postCount: 0,
         warnings: [result.error?.message ?? 'ChatGPT details capture failed.'],
+        debug: result.debug,
         raw: input.includeRaw ? result : undefined
       },
       error: {
@@ -475,6 +494,7 @@ export function standardizeChatGPTDetailsResult(
       finishedAt: result.meta.completedAt,
       sourceUrl: result.meta.tabUrl,
       warnings: [],
+      debug: result.debug,
       raw: input.includeRaw ? result : undefined
     }
   }
@@ -487,6 +507,7 @@ export function standardizeChatGPTPromptResult(
     conversationId?: string;
     messages?: ChatGPTMessage[];
     error?: { code: string; message: string };
+    debug?: CdpDebugInfo;
     meta?: { startedAt: string; completedAt: string; tabUrl: string };
   }
 ): StandardCrawlerOutput {
@@ -501,6 +522,7 @@ export function standardizeChatGPTPromptResult(
         profileCount: 0,
         postCount: 0,
         warnings: [result.error?.message ?? 'ChatGPT prompt submission failed.'],
+        debug: result.debug,
         raw: input.includeRaw ? result : undefined
       },
       error: {
@@ -529,6 +551,7 @@ export function standardizeChatGPTPromptResult(
       finishedAt: result.meta.completedAt,
       sourceUrl: result.meta.tabUrl,
       warnings: [],
+      debug: result.debug,
       raw: input.includeRaw ? result : undefined
     }
   }

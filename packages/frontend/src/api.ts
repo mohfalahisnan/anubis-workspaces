@@ -607,14 +607,34 @@ export interface ChatGPTMessageListItem {
   createTime: string
 }
 
+export interface CdpDebugObservedResponse {
+  url: string
+  status?: number
+  contentType?: string
+  matched: boolean
+  bodySize?: number
+  bodyOk?: boolean
+}
+
+export interface CdpDebugInfo {
+  events: string[]
+  responses: CdpDebugObservedResponse[]
+}
+
+export interface ChatGPTCrawlerMeta {
+  warnings: string[]
+  startedAt?: string
+  finishedAt?: string
+  sourceUrl?: string
+  debug?: CdpDebugInfo
+}
+
 export interface ChatGPTConversationsResponse {
   ok: boolean
   output: {
     conversations: ChatGPTConversationListItem[]
   }
-  meta: {
-    warnings: string[]
-  }
+  meta: ChatGPTCrawlerMeta
   error?: {
     code: string
     message: string
@@ -626,9 +646,7 @@ export interface ChatGPTConversationDetailsResponse {
   output: {
     chatMessages: ChatGPTMessageListItem[]
   }
-  meta: {
-    warnings: string[]
-  }
+  meta: ChatGPTCrawlerMeta
   error?: {
     code: string
     message: string
@@ -643,9 +661,7 @@ export interface ChatGPTPromptResponse {
   output: {
     chatMessages: ChatGPTMessageListItem[]
   }
-  meta: {
-    warnings: string[]
-  }
+  meta: ChatGPTCrawlerMeta
   error?: {
     code: string
     message: string
@@ -709,4 +725,73 @@ export async function sendChatGPTPrompt(
     method: 'POST',
     body: JSON.stringify(options),
   })
+}
+
+export interface ChatGPTStreamHandlers {
+  onDelta?: (text: string) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Send a prompt and stream the assistant response via Server-Sent Events.
+ * `onDelta` receives the full assistant text so far; resolves with the final
+ * StandardCrawlerOutput once generation completes.
+ */
+export async function streamChatGPTPrompt(
+  options: ChatGPTPromptOptions,
+  handlers: ChatGPTStreamHandlers = {},
+): Promise<ChatGPTPromptResponse> {
+  const baseUrl = await getApiBaseUrl()
+  const response = await fetch(new URL('/research-crawler/chatgpt/prompt/stream', baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+    body: JSON.stringify(options),
+    signal: handlers.signal,
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`Stream request failed: HTTP ${response.status}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: ChatGPTPromptResponse | null = null
+  let streamError: string | null = null
+
+  // Parse the SSE wire format: events separated by blank lines, each with
+  // `event:` and (possibly multiple) `data:` lines.
+  const handleEvent = (raw: string) => {
+    let event = 'message'
+    const dataLines: string[] = []
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+    }
+    if (dataLines.length === 0) return
+    const data = dataLines.join('\n')
+    if (event === 'delta') {
+      try { handlers.onDelta?.((JSON.parse(data) as { text: string }).text) } catch { /* ignore */ }
+    } else if (event === 'done') {
+      try { result = JSON.parse(data) as ChatGPTPromptResponse } catch { /* ignore */ }
+    } else if (event === 'error') {
+      try { streamError = (JSON.parse(data) as { message?: string }).message ?? 'stream error' } catch { streamError = 'stream error' }
+    }
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      if (chunk.trim()) handleEvent(chunk)
+    }
+  }
+  if (buffer.trim()) handleEvent(buffer)
+
+  if (streamError) throw new Error(streamError)
+  if (!result) throw new Error('Stream ended without a result.')
+  return result
 }

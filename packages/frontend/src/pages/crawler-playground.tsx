@@ -3,9 +3,10 @@ import {
   openChatGPTLoginChrome,
   getChatGPTConversations,
   getChatGPTConversationDetails,
-  sendChatGPTPrompt,
+  streamChatGPTPrompt,
   type ChatGPTConversationListItem,
-  type ChatGPTMessageListItem
+  type ChatGPTMessageListItem,
+  type CdpDebugInfo
 } from '@/api'
 import {
   GlobeIcon,
@@ -25,7 +26,7 @@ import {
 } from 'lucide-react'
 
 export function CrawlerPlaygroundPage() {
-  const [openNewTab, setOpenNewTab] = useState(true)
+  const [openNewTab, setOpenNewTab] = useState(false)
   const [headless, setHeadless] = useState(false)
   const [timeoutMs, setTimeoutMs] = useState(30000)
   const [keepTabOpen, setKeepTabOpen] = useState(true)
@@ -40,9 +41,15 @@ export function CrawlerPlaygroundPage() {
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [promptText, setPromptText] = useState('')
   const [sendingPrompt, setSendingPrompt] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
 
   const [chromeLoading, setChromeLoading] = useState(false)
   const [chromeSuccess, setChromeSuccess] = useState<string | null>(null)
+
+  // Debugging: last operation's CDP diagnostics
+  const [debugInfo, setDebugInfo] = useState<CdpDebugInfo | null>(null)
+  const [debugLabel, setDebugLabel] = useState<string>('')
+  const [debugOpen, setDebugOpen] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -81,6 +88,8 @@ export function CrawlerPlaygroundPage() {
         keepTabOpen
       })
 
+      setDebugInfo(res.meta?.debug ?? null)
+      setDebugLabel('List conversations')
       if (res.ok) {
         const list = res.output.conversations || []
         setConversations(list)
@@ -89,6 +98,7 @@ export function CrawlerPlaygroundPage() {
         }
       } else {
         setError(res.error?.message || 'Failed to fetch conversations')
+        setDebugOpen(true)
       }
     } catch (e: any) {
       setError(e.message || 'An error occurred during fetch')
@@ -110,10 +120,13 @@ export function CrawlerPlaygroundPage() {
         timeoutMs,
         keepTabOpen
       })
+      setDebugInfo(res.meta?.debug ?? null)
+      setDebugLabel(`Conversation details (${id})`)
       if (res.ok) {
         setActiveMessages(res.output.chatMessages || [])
       } else {
         setError(res.error?.message || 'Failed to load conversation details')
+        setDebugOpen(true)
       }
     } catch (e: any) {
       setError(e.message || 'Failed to load conversation details')
@@ -136,19 +149,36 @@ export function CrawlerPlaygroundPage() {
       content: textToSend,
       createTime: new Date().toISOString()
     }
+    const STREAM_ID = 'streaming-assistant'
+    setStreamingText('')
     setActiveMessages((prev) => [...prev, optimisticMsg])
 
     try {
-      const res = await sendChatGPTPrompt({
-        prompt: textToSend,
-        conversationId: selectedChatId || undefined,
-        openNewTab: false, // reuse tab
-        headless,
-        timeoutMs: timeoutMs + 30000, // give it extra time to generate
-        keepTabOpen
-      })
+      const res = await streamChatGPTPrompt(
+        {
+          prompt: textToSend,
+          conversationId: selectedChatId || undefined,
+          openNewTab: false, // reuse tab
+          headless,
+          timeoutMs: timeoutMs + 120000, // long tasks: generous streaming window
+          keepTabOpen,
+        },
+        {
+          onDelta: (text) => {
+            setStreamingText(text)
+            // Render the assistant reply live as it streams in.
+            setActiveMessages((prev) => {
+              const others = prev.filter((m) => m.id !== STREAM_ID)
+              return [...others, { id: STREAM_ID, role: 'assistant', content: text, createTime: new Date().toISOString() }]
+            })
+          },
+        },
+      )
 
+      setDebugInfo(res.meta?.debug ?? null)
+      setDebugLabel('Send prompt (stream)')
       if (res.ok) {
+        // Replace the live stream with the canonical final history.
         setActiveMessages(res.output.chatMessages || [])
         // If it was a new chat, we get the resolved ID and need to refresh list
         if (!selectedChatId && res.input?.conversationId) {
@@ -158,14 +188,16 @@ export function CrawlerPlaygroundPage() {
         await handleFetchConversations()
       } else {
         setError(res.error?.message || 'Failed to send prompt')
-        // Remove optimistic message on error
-        setActiveMessages((prev) => prev.filter(m => m.id !== optimisticMsg.id))
+        setDebugOpen(true)
+        // Remove optimistic + streaming messages on error
+        setActiveMessages((prev) => prev.filter(m => m.id !== optimisticMsg.id && m.id !== STREAM_ID))
       }
     } catch (e: any) {
       setError(e.message || 'Error sending prompt')
-      setActiveMessages((prev) => prev.filter(m => m.id !== optimisticMsg.id))
+      setActiveMessages((prev) => prev.filter(m => m.id !== optimisticMsg.id && m.id !== STREAM_ID))
     } finally {
       setSendingPrompt(false)
+      setStreamingText('')
     }
   }
 
@@ -212,6 +244,23 @@ export function CrawlerPlaygroundPage() {
               <RefreshCwIcon className='size-3.5' />
             )}
             Refresh List
+          </button>
+          <button
+            onClick={() => setDebugOpen((v) => !v)}
+            className={`flex items-center gap-1.5 py-1.5 px-3 rounded-md border text-xs font-semibold transition-all ${
+              debugOpen
+                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                : 'border-border/50 bg-zinc-800/40 hover:bg-zinc-800 text-muted-foreground'
+            }`}
+            title='Toggle CDP debug panel'
+          >
+            <TerminalIcon className='size-3.5' />
+            Debug
+            {debugInfo && (
+              <span className='ml-0.5 rounded-full bg-zinc-900/60 px-1.5 text-[9px] tabular-nums'>
+                {debugInfo.responses.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -411,8 +460,8 @@ export function CrawlerPlaygroundPage() {
                     )
                   })
                 )}
-                {sendingPrompt && (
-                  /* Thinking/Loading message bubble */
+                {sendingPrompt && !streamingText && (
+                  /* Thinking/Loading bubble — only until the first streamed token arrives */
                   <div className='flex gap-3 max-w-[85%] self-start animate-pulse'>
                     <div className='size-7 rounded-full border bg-zinc-800 border-zinc-700 text-zinc-300 flex items-center justify-center shrink-0 mt-0.5'>
                       <BotIcon className='size-3.5' />
@@ -464,6 +513,96 @@ export function CrawlerPlaygroundPage() {
         </div>
 
       </div>
+
+      {/* Debug drawer */}
+      {debugOpen && (
+        <div className='border-t border-emerald-500/20 bg-zinc-950/60 backdrop-blur-md shrink-0 flex flex-col max-h-[45vh] min-h-0'>
+          <div className='flex items-center justify-between px-4 py-2 border-b border-border/30 shrink-0'>
+            <div className='flex items-center gap-2 text-xs'>
+              <TerminalIcon className='size-3.5 text-emerald-400' />
+              <span className='font-semibold text-foreground'>CDP Debug</span>
+              {debugLabel && <span className='text-muted-foreground'>— {debugLabel}</span>}
+            </div>
+            <div className='flex items-center gap-3'>
+              <button
+                onClick={() => {
+                  if (debugInfo) navigator.clipboard?.writeText(JSON.stringify(debugInfo, null, 2))
+                }}
+                disabled={!debugInfo}
+                className='text-[10px] py-0.5 px-2 rounded border border-zinc-700 hover:bg-zinc-800 text-muted-foreground transition-all disabled:opacity-40'
+              >
+                Copy JSON
+              </button>
+              <button
+                onClick={() => setDebugOpen(false)}
+                className='text-[10px] py-0.5 px-2 rounded border border-zinc-700 hover:bg-zinc-800 text-muted-foreground transition-all'
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          {!debugInfo ? (
+            <div className='p-6 text-center text-xs text-muted-foreground'>
+              No debug data yet. Run an operation (list, open a conversation, or send a prompt) to capture CDP diagnostics.
+            </div>
+          ) : (
+            <div className='flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-px bg-border/20 min-h-0'>
+              {/* Event timeline */}
+              <div className='bg-zinc-950/40 flex flex-col min-h-0'>
+                <div className='px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/20 shrink-0'>
+                  Events ({debugInfo.events.length})
+                </div>
+                <div className='overflow-y-auto p-3 font-mono text-[10px] leading-relaxed text-zinc-300 whitespace-pre-wrap break-all'>
+                  {debugInfo.events.length === 0 ? (
+                    <span className='text-muted-foreground'>(no events)</span>
+                  ) : (
+                    debugInfo.events.map((e, i) => <div key={i}>{e}</div>)
+                  )}
+                </div>
+              </div>
+
+              {/* Observed responses */}
+              <div className='bg-zinc-950/40 flex flex-col min-h-0'>
+                <div className='px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/20 shrink-0'>
+                  Observed responses ({debugInfo.responses.length})
+                </div>
+                <div className='overflow-y-auto p-2 flex flex-col gap-1'>
+                  {debugInfo.responses.length === 0 ? (
+                    <span className='p-2 text-[10px] text-muted-foreground'>
+                      No chatgpt.com / openai.com responses were observed. The request likely fired before the listener attached, or the page is server-rendered.
+                    </span>
+                  ) : (
+                    debugInfo.responses.map((r, i) => (
+                      <div
+                        key={i}
+                        className={`rounded border px-2 py-1.5 flex flex-col gap-1 ${
+                          r.matched ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/30 bg-zinc-900/30'
+                        }`}
+                      >
+                        <div className='flex items-center gap-1.5 flex-wrap text-[9px]'>
+                          <span className={`px-1 rounded font-bold ${r.matched ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-700/40 text-zinc-400'}`}>
+                            {r.matched ? 'MATCH' : 'skip'}
+                          </span>
+                          {typeof r.status === 'number' && (
+                            <span className={`px-1 rounded tabular-nums ${r.status >= 400 ? 'bg-red-500/20 text-red-300' : 'bg-zinc-700/40 text-zinc-300'}`}>
+                              {r.status}
+                            </span>
+                          )}
+                          {r.bodyOk === true && <span className='px-1 rounded bg-sky-500/20 text-sky-300'>body ok{typeof r.bodySize === 'number' ? ` ${r.bodySize}b` : ''}</span>}
+                          {r.bodyOk === false && <span className='px-1 rounded bg-amber-500/20 text-amber-300'>body empty/failed</span>}
+                          {r.contentType && <span className='text-muted-foreground truncate'>{r.contentType.split(';')[0]}</span>}
+                        </div>
+                        <div className='font-mono text-[9px] text-zinc-400 break-all'>{r.url}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </main>
   )
 }

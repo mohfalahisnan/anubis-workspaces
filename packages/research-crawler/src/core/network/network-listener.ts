@@ -1,5 +1,5 @@
 import type { CdpSession } from "../chrome/cdp-session.js";
-import { isLikelyInstagramDataResponse } from "./response-filter.js";
+import { isLikelyInstagramDataResponse, isLikelyChatGPTDataResponse } from "./response-filter.js";
 
 export type CapturedNetworkResponse = {
   requestId: string;
@@ -103,6 +103,80 @@ export async function captureInstagramNetworkResponses(
         });
       } catch {
         // ignore errors if session got closed/detached
+      }
+      await delay(scrollIntervalMs);
+    }
+  }
+
+  await Promise.allSettled([...pendingReads]);
+  return captured;
+}
+
+export async function captureChatGPTNetworkResponses(
+  session: CdpSession,
+  options: CaptureNetworkResponsesOptions
+): Promise<CapturedNetworkResponse[]> {
+  const responses = new Map<string, {
+    responseUrl: string;
+    statusCode?: number;
+    contentType?: string;
+  }>();
+  const captured: CapturedNetworkResponse[] = [];
+  const pendingReads = new Set<Promise<void>>();
+
+  session.on("Network.responseReceived", (params) => {
+    const event = params as CdpResponseReceivedParams;
+    const requestId = typeof event.requestId === "string" ? event.requestId : "";
+    const responseUrl = typeof event.response?.url === "string" ? event.response.url : "";
+    const contentType = getContentType(event.response);
+    if (!requestId || !isLikelyChatGPTDataResponse(responseUrl, contentType)) return;
+    responses.set(requestId, {
+      responseUrl,
+      statusCode: typeof event.response?.status === "number" ? event.response.status : undefined,
+      contentType
+    });
+  });
+
+  session.on("Network.loadingFinished", (params) => {
+    const event = params as CdpLoadingFinishedParams;
+    const requestId = typeof event.requestId === "string" ? event.requestId : "";
+    const response = responses.get(requestId);
+    if (!requestId || !response || captured.length >= options.maxResponses) return;
+
+    const read = readResponseBody(session, requestId, response)
+      .then((item) => {
+        if (item && captured.length < options.maxResponses) {
+          captured.push(item);
+          options.onCaptured?.(captured);
+        }
+      })
+      .finally(() => pendingReads.delete(read));
+    pendingReads.add(read);
+  });
+
+  await session.send("Network.enable");
+  try {
+    await session.send("Network.setCacheDisabled", { cacheDisabled: true });
+  } catch {}
+  if (options.navigateUrl) {
+    await session.send("Page.enable");
+    await session.send("Page.navigate", { url: options.navigateUrl });
+  }
+
+  const scrollIntervalMs = Math.max(250, Math.floor(options.scrollIntervalMs ?? 1000));
+  const initialDelayMs = Math.max(0, Math.floor(options.initialDelayMs ?? 1200));
+
+  if (!options.shouldStop) {
+    await delay(options.timeoutMs);
+  } else {
+    const deadline = Date.now() + options.timeoutMs;
+    if (initialDelayMs > 0) await delay(initialDelayMs);
+    let lastCheckedLength = -1;
+    while (Date.now() < deadline) {
+      await Promise.allSettled([...pendingReads]);
+      if (captured.length !== lastCheckedLength) {
+        lastCheckedLength = captured.length;
+        if (await options.shouldStop(captured)) break;
       }
       await delay(scrollIntervalMs);
     }

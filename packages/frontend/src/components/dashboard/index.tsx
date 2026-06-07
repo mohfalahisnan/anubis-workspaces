@@ -23,6 +23,7 @@ import { SkillsPage } from '@/pages/skills'
 import { WorkflowDemoPage } from '@/components/workflow'
 import { WorkflowsPage } from '@/pages/workflows'
 import { WorkflowEditorPage } from '@/pages/workflow-editor'
+import { CrawlerPlaygroundPage } from '@/pages/crawler-playground'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -42,6 +43,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   'workflow-demo': 'Workflow demo',
   workflows: 'Workflows',
   'workflow-editor': 'Workflows · Editor',
+  'crawler-playground': 'Crawler Playground',
 }
 
 type BackendState = 'checking' | 'online' | 'offline'
@@ -215,6 +217,8 @@ function CurrentPage() {
       return <WorkflowsPage />
     case 'workflow-editor':
       return <WorkflowEditorPage workflowId={route.workflowId} />
+    case 'crawler-playground':
+      return <CrawlerPlaygroundPage />
     default:
       return <HomePage />
   }

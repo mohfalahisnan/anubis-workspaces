@@ -13,6 +13,7 @@ import {
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
+  TerminalIcon,
   UsersRoundIcon,
   WorkflowIcon,
   type LucideIcon,
@@ -36,6 +37,7 @@ export const navItems: NavItem[] = [
   { label: 'Skills', icon: LibraryIcon, page: 'skills' },
   { label: 'Scheduled', icon: CalendarClockIcon, page: 'scheduled' },
   { label: 'Workflows', icon: WorkflowIcon, page: 'workflows' },
+  { label: 'Playground', icon: TerminalIcon, page: 'crawler-playground' },
   { label: 'Settings', icon: Settings2Icon, page: 'settings' },
 ]
 

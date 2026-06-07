@@ -3,8 +3,8 @@ import type { InstagramCdpCaptureResult } from './services/instagram-cdp-capture
 import { calculateAvgLikesSummary } from './instagram/avg-likes.js'
 
 export type StandardCrawlerInput = {
-  target: 'instagram'
-  mode: 'profile_capture' | 'competitor_discovery' | 'avg_likes_setup'
+  target: 'instagram' | 'chatgpt'
+  mode: 'profile_capture' | 'competitor_discovery' | 'avg_likes_setup' | 'conversation_list' | 'conversation_details' | 'send_prompt'
   username?: string
   url?: string
   source?: 'explore' | 'hashtag' | 'keyword'
@@ -19,6 +19,8 @@ export type StandardCrawlerInput = {
   captureConcurrency?: number
   timeoutMs?: number
   includeRaw?: boolean
+  conversationId?: string
+  prompt?: string
 }
 
 export type ProfileData = {
@@ -65,7 +67,21 @@ export type PostData = {
   status?: 'profile_found' | 'profile_not_found'
 }
 
-export type StandardCrawlerOutputType = 'Profile Data List' | 'Post Data List'
+export type ChatGPTConversation = {
+  id: string
+  title: string
+  createTime: string
+  updateTime: string
+}
+
+export type ChatGPTMessage = {
+  id: string
+  role: string
+  content: string
+  createTime: string
+}
+
+export type StandardCrawlerOutputType = 'Profile Data List' | 'Post Data List' | 'ChatGPT Conversation List' | 'ChatGPT Message List'
 
 export type StandardCrawlerOutput = {
   ok: boolean
@@ -75,6 +91,8 @@ export type StandardCrawlerOutput = {
   output: {
     profiles: ProfileData[]
     posts: PostData[]
+    conversations?: ChatGPTConversation[]
+    chatMessages?: ChatGPTMessage[]
   }
   meta: {
     profileCount: number
@@ -336,4 +354,209 @@ function stripEmpty<T extends Record<string, unknown>>(record: T): T {
   return Object.fromEntries(
     Object.entries(record).filter(([, value]) => value !== undefined && value !== null && value !== '')
   ) as T
+}
+
+export function standardizeChatGPTResult(
+  input: StandardCrawlerInput,
+  result: {
+    ok: boolean;
+    conversations?: Array<{
+      id: string;
+      title: string;
+      createTime: any;
+      updateTime: any;
+    }>;
+    error?: {
+      code: string;
+      message: string;
+    };
+    meta?: {
+      startedAt: string;
+      completedAt: string;
+      tabUrl: string;
+    };
+  }
+): StandardCrawlerOutput {
+  if (!result.ok || !result.conversations || !result.meta) {
+    return {
+      ok: false,
+      schemaVersion: '1.0',
+      outputTypes: ['ChatGPT Conversation List'],
+      input,
+      output: {
+        profiles: [],
+        posts: [],
+        conversations: []
+      },
+      meta: {
+        profileCount: 0,
+        postCount: 0,
+        warnings: [result.error?.message ?? 'ChatGPT crawler failed.'],
+        raw: input.includeRaw ? result : undefined
+      },
+      error: {
+        code: result.error?.code ?? 'CHATGPT_CAPTURE_FAILED',
+        message: result.error?.message ?? 'ChatGPT crawler failed.'
+      }
+    }
+  }
+
+  const conversations = result.conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    createTime: parseSafeDate(c.createTime),
+    updateTime: parseSafeDate(c.updateTime)
+  }))
+
+  return {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['ChatGPT Conversation List'],
+    input,
+    output: {
+      profiles: [],
+      posts: [],
+      conversations
+    },
+    meta: {
+      profileCount: 0,
+      postCount: 0,
+      startedAt: result.meta.startedAt,
+      finishedAt: result.meta.completedAt,
+      sourceUrl: result.meta.tabUrl,
+      warnings: conversations.length === 0 ? ['No conversation history found.'] : [],
+      raw: input.includeRaw ? result : undefined
+    }
+  }
+}
+
+export function standardizeChatGPTDetailsResult(
+  input: StandardCrawlerInput,
+  result: {
+    ok: boolean;
+    messages?: ChatGPTMessage[];
+    error?: { code: string; message: string };
+    meta?: { startedAt: string; completedAt: string; tabUrl: string };
+  }
+): StandardCrawlerOutput {
+  if (!result.ok || !result.messages || !result.meta) {
+    return {
+      ok: false,
+      schemaVersion: '1.0',
+      outputTypes: ['ChatGPT Message List'],
+      input,
+      output: { profiles: [], posts: [], conversations: [], chatMessages: [] },
+      meta: {
+        profileCount: 0,
+        postCount: 0,
+        warnings: [result.error?.message ?? 'ChatGPT details capture failed.'],
+        raw: input.includeRaw ? result : undefined
+      },
+      error: {
+        code: result.error?.code ?? 'CHATGPT_CAPTURE_FAILED',
+        message: result.error?.message ?? 'ChatGPT details capture failed.'
+      }
+    }
+  }
+  return {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['ChatGPT Message List'],
+    input,
+    output: {
+      profiles: [],
+      posts: [],
+      chatMessages: result.messages
+    },
+    meta: {
+      profileCount: 0,
+      postCount: 0,
+      startedAt: result.meta.startedAt,
+      finishedAt: result.meta.completedAt,
+      sourceUrl: result.meta.tabUrl,
+      warnings: [],
+      raw: input.includeRaw ? result : undefined
+    }
+  }
+}
+
+export function standardizeChatGPTPromptResult(
+  input: StandardCrawlerInput,
+  result: {
+    ok: boolean;
+    conversationId?: string;
+    messages?: ChatGPTMessage[];
+    error?: { code: string; message: string };
+    meta?: { startedAt: string; completedAt: string; tabUrl: string };
+  }
+): StandardCrawlerOutput {
+  if (!result.ok || !result.messages || !result.meta) {
+    return {
+      ok: false,
+      schemaVersion: '1.0',
+      outputTypes: ['ChatGPT Message List'],
+      input,
+      output: { profiles: [], posts: [], conversations: [], chatMessages: [] },
+      meta: {
+        profileCount: 0,
+        postCount: 0,
+        warnings: [result.error?.message ?? 'ChatGPT prompt submission failed.'],
+        raw: input.includeRaw ? result : undefined
+      },
+      error: {
+        code: result.error?.code ?? 'CHATGPT_PROMPT_FAILED',
+        message: result.error?.message ?? 'ChatGPT prompt submission failed.'
+      }
+    }
+  }
+  return {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['ChatGPT Message List'],
+    input: {
+      ...input,
+      conversationId: result.conversationId ?? input.conversationId
+    },
+    output: {
+      profiles: [],
+      posts: [],
+      chatMessages: result.messages
+    },
+    meta: {
+      profileCount: 0,
+      postCount: 0,
+      startedAt: result.meta.startedAt,
+      finishedAt: result.meta.completedAt,
+      sourceUrl: result.meta.tabUrl,
+      warnings: [],
+      raw: input.includeRaw ? result : undefined
+    }
+  }
+}
+
+function parseSafeDate(val: any): string {
+  if (!val) return new Date().toISOString()
+
+  // If it's a number (timestamp in seconds or ms)
+  if (typeof val === 'number') {
+    const isSeconds = val < 10000000000
+    const date = new Date(isSeconds ? val * 1000 : val)
+    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+  }
+
+  // If it's a string
+  if (typeof val === 'string') {
+    // Check if it's a numeric string
+    const num = Number(val)
+    if (!isNaN(num)) {
+      const isSeconds = num < 10000000000
+      const date = new Date(isSeconds ? num * 1000 : num)
+      return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+    }
+    // Try to parse directly
+    const date = new Date(val)
+    return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+  }
+
+  return new Date().toISOString()
 }

@@ -3,6 +3,9 @@ import { z } from 'zod'
 import {
   captureInstagramData,
   discoverInstagramCompetitors,
+  captureChatGPTConversations,
+  captureChatGPTConversationDetails,
+  sendChatGPTPrompt,
   launchChrome,
   silentReporter,
 } from '@anubis/research-crawler'
@@ -16,7 +19,7 @@ import { withCrawlerProfileDefaults, type CrawlerProfileName } from './chrome-de
                        Chrome profile.
    - profile=public  → existing CDP scraper (anonymous mode).
    - profile=flow    → existing CDP scraper.
-   ----------------------------------------------------------- */
+   - ----------------------------------------------------------- */
 
 const profileSchema = z.enum(['login', 'public', 'flow'])
 
@@ -78,6 +81,56 @@ const discoverInstagramSchema = z.object({
 
 export const researchCrawlerRoutes = new Hono()
 
+const captureChatGPTConversationsSchema = z.object({
+  chromeOrigin: z.string().url().optional(),
+  remoteDebuggingPort: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  openNewTab: z.boolean().optional(),
+  profile: profileSchema.optional(),
+  profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
+  chromePath: z.string().min(1).optional(),
+  headless: z.boolean().optional(),
+  forceHeadless: z.boolean().optional(),
+  keepChromeOpen: z.boolean().optional(),
+  keepTabOpen: z.boolean().optional(),
+  includeRaw: z.boolean().optional(),
+}).strict()
+
+const captureChatGPTConversationDetailsSchema = z.object({
+  chromeOrigin: z.string().url().optional(),
+  remoteDebuggingPort: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  openNewTab: z.boolean().optional(),
+  profile: profileSchema.optional(),
+  profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
+  chromePath: z.string().min(1).optional(),
+  headless: z.boolean().optional(),
+  forceHeadless: z.boolean().optional(),
+  keepChromeOpen: z.boolean().optional(),
+  keepTabOpen: z.boolean().optional(),
+  includeRaw: z.boolean().optional(),
+}).strict()
+
+const sendChatGPTPromptSchema = z.object({
+  prompt: z.string().min(1),
+  conversationId: z.string().min(1).optional(),
+  chromeOrigin: z.string().url().optional(),
+  remoteDebuggingPort: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  openNewTab: z.boolean().optional(),
+  profile: profileSchema.optional(),
+  profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
+  chromePath: z.string().min(1).optional(),
+  headless: z.boolean().optional(),
+  forceHeadless: z.boolean().optional(),
+  keepChromeOpen: z.boolean().optional(),
+  keepTabOpen: z.boolean().optional(),
+  includeRaw: z.boolean().optional(),
+}).strict()
+
 researchCrawlerRoutes.post('/chrome/open', async (c) => {
   const input = openChromeSchema.parse(await c.req.json())
   const cfg = getStack().appConfig.get()
@@ -85,6 +138,47 @@ researchCrawlerRoutes.post('/chrome/open', async (c) => {
     ...input,
     chromePath: input.chromePath ?? cfg.chromePath,
   }, input.profile ?? 'login', cfg, getDataDir())))
+})
+
+researchCrawlerRoutes.post('/chatgpt/conversations', async (c) => {
+  const input = captureChatGPTConversationsSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return c.json(
+    await captureChatGPTConversations(withCrawlerProfileDefaults({
+      ...input,
+      chromePath: input.chromePath ?? cfg.chromePath,
+      reporter: silentReporter(),
+    }, profile, cfg, getDataDir())),
+  )
+})
+
+researchCrawlerRoutes.post('/chatgpt/conversations/:id', async (c) => {
+  const conversationId = c.req.param('id')
+  const input = captureChatGPTConversationDetailsSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return c.json(
+    await captureChatGPTConversationDetails(withCrawlerProfileDefaults({
+      ...input,
+      conversationId,
+      chromePath: input.chromePath ?? cfg.chromePath,
+      reporter: silentReporter(),
+    }, profile, cfg, getDataDir())),
+  )
+})
+
+researchCrawlerRoutes.post('/chatgpt/prompt', async (c) => {
+  const input = sendChatGPTPromptSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return c.json(
+    await sendChatGPTPrompt(withCrawlerProfileDefaults({
+      ...input,
+      chromePath: input.chromePath ?? cfg.chromePath,
+      reporter: silentReporter(),
+    }, profile, cfg, getDataDir())),
+  )
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {

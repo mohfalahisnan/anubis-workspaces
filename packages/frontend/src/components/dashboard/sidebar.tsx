@@ -93,6 +93,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'workflow-demo' }
     case 'workflows':
       return { page: 'workflows' }
+    case 'crawler-playground':
+      return { page: 'crawler-playground' }
     case 'settings':
       return { page: 'settings' }
     default:

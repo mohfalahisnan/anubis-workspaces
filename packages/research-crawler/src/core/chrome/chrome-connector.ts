@@ -37,6 +37,25 @@ export async function resolveInstagramTarget(options: ChromeConnectorOptions = {
   return target;
 }
 
+export async function resolveChatGPTTarget(options: ChromeConnectorOptions = {}): Promise<ChromeTarget> {
+  const targets = await listChromeTargetsWaitingForPreferredUrl(options);
+  const target = targets.find((candidate) => (
+    candidate.type === "page" &&
+    candidate.webSocketDebuggerUrl &&
+    isSamePageUrl(candidate.url, options.preferredUrl)
+  )) ?? targets.find((candidate) => (
+    candidate.type === "page" &&
+    candidate.webSocketDebuggerUrl &&
+    isChatGPTUrl(candidate.url)
+  )) ?? (options.allowAnyPage ? targets.find((candidate) => candidate.type === "page" && candidate.webSocketDebuggerUrl) : undefined);
+
+  if (!target) {
+    throw new Error("No Chrome tab with a CDP socket was found.");
+  }
+
+  return target;
+}
+
 async function listChromeTargetsWaitingForPreferredUrl(options: ChromeConnectorOptions): Promise<ChromeTarget[]> {
   const waitMs = Math.max(0, Math.floor(options.preferredUrlWaitMs ?? 0));
   if (!options.preferredUrl || waitMs === 0) return listChromeTargets(options);
@@ -204,6 +223,15 @@ function isInstagramUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.hostname === "instagram.com" || url.hostname.endsWith(".instagram.com");
+  } catch {
+    return false;
+  }
+}
+
+function isChatGPTUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.hostname === "chatgpt.com" || url.hostname.endsWith(".chatgpt.com");
   } catch {
     return false;
   }

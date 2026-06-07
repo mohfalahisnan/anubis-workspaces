@@ -591,3 +591,122 @@ export async function deletePost(id: string): Promise<void> {
   })
 }
 
+/* ---------- ChatGPT Crawler Playground ---------- */
+
+export interface ChatGPTConversationListItem {
+  id: string
+  title: string
+  createTime: string
+  updateTime: string
+}
+
+export interface ChatGPTMessageListItem {
+  id: string
+  role: string
+  content: string
+  createTime: string
+}
+
+export interface ChatGPTConversationsResponse {
+  ok: boolean
+  output: {
+    conversations: ChatGPTConversationListItem[]
+  }
+  meta: {
+    warnings: string[]
+  }
+  error?: {
+    code: string
+    message: string
+  }
+}
+
+export interface ChatGPTConversationDetailsResponse {
+  ok: boolean
+  output: {
+    chatMessages: ChatGPTMessageListItem[]
+  }
+  meta: {
+    warnings: string[]
+  }
+  error?: {
+    code: string
+    message: string
+  }
+}
+
+export interface ChatGPTPromptResponse {
+  ok: boolean
+  input: {
+    conversationId?: string
+  }
+  output: {
+    chatMessages: ChatGPTMessageListItem[]
+  }
+  meta: {
+    warnings: string[]
+  }
+  error?: {
+    code: string
+    message: string
+  }
+}
+
+export interface ChatGPTConversationsOptions {
+  profile?: 'login' | 'public' | 'flow'
+  headless?: boolean
+  forceHeadless?: boolean
+  timeoutMs?: number
+  openNewTab?: boolean
+  keepTabOpen?: boolean
+}
+
+export interface ChatGPTPromptOptions {
+  prompt: string
+  conversationId?: string
+  profile?: 'login' | 'public' | 'flow'
+  headless?: boolean
+  forceHeadless?: boolean
+  timeoutMs?: number
+  openNewTab?: boolean
+  keepTabOpen?: boolean
+}
+
+export async function openChatGPTLoginChrome(): Promise<OpenCrawlerChromeResult> {
+  return api<OpenCrawlerChromeResult>('/research-crawler/chrome/open', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile: 'login',
+      headless: false,
+      url: 'https://chatgpt.com/',
+    }),
+  })
+}
+
+export async function getChatGPTConversations(
+  options: ChatGPTConversationsOptions = {}
+): Promise<ChatGPTConversationsResponse> {
+  return api<ChatGPTConversationsResponse>('/research-crawler/chatgpt/conversations', {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
+
+export async function getChatGPTConversationDetails(
+  conversationId: string,
+  options: ChatGPTConversationsOptions = {}
+): Promise<ChatGPTConversationDetailsResponse> {
+  return api<ChatGPTConversationDetailsResponse>(`/research-crawler/chatgpt/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
+
+export async function sendChatGPTPrompt(
+  options: ChatGPTPromptOptions
+): Promise<ChatGPTPromptResponse> {
+  return api<ChatGPTPromptResponse>('/research-crawler/chatgpt/prompt', {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}

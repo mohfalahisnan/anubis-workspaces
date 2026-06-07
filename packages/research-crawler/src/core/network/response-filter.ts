@@ -19,3 +19,9 @@ export function isLikelyInstagramDataResponse(url: string, mimeType = ""): boole
   }
   return INSTAGRAM_RESPONSE_MARKERS.some((marker) => lowerUrl.includes(marker));
 }
+
+export function isLikelyChatGPTDataResponse(url: string, mimeType = ""): boolean {
+  const lowerUrl = url.toLowerCase();
+  if (!lowerUrl.includes("chatgpt.com") && !lowerUrl.includes("openai.com")) return false;
+  return lowerUrl.includes("/backend-api/conversation");
+}

@@ -59,6 +59,13 @@ export const lessonWriterExecutor: Executor<LessonWriterConfig> = {
     const env = parseEnvelope(result.text)
     const lessonText = env.text || result.text
 
-    return { kind: 'lesson', text: lessonText, conversationId: result.conversationId }
+    const { path } = await ctx.lessons.write({
+      nodeId: input.nodeId,
+      lessonType: input.config.lessonType,
+      text: lessonText,
+      profileId: input.config.profileId,
+    })
+
+    return { kind: 'lesson', text: lessonText, conversationId: result.conversationId, path }
   },
 }

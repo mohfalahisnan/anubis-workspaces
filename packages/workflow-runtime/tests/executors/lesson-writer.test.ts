@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { lessonWriterExecutor } from '../../src/executors/lesson-writer.js'
 import type { ExecutorContext } from '../../src/types.js'
 
-function ctx(capture?: (input: { content: string; source?: string; workflow?: unknown }) => void): ExecutorContext {
+function ctx(
+  capture?: (input: { content: string; source?: string; workflow?: unknown }) => void,
+  onLesson?: (input: { nodeId: string; lessonType: string; text: string; profileId?: string }) => void,
+): ExecutorContext {
   return {
     runId: 'run-9', signal: new AbortController().signal, emit: () => {},
     conversations: {
@@ -14,6 +17,12 @@ function ctx(capture?: (input: { content: string; source?: string; workflow?: un
         }
       },
       cancel: async () => {},
+    },
+    lessons: {
+      write: async (input: { nodeId: string; lessonType: string; text: string; profileId?: string }) => {
+        onLesson?.(input)
+        return { path: `/lesson/${input.nodeId}.md` }
+      },
     },
   } as unknown as ExecutorContext
 }
@@ -28,10 +37,27 @@ describe('lessonWriterExecutor', () => {
         downstream: [],
       },
       ctx(),
-    ) as { kind: string; text: string; conversationId: string }
+    ) as { kind: string; text: string; conversationId: string; path: string }
     expect(out.kind).toBe('lesson')
     expect(out.text).toContain('Avoid weak hooks')
     expect(out.conversationId).toBe('c1')
+    expect(out.path).toContain('lw.md')
+  })
+
+  it('persists the lesson to the lesson store', async () => {
+    let written: { nodeId: string; lessonType: string; text: string; profileId?: string } | undefined
+    await lessonWriterExecutor.run(
+      {
+        nodeId: 'lw',
+        config: { profileId: 'claude-research', lessonType: 'mistake' },
+        upstream: { gate: { kind: 'approval', decision: 'rejected', notes: 'weak hook' } },
+        downstream: [],
+      },
+      ctx(undefined, (input) => { written = input }),
+    )
+    expect(written).toEqual({
+      nodeId: 'lw', lessonType: 'mistake', text: 'Avoid weak hooks', profileId: 'claude-research',
+    })
   })
 
   it('surfaces the reviewer comment from an approval upstream into the prompt', async () => {

@@ -34,7 +34,7 @@ export const LessonWriterExecutableNode = memo(function LessonWriterExecutableNo
       {output?.kind === 'lesson' ? (
         <p className='line-clamp-4 text-xs leading-relaxed text-muted-foreground'>{output.text}</p>
       ) : (
-        <p className='text-[10px] text-muted-foreground'>Writes a lesson to anubis-core (rejected → mistake, approved → what worked).</p>
+        <p className='text-[10px] text-muted-foreground'>Writes a lesson markdown file to ./lesson (rejected → mistake, approved → what worked). Lessons are injected into every workflow agent.</p>
       )}
     </NodeShell>
   )

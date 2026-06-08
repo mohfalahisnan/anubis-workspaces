@@ -14,7 +14,7 @@ const TYPE_LABELS: Record<string, string> = {
   humanApproval: 'Human Review',
   lessonWriter: 'Lesson',
   originalCopy: 'Original Copy',
-  savePlanner: 'Save to Planner',
+  savePlanner: 'Save to Content Planner',
 }
 
 const TYPE_DOTS: Record<string, string> = {

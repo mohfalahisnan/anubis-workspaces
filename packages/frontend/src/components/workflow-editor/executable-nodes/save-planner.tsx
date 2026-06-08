@@ -34,7 +34,7 @@ export const SavePlannerExecutableNode = memo(function SavePlannerExecutableNode
   return (
     <NodeShell
       icon={Database}
-      title={nodeTitle(data, 'Save to Planner')}
+      title={nodeTitle(data, 'Save to Content Planner')}
       subtitle={data.projectId ? `Project: ${data.projectId} · ${statusLabel}` : `Project: default · ${statusLabel}`}
       accent={ACCENT_GRADIENTS.final}
       runStatus={runStatus}
@@ -49,7 +49,7 @@ export const SavePlannerExecutableNode = memo(function SavePlannerExecutableNode
         </div>
       ) : (
         <p className='text-xs text-muted-foreground'>
-          Saves workflow execution results directly to the planner.
+          Saves workflow execution results directly to the Content Planner.
         </p>
       )}
     </NodeShell>

@@ -26,6 +26,10 @@ interface Window {
       /** Resolves to the selected absolute path, or null if cancelled. */
       pick(): Promise<string | null>
     }
+    files: {
+      /** Resolves to selected absolute paths, or [] if cancelled. */
+      pick(): Promise<string[]>
+    }
     updater: {
       check(): Promise<unknown>
       startDownload(): Promise<void>

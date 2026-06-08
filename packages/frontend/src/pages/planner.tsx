@@ -35,6 +35,7 @@ import { useLevelMultipliers } from '@/hooks/use-level-multipliers'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ViewToggle } from '@/components/view-toggle'
+import { KanbanBoard, type KanbanColumn } from '@/components/kanban'
 
 const STATUSES: ContentItemStatus[] = ['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected']
 
@@ -165,6 +166,32 @@ export function PlannerPage() {
     return out
   }, [items])
 
+  const kanbanColumns = useMemo<Array<KanbanColumn<ContentItemStatus, ContentItemSummary>>>(() => {
+    const q = query.trim().toLowerCase()
+    return STATUSES.map((status) => ({
+      id: status,
+      label: STATUS_LABEL[status],
+      dotClassName: cn('border', STATUS_TONE[status]),
+      count: counts[status],
+      emptyLabel: 'Drag items here',
+      items: items.filter((item) => {
+        if (item.status !== status) return false
+        if (!q) return true
+        const ref = item.referencePost
+        const haystack = [
+          item.title,
+          item.rawBrief,
+          item.improvedDraft,
+          ref?.caption,
+          ref?.competitorHandle,
+          ref?.username,
+          item.referenceUrl,
+        ].filter(Boolean).join(' ').toLowerCase()
+        return haystack.includes(q)
+      }),
+    }))
+  }, [counts, items, query])
+
   async function saveSelected() {
     if (!selected) return
     setBusy(true)
@@ -183,7 +210,7 @@ export function PlannerPage() {
         },
       })
       setItems((prev) => prev.map((item) => item.id === saved.id ? saved : item))
-      setBanner('Saved planner item.')
+      setBanner('Saved content planner item.')
     } finally {
       setBusy(false)
     }
@@ -194,6 +221,18 @@ export function PlannerPage() {
     setDraft((current) => ({ ...current, status }))
     const saved = await updateContentItem(selected.id, { status })
     setItems((prev) => prev.map((item) => item.id === saved.id ? saved : item))
+  }
+
+  async function moveContentItem(itemId: string, status: ContentItemStatus) {
+    const itemToMove = items.find((item) => item.id === itemId)
+    if (!itemToMove || itemToMove.status === status) return
+    setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, status } : item))
+    try {
+      await updateContentItem(itemId, { status })
+    } catch (err) {
+      console.error('Failed to drag and drop update status:', err)
+      await refresh()
+    }
   }
 
   async function syncMetrics() {
@@ -228,7 +267,7 @@ export function PlannerPage() {
       <div className='border-b border-border px-6 py-4'>
         <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
           <div>
-            <h1 className='text-[24px] font-semibold tracking-[-0.02em]'>Planner</h1>
+            <h1 className='text-[24px] font-semibold tracking-[-0.02em]'>Content Planner</h1>
             <p className='mt-1 text-[13px] text-muted-foreground'>
               Plan your own content from a fresh reference URL, then track the published result.
             </p>
@@ -255,7 +294,7 @@ export function PlannerPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder='Search planner...'
+              placeholder='Search content planner...'
               className='min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground'
             />
           </label>
@@ -292,109 +331,29 @@ export function PlannerPage() {
 
       {/* Main Content Area */}
       {viewMode === 'grid' ? (
-        /* Kanban View */
-        <div className='min-h-0 flex-1 overflow-x-auto overflow-y-hidden bg-background p-6'>
-          <div className='flex h-full gap-4 items-start pb-4'>
-            {STATUSES.map((status) => {
-              const columnItems = items.filter(item => {
-                if (item.status !== status) return false
-                const q = query.trim().toLowerCase()
-                if (!q) return true
-                const ref = item.referencePost
-                const haystack = [
-                  item.title,
-                  item.rawBrief,
-                  item.improvedDraft,
-                  ref?.caption,
-                  ref?.competitorHandle,
-                  ref?.username,
-                  item.referenceUrl,
-                ].filter(Boolean).join(' ').toLowerCase()
-                return haystack.includes(q)
-              })
-
-              return (
-                <div
-                  key={status}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={async (e) => {
-                    e.preventDefault()
-                    const itemId = e.dataTransfer.getData('text/plain')
-                    if (!itemId) return
-                    const itemToMove = items.find(i => i.id === itemId)
-                    if (itemToMove && itemToMove.status !== status) {
-                      // Optimistic local state update
-                      setItems(prev => prev.map(i => i.id === itemId ? { ...i, status } : i))
-                      try {
-                        await updateContentItem(itemId, { status })
-                      } catch (err) {
-                        console.error('Failed to drag and drop update status:', err)
-                        await refresh()
-                      }
-                    }
-                  }}
-                  className='flex h-full w-[280px] shrink-0 flex-col rounded-xl border border-border bg-card/20 p-3 hover:bg-card/30 transition-colors'
-                >
-                  {/* Column Header */}
-                  <div className='flex items-center justify-between border-b border-border pb-2'>
-                    <div className='flex items-center gap-2'>
-                      <span className={cn('h-2 w-2 rounded-full border', STATUS_TONE[status])} />
-                      <span className='text-xs font-semibold uppercase tracking-wider text-foreground'>{STATUS_LABEL[status]}</span>
-                    </div>
-                    <span className='rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground'>
-                      {columnItems.length}
-                    </span>
-                  </div>
-
-                  {/* Cards stack */}
-                  <div className='min-h-0 flex-1 overflow-y-auto mt-3 space-y-2 pr-1'>
-                    {columnItems.length === 0 ? (
-                      <div className='flex h-24 flex-col items-center justify-center rounded-lg border border-dashed border-border/50 p-4 text-center'>
-                        <p className='text-[10px] text-muted-foreground'>Drag items here</p>
-                      </div>
-                    ) : (
-                      columnItems.map((item) => (
-                        <div
-                          key={item.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('text/plain', item.id)
-                          }}
-                          onClick={() => {
-                            setSelectedId(item.id)
-                            setEditorOpen(true)
-                          }}
-                          className='group relative w-full rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-[var(--anubis-gold)] hover:shadow-md cursor-grab active:cursor-grabbing hover:bg-muted/30'
-                        >
-                          <p className='line-clamp-2 text-[12px] font-medium leading-snug text-foreground group-hover:text-[var(--anubis-gold)]'>
-                            {item.title}
-                          </p>
-                          <p className='mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground'>
-                            {item.referencePost?.caption ?? item.referenceUrl ?? 'No reference'}
-                          </p>
-
-                          <div className='mt-2.5 flex items-center justify-between border-t border-border/50 pt-2 text-[9.5px] text-muted-foreground'>
-                            <span className='truncate font-mono font-medium max-w-[130px]'>
-                              {item.referencePost?.competitorHandle ?? item.referencePost?.username ?? (item.referenceUrl ? 'URL reference' : 'reference')}
-                            </span>
-                            <span>{shortRelativeMs(item.updatedAt)}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <KanbanBoard
+          columns={kanbanColumns}
+          getItemId={(item) => item.id}
+          onMove={moveContentItem}
+          columnClassName='w-[280px] rounded-xl'
+          emptyClassName='rounded-lg border-border/50 text-[10px]'
+          renderItem={(item) => (
+            <ContentPlannerCard
+              item={item}
+              onOpen={() => {
+                setSelectedId(item.id)
+                setEditorOpen(true)
+              }}
+            />
+          )}
+        />
       ) : (
         /* Table View */
         <div className='min-h-0 flex-1 overflow-y-auto bg-background p-6'>
           {filteredItems.length === 0 ? (
             <div className='flex h-64 flex-col items-center justify-center text-center'>
               <FileTextIcon className='size-8 text-muted-foreground' />
-              <p className='mt-3 text-sm font-medium'>No planner items found</p>
+              <p className='mt-3 text-sm font-medium'>No content planner items found</p>
               <p className='mt-1 text-xs text-muted-foreground'>Try resetting filters or searching for something else.</p>
             </div>
           ) : (
@@ -477,7 +436,7 @@ export function PlannerPage() {
         <SheetContent className='sm:max-w-2xl overflow-y-auto bg-card border-l border-border p-6 shadow-2xl flex flex-col'>
           <SheetHeader className='pb-4 border-b border-border shrink-0'>
             <SheetTitle className='text-lg font-bold text-foreground'>
-              Edit Planner Item
+              Edit Content Planner Item
             </SheetTitle>
           </SheetHeader>
 
@@ -603,6 +562,36 @@ export function PlannerPage() {
         projectId={activeProject?.id}
       />
     </div>
+  )
+}
+
+function ContentPlannerCard({
+  item,
+  onOpen,
+}: {
+  item: ContentItemSummary
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type='button'
+      onClick={onOpen}
+      className='group relative w-full cursor-grab rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-[var(--anubis-gold)] hover:bg-muted/30 hover:shadow-md active:cursor-grabbing'
+    >
+      <p className='line-clamp-2 text-[12px] font-medium leading-snug text-foreground group-hover:text-[var(--anubis-gold)]'>
+        {item.title}
+      </p>
+      <p className='mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground'>
+        {item.referencePost?.caption ?? item.referenceUrl ?? 'No reference'}
+      </p>
+
+      <div className='mt-2.5 flex items-center justify-between border-t border-border/50 pt-2 text-[9.5px] text-muted-foreground'>
+        <span className='max-w-[130px] truncate font-mono font-medium'>
+          {item.referencePost?.competitorHandle ?? item.referencePost?.username ?? (item.referenceUrl ? 'URL reference' : 'reference')}
+        </span>
+        <span>{shortRelativeMs(item.updatedAt)}</span>
+      </div>
+    </button>
   )
 }
 

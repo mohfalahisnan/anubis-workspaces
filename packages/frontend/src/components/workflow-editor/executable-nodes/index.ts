@@ -76,5 +76,5 @@ export const NODE_PALETTE = [
   { type: 'markdownDisplay',     label: 'Markdown',               category: 'output'    },
   { type: 'mediaDisplay',        label: 'Media',                  category: 'output'    },
   { type: 'originalCopy',        label: 'Original Copy',          category: 'output'    },
-  { type: 'savePlanner',         label: 'Save to Planner',        category: 'output'    },
+  { type: 'savePlanner',         label: 'Save to Content Planner', category: 'output'   },
 ] as const satisfies ReadonlyArray<{ type: string; label: string; category: NodeCategory }>

@@ -16,6 +16,7 @@ import {
   type CompetitorListResponse,
   type CompetitorSummary,
   type CreateContentItemInput,
+  type CreateTaskInput,
   type ConversationCreateResponse,
   type ConversationListResponse,
   type ConversationSummary,
@@ -35,10 +36,15 @@ import {
   type SkillListResponse,
   type SkillSource,
   type SkillSummary,
+  type TaskListResponse,
+  type TaskPriority,
+  type TaskStatus,
+  type TaskSummary,
   type UpdateCompetitorInput,
   type UpdateCapturedPostInput,
   type UpdateContentItemInput,
   type UpdateCronJobInput,
+  type UpdateTaskInput,
   type WorkspaceSummary,
   type ImportCapturedPostsInput,
   type ProjectSummary,
@@ -657,6 +663,54 @@ export async function syncContentItemMetrics(id: string): Promise<ContentItemSum
   )
   return r.item
 }
+
+export interface ListTasksOpts {
+  projectId?: string
+  status?: TaskStatus
+  assigneeProfileId?: string
+  limit?: number
+}
+
+export async function listTasks(
+  opts: ListTasksOpts = {},
+): Promise<TaskSummary[]> {
+  const params = new URLSearchParams()
+  if (opts.projectId) params.set('projectId', opts.projectId)
+  if (opts.status) params.set('status', opts.status)
+  if (opts.assigneeProfileId) params.set('assigneeProfileId', opts.assigneeProfileId)
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  const qs = params.toString()
+  const path = qs ? `/tasks?${qs}` : '/tasks'
+  const r = await api<TaskListResponse>(path)
+  return r.items
+}
+
+export async function createTask(input: CreateTaskInput): Promise<TaskSummary> {
+  const r = await api<{ ok: true; task: TaskSummary }>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.task
+}
+
+export async function updateTask(
+  id: string,
+  patch: UpdateTaskInput,
+): Promise<TaskSummary> {
+  const r = await api<{ ok: true; task: TaskSummary }>(
+    `/tasks/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.task
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  await api<{ ok: true }>(`/tasks/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export type { TaskStatus, TaskPriority, TaskSummary }
 
 /* ---------- ChatGPT Crawler Playground ---------- */
 

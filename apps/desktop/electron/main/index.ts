@@ -77,6 +77,20 @@ ipcMain.handle('anubis:pick-workspace', async () => {
   return result.filePaths[0]
 })
 
+// Native picker for task file references. Returns selected absolute paths,
+// or an empty array on cancel.
+ipcMain.handle('anubis:pick-files', async () => {
+  const options: Electron.OpenDialogOptions = {
+    title: 'Select task files',
+    properties: ['openFile', 'multiSelections'],
+  }
+  const result = win
+    ? await dialog.showOpenDialog(win, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled) return []
+  return result.filePaths
+})
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Anubis',

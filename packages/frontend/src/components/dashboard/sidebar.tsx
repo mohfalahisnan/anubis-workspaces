@@ -82,6 +82,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'content' }
     case 'planner':
       return { page: 'planner' }
+    case 'tasks':
+      return { page: 'tasks' }
     case 'profiles':
       return { page: 'profiles' }
     case 'skills':

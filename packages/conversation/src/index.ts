@@ -16,6 +16,7 @@ import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
 import { CompetitorsService } from './competitors/competitors-service.js'
 import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
+import { TasksRepo } from './db/repositories/tasks-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
 import { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
 import { WorkflowTriggersRepo } from './db/repositories/workflow-triggers-repo.js'
@@ -42,6 +43,7 @@ export interface ConversationStack {
   competitors: CompetitorsService
   capturedPosts: CapturedPostsRepo
   contentItems: ContentItemsRepo
+  tasks: TasksRepo
   workflows: WorkflowsRepo
   workflowRuns: WorkflowRunsRepo
   workflowTriggers: WorkflowTriggersRepo
@@ -91,6 +93,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
   const capturedPosts = new CapturedPostsRepo(db)
   const contentItems = new ContentItemsRepo(db)
+  const tasks = new TasksRepo(db)
   const workflowsRepo = new WorkflowsRepo(db)
   workflowsRepo.seedBuiltins()
   const workflowRunsRepo = new WorkflowRunsRepo(db)
@@ -125,7 +128,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   return {
-    conversation, profiles, competitors, capturedPosts, contentItems,
+    conversation, profiles, competitors, capturedPosts, contentItems, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,
@@ -153,6 +156,8 @@ export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-pos
 export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 export type { ContentItem, ListContentItemsOpts, UpdateContentItemPatch } from './db/repositories/content-items-repo.js'
 export { ContentItemsRepo } from './db/repositories/content-items-repo.js'
+export type { Task, ListTasksOpts, UpdateTaskPatch } from './db/repositories/tasks-repo.js'
+export { TasksRepo } from './db/repositories/tasks-repo.js'
 export type { KnownWorkspace } from './db/repositories/known-workspaces-repo.js'
 export { KnownWorkspacesRepo } from './db/repositories/known-workspaces-repo.js'
 export type { Workflow } from './db/repositories/workflows-repo.js'

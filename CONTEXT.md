@@ -36,16 +36,52 @@ How strongly a published Content Item performed as the user's own content. It is
 
 ### Content Analytics
 
-The performance measurements tracked for a published Content Item. For v1, the user provides the publishedUrl, and Anubis syncs available public engagement metrics such as likes and comments from that URL. Saves is part of the model but is not automatically populated yet. Broader insight metrics such as impressions, reach, shares, follows, and profileVisits are outside the v1 planner scope.
+The performance measurements tracked for a published Content Item. For v1, the user provides the publishedUrl, and Anubis syncs available public engagement metrics such as likes and comments from that URL. Saves is part of the model but is not automatically populated yet. Broader insight metrics such as impressions, reach, shares, follows, and profileVisits are outside the v1 Content Planner scope.
 
-### Planner
+### Content Planner
 
-The workspace for the user's own Content Items. Planner is separate from the Content page, which remains the library of Captured Posts.
+The workspace for the user's own Content Items. Content Planner is separate from the Content page, which remains the library of Captured Posts.
 
-### Planner v1
+### Content Planner v1
 
-The first Planner version supports creating a Content Item from a selected Content Reference, editing title, Raw Brief, Improved Draft, status, and publishedUrl, moving status forward or backward including rejected -> draft, syncing available published metrics from publishedUrl, and comparing Reference Effectiveness against Content Effectiveness. Planner v1 does not include a calendar.
+The first Content Planner version supports creating a Content Item from a selected Content Reference, editing title, Raw Brief, Improved Draft, status, and publishedUrl, moving status forward or backward including rejected -> draft, syncing available published metrics from publishedUrl, and comparing Reference Effectiveness against Content Effectiveness. Content Planner v1 does not include a calendar.
 
 ### Project Scope
 
-Content Items and Planner views are scoped to a Project. A Content Item belongs to exactly one Project, and its Content Reference should come from the same Project.
+Content Items, Content Planner views, and Tasks are scoped to a Project. A Content Item belongs to exactly one Project, and its Content Reference should come from the same Project.
+
+### Task
+
+A generic project-scoped work item for coordinating execution. A Task can be assigned to an AI Agent Profile, linked to files, and linked to workflows.
+
+### Task Assignee
+
+The AI Agent Profile responsible for a Task. Task assignment uses an existing Profile, because a Profile defines the agent kind, configuration, credentials, and isolated agent home used for execution.
+
+### Task Execution
+
+The act of telling an AI Agent Profile to work on a Task. Task Execution is not automatic in v1; assigning a Task to a Profile means ownership only. Future execution behavior is initiated explicitly by a Manager.
+
+### Manager
+
+A future coordinating role that tracks Tasks, decides which Task should be executed, builds context for the executor, and validates the result. Manager behavior is outside the v1 Task Management scope.
+
+### Task Management v1
+
+The first Task Management version supports title, description, status, priority, projectId, assigneeProfileId, fileReferences, workflowReferences, createdAt, and updatedAt. Task Management v1 does not include automatic Task Execution or Manager behavior.
+
+### Task Priority
+
+The relative importance of a Task. Task Priority values are low, medium, high, and urgent.
+
+### Task File Reference
+
+An absolute or project-relative file path attached to a Task as context through the file explorer. A Task File Reference points at the real workspace file; Anubis does not copy the file contents into the Task.
+
+### Task Workflow Reference
+
+An existing Workflow linked to a Task as context. A Task Workflow Reference is informational only; it does not run, own, duplicate, or change workflow logic.
+
+### Task Status
+
+The lifecycle state of a Task. The canonical flow is backlog -> todo -> in progress -> in review -> done.

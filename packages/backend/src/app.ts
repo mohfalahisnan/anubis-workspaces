@@ -17,6 +17,7 @@ import { workflowRoutes } from './workflow.js'
 import { workspaceRoutes } from './workspaces.js'
 import { projectRoutes } from './projects.js'
 import { contentItemRoutes } from './content-items.js'
+import { taskRoutes } from './tasks.js'
 
 const app = new Hono()
 
@@ -63,6 +64,7 @@ app.route('/workflows', workflowRoutes)
 app.route('/workspaces', workspaceRoutes)
 app.route('/projects', projectRoutes)
 app.route('/content-items', contentItemRoutes)
+app.route('/tasks', taskRoutes)
 
 app.onError((error, c) => {
   if (error instanceof ZodError) {

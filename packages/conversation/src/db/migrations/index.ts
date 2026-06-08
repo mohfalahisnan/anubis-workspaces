@@ -95,4 +95,5 @@ export const MIGRATIONS: Migration[] = [
   repairProjectsMigration,
   load(19, '019_content_items.sql'),
   load(20, '020_content_item_reference_url.sql'),
+  load(21, '021_tasks.sql'),
 ]

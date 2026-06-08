@@ -14,6 +14,7 @@ import { useNavigation, type PageKey } from '@/lib/navigation'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { PlannerPage } from '@/pages/planner'
+import { TasksPage } from '@/pages/tasks'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
 import { CompetitorsPage } from '@/pages/competitors'
@@ -36,7 +37,8 @@ const BREADCRUMBS: Record<PageKey, string> = {
   conversations: 'Conversations',
   'active-conversation': 'Conversations',
   content: 'Content',
-  planner: 'Planner',
+  planner: 'Content Planner',
+  tasks: 'Tasks',
   profiles: 'Profiles',
   'profile-editor': 'Profiles · Edit',
   skills: 'Skills',
@@ -205,6 +207,8 @@ function CurrentPage() {
       return <ContentPage />
     case 'planner':
       return <PlannerPage />
+    case 'tasks':
+      return <TasksPage />
     case 'profiles':
       return <ProfilesPage />
     case 'profile-editor':

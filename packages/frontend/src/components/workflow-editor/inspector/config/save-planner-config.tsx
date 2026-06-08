@@ -31,7 +31,7 @@ export function SavePlannerConfigForm({ nodeId }: { nodeId: string }) {
   return (
     <div className='space-y-4'>
       <div>
-        <p className='text-xs font-semibold uppercase tracking-wider text-muted-foreground'>Save to Planner</p>
+        <p className='text-xs font-semibold uppercase tracking-wider text-muted-foreground'>Save to Content Planner</p>
         <p className='text-[11px] text-muted-foreground mt-1'>
           Save content workflow outputs directly to the content planner. You can use template mapping like{' '}
           <code className='px-1 py-0.5 rounded bg-muted font-mono text-[10px]'>{"{{nodeId.field}}"}</code>.

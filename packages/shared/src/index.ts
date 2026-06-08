@@ -15,6 +15,8 @@ export type ProfileSource = 'builtin' | 'user'
 export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
 export type ContentItemStatus = 'idea' | 'brief' | 'draft' | 'review' | 'scheduled' | 'published' | 'rejected'
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type SkillSource =
   | 'builtin-auto'
   | 'builtin-opt-in'
@@ -505,6 +507,43 @@ export interface UpdateContentItemInput {
 }
 
 export type ContentItemListResponse = ListResponse<ContentItemSummary>
+
+export interface TaskSummary {
+  id: string
+  projectId?: string
+  title: string
+  description?: string
+  status: TaskStatus
+  priority: TaskPriority
+  assigneeProfileId?: string
+  fileReferences: string[]
+  workflowReferences: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreateTaskInput {
+  projectId?: string
+  title: string
+  description?: string
+  status?: TaskStatus
+  priority?: TaskPriority
+  assigneeProfileId?: string
+  fileReferences?: string[]
+  workflowReferences?: string[]
+}
+
+export interface UpdateTaskInput {
+  title?: string
+  description?: string | null
+  status?: TaskStatus
+  priority?: TaskPriority
+  assigneeProfileId?: string | null
+  fileReferences?: string[]
+  workflowReferences?: string[]
+}
+
+export type TaskListResponse = ListResponse<TaskSummary>
 
 export interface CaptureResultPayload {
   ok: true

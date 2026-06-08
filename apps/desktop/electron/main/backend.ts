@@ -14,6 +14,7 @@ interface BackendRuntime {
 }
 
 let backendRuntime: Promise<BackendRuntime> | undefined
+const DEFAULT_BACKEND_PORT = '4317'
 
 export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, modelsDir?: string) {
   backendRuntime ??= new Promise<BackendRuntime>((resolve, reject) => {
@@ -28,7 +29,7 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, 
     const backendEnv: NodeJS.ProcessEnv = {
       ...process.env,
       ANUBIS_BACKEND_HOST: '127.0.0.1',
-      ANUBIS_BACKEND_PORT: '0',
+      ANUBIS_BACKEND_PORT: process.env.ANUBIS_BACKEND_PORT ?? DEFAULT_BACKEND_PORT,
       FORCE_COLOR: '0',
     }
     if (dataDir) backendEnv.ANUBIS_DATA_DIR = dataDir

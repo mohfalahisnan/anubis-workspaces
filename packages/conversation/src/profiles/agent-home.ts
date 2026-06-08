@@ -58,7 +58,7 @@ export function envFor(
   homePath: string,
 ): Record<string, string> {
   if (agent === 'codex') return { CODEX_HOME: homePath }
-  if (agent === 'gpt-web') return {}
+  if (agent === 'gpt-web' || agent === 'qwen-web') return {}
   // The Antigravity CLI (`agy`) is built on the Gemini CLI and relocates its
   // home (config + per-project state under ~/.gemini) via GEMINI_DIR — verified
   // against the agy v1.0.5 binary. This isolates a profile's config/state, but
@@ -101,7 +101,7 @@ export function hasCredentials(
   // nothing on disk to detect, so we don't gate antigravity turns on a marker
   // file — auth is handled globally via `agy` login or an API key in the env.
   // Returning true here avoids falsely blocking every run with NoCredentials.
-  if (agent === 'antigravity' || agent === 'gpt-web') return true
+  if (agent === 'antigravity' || agent === 'gpt-web' || agent === 'qwen-web') return true
   const home = homePathFor(agentHomeRoot, profileId, agent)
   return existsSync(join(home, CREDENTIAL_FILE[agent as 'claude' | 'codex']))
 }

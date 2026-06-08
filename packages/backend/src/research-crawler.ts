@@ -7,6 +7,9 @@ import {
   captureChatGPTConversations,
   captureChatGPTConversationDetails,
   sendChatGPTPrompt,
+  captureQwenConversations,
+  captureQwenConversationDetails,
+  sendQwenPrompt,
   launchChrome,
   silentReporter,
 } from '@anubis/research-crawler'
@@ -208,6 +211,95 @@ researchCrawlerRoutes.post('/chatgpt/prompt/stream', async (c) => {
 
     try {
       const result = await sendChatGPTPrompt(withCrawlerProfileDefaults({
+        ...input,
+        chromePath: input.chromePath ?? cfg.chromePath,
+        reporter: silentReporter(),
+        onDelta: (text) => { latest = text },
+      }, profile, cfg, getDataDir()))
+      finished = true
+      await pump
+      if (latest !== null && latest !== lastSent) {
+        await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: latest }) })
+      }
+      await stream.writeSSE({ event: 'done', data: JSON.stringify(result) })
+    } catch (err) {
+      finished = true
+      await pump.catch(() => {})
+      await stream.writeSSE({ event: 'error', data: JSON.stringify({ message: err instanceof Error ? err.message : 'stream failed' }) })
+    }
+  })
+})
+
+/* -----------------------------------------------------------
+   Qwen (chat.qwen.ai) routes — same CDP login profile as ChatGPT.
+   ----------------------------------------------------------- */
+
+researchCrawlerRoutes.post('/qwen/conversations', async (c) => {
+  const input = captureChatGPTConversationsSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return c.json(
+    await captureQwenConversations(withCrawlerProfileDefaults({
+      ...input,
+      chromePath: input.chromePath ?? cfg.chromePath,
+      reporter: silentReporter(),
+    }, profile, cfg, getDataDir())),
+  )
+})
+
+researchCrawlerRoutes.post('/qwen/conversations/:id', async (c) => {
+  const conversationId = c.req.param('id')
+  const input = captureChatGPTConversationDetailsSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return c.json(
+    await captureQwenConversationDetails(withCrawlerProfileDefaults({
+      ...input,
+      conversationId,
+      chromePath: input.chromePath ?? cfg.chromePath,
+      reporter: silentReporter(),
+    }, profile, cfg, getDataDir())),
+  )
+})
+
+researchCrawlerRoutes.post('/qwen/prompt', async (c) => {
+  const input = sendChatGPTPromptSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return c.json(
+    await sendQwenPrompt(withCrawlerProfileDefaults({
+      ...input,
+      chromePath: input.chromePath ?? cfg.chromePath,
+      reporter: silentReporter(),
+    }, profile, cfg, getDataDir())),
+  )
+})
+
+// Streaming variant: emits Server-Sent Events as the assistant response renders.
+//   event: delta  data: { text }   (full assistant text so far)
+//   event: done   data: <StandardCrawlerOutput>
+//   event: error  data: { message }
+researchCrawlerRoutes.post('/qwen/prompt/stream', async (c) => {
+  const input = sendChatGPTPromptSchema.parse(await c.req.json().catch(() => ({})))
+  const cfg = getStack().appConfig.get()
+  const profile = input.profile ?? 'login'
+  return streamSSE(c, async (stream) => {
+    let latest: string | null = null
+    let lastSent: string | null = null
+    let finished = false
+
+    const pump = (async () => {
+      while (!finished) {
+        if (latest !== null && latest !== lastSent) {
+          lastSent = latest
+          await stream.writeSSE({ event: 'delta', data: JSON.stringify({ text: lastSent }) })
+        }
+        await stream.sleep(150)
+      }
+    })()
+
+    try {
+      const result = await sendQwenPrompt(withCrawlerProfileDefaults({
         ...input,
         chromePath: input.chromePath ?? cfg.chromePath,
         reporter: silentReporter(),

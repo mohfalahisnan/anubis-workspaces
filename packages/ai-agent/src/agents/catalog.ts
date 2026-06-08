@@ -1,6 +1,6 @@
-export type Agent = 'codex' | 'claude' | 'antigravity' | 'gpt-web'
+export type Agent = 'codex' | 'claude' | 'antigravity' | 'gpt-web' | 'qwen-web'
 
-export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity', 'gpt-web']
+export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity', 'gpt-web', 'qwen-web']
 
 export type ModelCategory =
   | 'recommended'
@@ -97,6 +97,13 @@ export const MODELS: Record<Agent, ModelInfo[]> = {
       description: 'ChatGPT Web interface via crawler CDP automation.',
     },
   ],
+  'qwen-web': [
+    {
+      id: 'qwen-web',
+      category: 'recommended',
+      description: 'Qwen (chat.qwen.ai) Web interface via crawler CDP automation.',
+    },
+  ],
 }
 
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
@@ -107,6 +114,7 @@ export const DEFAULT_MODEL: Record<Agent, string> = {
   claude: 'claude-sonnet-4-6',
   antigravity: 'gemini-3.1-pro',
   'gpt-web': 'chatgpt-web',
+  'qwen-web': 'qwen-web',
 }
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium'

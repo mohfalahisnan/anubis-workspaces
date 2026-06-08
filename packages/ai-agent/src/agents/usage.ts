@@ -97,6 +97,13 @@ function extractGptWebUsage(raw: any): ExtractedUsage {
   }
 }
 
+function extractQwenWebUsage(raw: any): ExtractedUsage {
+  return {
+    model: raw?.model ?? 'qwen-web',
+    raw: { usage: raw },
+  }
+}
+
 export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
   switch (agent) {
     case 'codex':
@@ -107,5 +114,7 @@ export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
       return extractAntigravityUsage(raw)
     case 'gpt-web':
       return extractGptWebUsage(raw)
+    case 'qwen-web':
+      return extractQwenWebUsage(raw)
   }
 }

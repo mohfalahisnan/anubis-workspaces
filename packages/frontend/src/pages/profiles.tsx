@@ -496,6 +496,7 @@ const AGENT_LABEL: Record<ProfileSummary['config']['agent'], string> = {
   codex: 'Codex',
   antigravity: 'Antigravity',
   'gpt-web': 'GPT Web',
+  'qwen-web': 'Qwen Web',
 }
 
 function AgentChip({ agent }: { agent: ProfileSummary['config']['agent'] }) {

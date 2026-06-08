@@ -41,6 +41,7 @@ const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
   codex: 'Codex CLI',
   antigravity: 'the Antigravity CLI',
   'gpt-web': 'GPT Web',
+  'qwen-web': 'Qwen Web',
 }
 
 function useProfiles() {

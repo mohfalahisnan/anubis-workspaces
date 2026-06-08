@@ -3,7 +3,7 @@ import type { InstagramCdpCaptureResult } from './services/instagram-cdp-capture
 import { calculateAvgLikesSummary } from './instagram/avg-likes.js'
 
 export type StandardCrawlerInput = {
-  target: 'instagram' | 'chatgpt'
+  target: 'instagram' | 'chatgpt' | 'qwen'
   mode: 'profile_capture' | 'competitor_discovery' | 'avg_likes_setup' | 'conversation_list' | 'conversation_details' | 'send_prompt'
   username?: string
   url?: string
@@ -81,7 +81,17 @@ export type ChatGPTMessage = {
   createTime: string
 }
 
-export type StandardCrawlerOutputType = 'Profile Data List' | 'Post Data List' | 'ChatGPT Conversation List' | 'ChatGPT Message List'
+/** Qwen output reuses the same conversation/message shapes as ChatGPT. */
+export type QwenConversation = ChatGPTConversation
+export type QwenMessage = ChatGPTMessage
+
+export type StandardCrawlerOutputType =
+  | 'Profile Data List'
+  | 'Post Data List'
+  | 'ChatGPT Conversation List'
+  | 'ChatGPT Message List'
+  | 'Qwen Conversation List'
+  | 'Qwen Message List'
 
 export type StandardCrawlerOutput = {
   ok: boolean
@@ -544,6 +554,162 @@ export function standardizeChatGPTPromptResult(
       posts: [],
       chatMessages: result.messages
     },
+    meta: {
+      profileCount: 0,
+      postCount: 0,
+      startedAt: result.meta.startedAt,
+      finishedAt: result.meta.completedAt,
+      sourceUrl: result.meta.tabUrl,
+      warnings: [],
+      debug: result.debug,
+      raw: input.includeRaw ? result : undefined
+    }
+  }
+}
+
+export function standardizeQwenResult(
+  input: StandardCrawlerInput,
+  result: {
+    ok: boolean;
+    conversations?: Array<{ id: string; title: string; createTime: any; updateTime: any }>;
+    error?: { code: string; message: string };
+    debug?: CdpDebugInfo;
+    meta?: { startedAt: string; completedAt: string; tabUrl: string };
+  }
+): StandardCrawlerOutput {
+  if (!result.ok || !result.conversations || !result.meta) {
+    return {
+      ok: false,
+      schemaVersion: '1.0',
+      outputTypes: ['Qwen Conversation List'],
+      input,
+      output: { profiles: [], posts: [], conversations: [] },
+      meta: {
+        profileCount: 0,
+        postCount: 0,
+        warnings: [result.error?.message ?? 'Qwen crawler failed.'],
+        debug: result.debug,
+        raw: input.includeRaw ? result : undefined
+      },
+      error: {
+        code: result.error?.code ?? 'QWEN_CAPTURE_FAILED',
+        message: result.error?.message ?? 'Qwen crawler failed.'
+      }
+    }
+  }
+
+  const conversations = result.conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    createTime: parseSafeDate(c.createTime),
+    updateTime: parseSafeDate(c.updateTime)
+  }))
+
+  return {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['Qwen Conversation List'],
+    input,
+    output: { profiles: [], posts: [], conversations },
+    meta: {
+      profileCount: 0,
+      postCount: 0,
+      startedAt: result.meta.startedAt,
+      finishedAt: result.meta.completedAt,
+      sourceUrl: result.meta.tabUrl,
+      warnings: conversations.length === 0 ? ['No conversation history found.'] : [],
+      debug: result.debug,
+      raw: input.includeRaw ? result : undefined
+    }
+  }
+}
+
+export function standardizeQwenDetailsResult(
+  input: StandardCrawlerInput,
+  result: {
+    ok: boolean;
+    messages?: ChatGPTMessage[];
+    error?: { code: string; message: string };
+    debug?: CdpDebugInfo;
+    meta?: { startedAt: string; completedAt: string; tabUrl: string };
+  }
+): StandardCrawlerOutput {
+  if (!result.ok || !result.messages || !result.meta) {
+    return {
+      ok: false,
+      schemaVersion: '1.0',
+      outputTypes: ['Qwen Message List'],
+      input,
+      output: { profiles: [], posts: [], conversations: [], chatMessages: [] },
+      meta: {
+        profileCount: 0,
+        postCount: 0,
+        warnings: [result.error?.message ?? 'Qwen details capture failed.'],
+        debug: result.debug,
+        raw: input.includeRaw ? result : undefined
+      },
+      error: {
+        code: result.error?.code ?? 'QWEN_CAPTURE_FAILED',
+        message: result.error?.message ?? 'Qwen details capture failed.'
+      }
+    }
+  }
+  return {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['Qwen Message List'],
+    input,
+    output: { profiles: [], posts: [], chatMessages: result.messages },
+    meta: {
+      profileCount: 0,
+      postCount: 0,
+      startedAt: result.meta.startedAt,
+      finishedAt: result.meta.completedAt,
+      sourceUrl: result.meta.tabUrl,
+      warnings: [],
+      debug: result.debug,
+      raw: input.includeRaw ? result : undefined
+    }
+  }
+}
+
+export function standardizeQwenPromptResult(
+  input: StandardCrawlerInput,
+  result: {
+    ok: boolean;
+    conversationId?: string;
+    messages?: ChatGPTMessage[];
+    error?: { code: string; message: string };
+    debug?: CdpDebugInfo;
+    meta?: { startedAt: string; completedAt: string; tabUrl: string };
+  }
+): StandardCrawlerOutput {
+  if (!result.ok || !result.messages || !result.meta) {
+    return {
+      ok: false,
+      schemaVersion: '1.0',
+      outputTypes: ['Qwen Message List'],
+      input,
+      output: { profiles: [], posts: [], conversations: [], chatMessages: [] },
+      meta: {
+        profileCount: 0,
+        postCount: 0,
+        warnings: [result.error?.message ?? 'Qwen prompt submission failed.'],
+        debug: result.debug,
+        raw: input.includeRaw ? result : undefined
+      },
+      error: {
+        code: result.error?.code ?? 'QWEN_PROMPT_FAILED',
+        message: result.error?.message ?? 'Qwen prompt submission failed.'
+      }
+    }
+  }
+  return {
+    ok: true,
+    schemaVersion: '1.0',
+    outputTypes: ['Qwen Message List'],
+    input: { ...input, conversationId: result.conversationId ?? input.conversationId },
+    output: { profiles: [], posts: [], chatMessages: result.messages },
     meta: {
       profileCount: 0,
       postCount: 0,

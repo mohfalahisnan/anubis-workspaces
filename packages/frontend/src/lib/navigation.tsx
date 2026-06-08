@@ -23,6 +23,7 @@ export type Route =
   | { page: 'workflows' }
   | { page: 'workflow-editor'; workflowId: string }
   | { page: 'crawler-playground' }
+  | { page: 'qwen-playground' }
 
 export type PageKey = Route['page']
 

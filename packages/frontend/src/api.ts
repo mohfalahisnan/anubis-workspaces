@@ -863,6 +863,109 @@ export async function streamChatGPTPrompt(
   return result
 }
 
+/* ---------- Qwen Crawler Playground ---------- */
+
+// Qwen reuses the same StandardCrawlerOutput-based shapes as ChatGPT.
+export type QwenConversationListItem = ChatGPTConversationListItem
+export type QwenMessageListItem = ChatGPTMessageListItem
+export type QwenConversationsResponse = ChatGPTConversationsResponse
+export type QwenConversationDetailsResponse = ChatGPTConversationDetailsResponse
+export type QwenPromptResponse = ChatGPTPromptResponse
+export type QwenConversationsOptions = ChatGPTConversationsOptions
+export type QwenPromptOptions = ChatGPTPromptOptions
+
+export async function openQwenLoginChrome(): Promise<OpenCrawlerChromeResult> {
+  return api<OpenCrawlerChromeResult>('/research-crawler/chrome/open', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile: 'login',
+      headless: false,
+      url: 'https://chat.qwen.ai/',
+    }),
+  })
+}
+
+export async function getQwenConversations(
+  options: QwenConversationsOptions = {}
+): Promise<QwenConversationsResponse> {
+  return api<QwenConversationsResponse>('/research-crawler/qwen/conversations', {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
+
+export async function getQwenConversationDetails(
+  conversationId: string,
+  options: QwenConversationsOptions = {}
+): Promise<QwenConversationDetailsResponse> {
+  return api<QwenConversationDetailsResponse>(`/research-crawler/qwen/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
+
+/**
+ * Send a prompt to Qwen and stream the assistant response via Server-Sent Events.
+ * `onDelta` receives the full assistant text so far; resolves with the final
+ * StandardCrawlerOutput once generation completes.
+ */
+export async function streamQwenPrompt(
+  options: QwenPromptOptions,
+  handlers: ChatGPTStreamHandlers = {},
+): Promise<QwenPromptResponse> {
+  const baseUrl = await getApiBaseUrl()
+  const response = await fetch(new URL('/research-crawler/qwen/prompt/stream', baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+    body: JSON.stringify(options),
+    signal: handlers.signal,
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`Stream request failed: HTTP ${response.status}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: QwenPromptResponse | null = null
+  let streamError: string | null = null
+
+  const handleEvent = (raw: string) => {
+    let event = 'message'
+    const dataLines: string[] = []
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+    }
+    if (dataLines.length === 0) return
+    const data = dataLines.join('\n')
+    if (event === 'delta') {
+      try { handlers.onDelta?.((JSON.parse(data) as { text: string }).text) } catch { /* ignore */ }
+    } else if (event === 'done') {
+      try { result = JSON.parse(data) as QwenPromptResponse } catch { /* ignore */ }
+    } else if (event === 'error') {
+      try { streamError = (JSON.parse(data) as { message?: string }).message ?? 'stream error' } catch { streamError = 'stream error' }
+    }
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      if (chunk.trim()) handleEvent(chunk)
+    }
+  }
+  if (buffer.trim()) handleEvent(buffer)
+
+  if (streamError) throw new Error(streamError)
+  if (!result) throw new Error('Stream ended without a result.')
+  return result
+}
+
 export async function listProjects(): Promise<ProjectSummary[]> {
   const r = await api<ProjectListResponse>('/projects')
   return r.items

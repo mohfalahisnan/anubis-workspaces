@@ -26,6 +26,7 @@ import { WorkflowDemoPage } from '@/components/workflow'
 import { WorkflowsPage } from '@/pages/workflows'
 import { WorkflowEditorPage } from '@/pages/workflow-editor'
 import { CrawlerPlaygroundPage } from '@/pages/crawler-playground'
+import { QwenPlaygroundPage } from '@/pages/qwen-playground'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -47,6 +48,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   workflows: 'Workflows',
   'workflow-editor': 'Workflows · Editor',
   'crawler-playground': 'Crawler Playground',
+  'qwen-playground': 'Qwen Playground',
 }
 
 type BackendState = 'checking' | 'online' | 'offline'
@@ -225,6 +227,8 @@ function CurrentPage() {
       return <WorkflowEditorPage workflowId={route.workflowId} />
     case 'crawler-playground':
       return <CrawlerPlaygroundPage />
+    case 'qwen-playground':
+      return <QwenPlaygroundPage />
     default:
       return <HomePage />
   }

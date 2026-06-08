@@ -320,10 +320,11 @@ export async function listMessages(conversationId: string): Promise<MessageSumma
 export async function sendMessage(
   conversationId: string,
   content: string,
+  fileReferences?: string[],
 ): Promise<{ msgId: string; messageId: string }> {
   const r = await api<{ ok: true; msgId: string; messageId: string }>(
     `/conversations/${encodeURIComponent(conversationId)}/messages`,
-    { method: 'POST', body: JSON.stringify({ content }) },
+    { method: 'POST', body: JSON.stringify({ content, fileReferences }) },
   )
   return { msgId: r.msgId, messageId: r.messageId }
 }

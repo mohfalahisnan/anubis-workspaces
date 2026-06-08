@@ -6,6 +6,7 @@ export interface BuildClaudeArgsOpts {
   allowedTools?: string[]
   disallowedTools?: string[]
   appendSystemPrompt?: string
+  files?: string[]
 }
 
 export function buildClaudeArgs(opts: BuildClaudeArgsOpts): string[] {
@@ -35,6 +36,9 @@ export function buildClaudeArgs(opts: BuildClaudeArgsOpts): string[] {
   }
   if (opts.appendSystemPrompt && opts.appendSystemPrompt.trim() !== '') {
     args.push('--append-system-prompt', opts.appendSystemPrompt)
+  }
+  if (opts.files?.length) {
+    args.push(...opts.files)
   }
   return args
 }

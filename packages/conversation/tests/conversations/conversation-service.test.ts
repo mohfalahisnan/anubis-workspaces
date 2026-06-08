@@ -142,6 +142,26 @@ describe('ConversationService', () => {
     await ctx.tm.shutdown()
   })
 
+  it('sendMessage stores fileReferences in message metadata and passes to task manager', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
+    const files = ['/tmp/file1.txt', 'file2.js']
+    const r = await ctx.svc.sendMessage(c.id, { content: 'hello with files', fileReferences: files })
+    expect(r.msgId).toBeTruthy()
+    await new Promise(rs => setTimeout(rs, 20))
+    const msgs = ctx.svc.listMessages(c.id)
+    const userMsg = msgs.find(m => m.role === 'user' && m.content === 'hello with files')
+    expect(userMsg).toBeTruthy()
+    expect(userMsg?.metadata?.fileReferences).toEqual(files)
+
+    const call = ctx.aiAgent.streamAgent.mock.calls[ctx.aiAgent.streamAgent.mock.calls.length - 1]?.[0] as { files?: string[] }
+    expect(call?.files).toBeTruthy()
+    expect(call?.files).toContain('/tmp/file1.txt')
+    expect(call?.files?.some(f => f.endsWith('file2.js'))).toBe(true)
+
+    await ctx.tm.shutdown()
+  })
+
   it('PATCH rejects changing agent via override', () => {
     const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', workspacePath: '/tmp' })
     expect(() => ctx.svc.update(c.id, { override: { agent: 'codex' } })).toThrow(/agent/i)

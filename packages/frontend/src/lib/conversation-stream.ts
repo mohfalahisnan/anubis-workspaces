@@ -22,6 +22,7 @@ export interface OptimisticUserMessage {
   id: string
   role: 'user'
   content: string
+  fileReferences?: string[]
   createdAt: number
 }
 
@@ -32,7 +33,7 @@ export interface ConversationStreamState {
   error: string | null
   chunks: number
   partialChars: number
-  pushOptimisticUser: (content: string) => void
+  pushOptimisticUser: (content: string, fileReferences?: string[]) => void
   /** Clear the last stream error so a retry doesn't keep showing it. */
   clearError: () => void
 }
@@ -50,13 +51,14 @@ export function useConversationMessages(
 
   const clearError = useCallback(() => setError(null), [])
 
-  const pushOptimisticUser = useCallback((content: string) => {
+  const pushOptimisticUser = useCallback((content: string, fileReferences?: string[]) => {
     setOptimistic((prev) => [
       ...prev,
       {
         id: `optimistic:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
         role: 'user',
         content,
+        fileReferences,
         createdAt: Date.now(),
       },
     ])

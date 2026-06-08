@@ -246,6 +246,7 @@ export class ConversationService {
     this.deps.messages.insert({
       id: userRowId, conversationId: cur.id, msgId, role: 'user',
       content: input.content, createdAt: now,
+      metadata: input.fileReferences?.length ? { fileReferences: input.fileReferences } : undefined,
     })
     this.deps.conversations.updateStatus(cur.id, 'running')
 

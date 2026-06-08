@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { basename } from 'node:path'
 import { AGENTS, DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, MODELS, REASONING_EFFORTS } from '../agents/catalog.js'
 import type { Agent, ReasoningEffort } from '../agents/catalog.js'
 import { extractUsage, type ExtractedUsage } from '../agents/usage.js'
@@ -134,6 +135,14 @@ export class AiAgentService {
     let agentSessionId: string | undefined
 
     if (input.agent === 'codex') {
+      let appendSystemPrompt = input.appendSystemPrompt
+      if (input.files?.length) {
+        const fileList = input.files.map(f => basename(f)).join(', ')
+        const filesNote = `The user has explicitly attached the following files to this turn: ${fileList}. You can read or edit them in the workspace.`
+        appendSystemPrompt = appendSystemPrompt
+          ? `${appendSystemPrompt}\n\n${filesNote}`
+          : filesNote
+      }
       const stream = await this.codex.run({
         workspaceId,
         sessionId,
@@ -142,7 +151,7 @@ export class AiAgentService {
         prompt: input.prompt,
         model: input.model,
         reasoningEffort: input.reasoningEffort,
-        appendSystemPrompt: input.appendSystemPrompt,
+        appendSystemPrompt,
         sandboxMode: input.yolo ? 'danger-full-access' : input.sandboxMode,
         approvalPolicy: input.yolo ? 'never' : input.approvalPolicy,
         onSession: (id) => {
@@ -163,6 +172,14 @@ export class AiAgentService {
       // agy exposes a single `--dangerously-skip-permissions` flag, so both the
       // direct `yolo` toggle and a profile's `bypassPermissions` mode map to it.
       const skipPermissions = input.yolo === true || input.permissionMode === 'bypassPermissions'
+      let appendSystemPrompt = input.appendSystemPrompt
+      if (input.files?.length) {
+        const fileList = input.files.map(f => basename(f)).join(', ')
+        const filesNote = `The user has explicitly attached the following files to this turn: ${fileList}. You can read or edit them in the workspace.`
+        appendSystemPrompt = appendSystemPrompt
+          ? `${appendSystemPrompt}\n\n${filesNote}`
+          : filesNote
+      }
       const { emitter, cancel } = await this.antigravity.run({
         workspaceId,
         sessionId,
@@ -171,7 +188,7 @@ export class AiAgentService {
         prompt: input.prompt,
         model: input.model,
         yolo: skipPermissions,
-        appendSystemPrompt: input.appendSystemPrompt,
+        appendSystemPrompt,
         extraEnv: input.extraEnv,
       })
 
@@ -228,6 +245,14 @@ export class AiAgentService {
     const mode = input.yolo
       ? 'bypassPermissions'
       : input.permissionMode ?? 'default'
+    let appendSystemPrompt = input.appendSystemPrompt
+    if (input.files?.length) {
+      const fileList = input.files.map(f => basename(f)).join(', ')
+      const filesNote = `The user has explicitly attached the following files to this turn: ${fileList}. You can read or edit them in the workspace.`
+      appendSystemPrompt = appendSystemPrompt
+        ? `${appendSystemPrompt}\n\n${filesNote}`
+        : filesNote
+    }
     const { emitter, cancel } = await this.claude.run({
       workspaceId,
       sessionId,
@@ -240,7 +265,8 @@ export class AiAgentService {
       permissionMode: mode,
       allowedTools: input.allowedTools,
       disallowedTools: input.disallowedTools,
-      appendSystemPrompt: input.appendSystemPrompt,
+      appendSystemPrompt,
+      files: input.files,
     })
 
     return {

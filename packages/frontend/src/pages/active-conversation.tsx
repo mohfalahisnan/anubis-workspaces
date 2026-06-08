@@ -348,7 +348,7 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     }
   }, [conversationId, stopping])
 
-  const onSend = useCallback(async (content: string) => {
+  const onSend = useCallback(async (content: string, files?: string[]) => {
     setSendError(null)
     // Wipe the previous turn's stream error (e.g. usageLimitExceeded) so the
     // user isn't staring at it forever — the new turn either succeeds or
@@ -356,10 +356,10 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     clearStreamError()
     // Show the user's message instantly. It will be reconciled out when the
     // backend's persisted copy comes back via listMessages on `done`.
-    if (conversationId) pushOptimisticUser(content)
+    if (conversationId) pushOptimisticUser(content, files)
     try {
       const id = await ensure(content)
-      await apiSendMessage(id, content)
+      await apiSendMessage(id, content, files)
       if (id !== conversationId) {
         refetchWorkspaces()
         navigate({ page: 'active-conversation', conversationId: id })
@@ -548,11 +548,29 @@ function RenderedMessage({
   conversationId: string
 }) {
   if (message.role === 'user') {
+    const files = message.metadata?.fileReferences as string[] | undefined
     return (
-      <div className='flex justify-end'>
+      <div className='flex flex-col items-end gap-1.5'>
         <div className='max-w-[75%] rounded-[13px] rounded-br-[4px] border border-border bg-card px-[15px] py-3 text-[15px] leading-[1.5] tracking-[-0.005em] text-foreground'>
           {message.content}
         </div>
+        {files && files.length > 0 && (
+          <div className='flex flex-col items-end gap-1 max-w-[75%]'>
+            {files.map((file, idx) => {
+              const filename = file.split(/[/\\]/).pop() || file
+              return (
+                <div
+                  key={idx}
+                  className='flex items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-[11px] text-muted-foreground'
+                  title={file}
+                >
+                  <PaperclipIcon className='size-[11px] shrink-0 text-muted-foreground/75' strokeWidth={2} />
+                  <span className='truncate max-w-[240px]'>{filename}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
@@ -600,11 +618,29 @@ function ThinkingIndicator() {
 }
 
 function OptimisticUserBubble({ message }: { message: OptimisticUserMessage }) {
+  const files = message.fileReferences
   return (
-    <div className='flex justify-end'>
+    <div className='flex flex-col items-end gap-1.5'>
       <div className='max-w-[75%] rounded-[13px] rounded-br-[4px] border border-border bg-card px-[15px] py-3 text-[15px] leading-[1.5] tracking-[-0.005em] text-foreground opacity-80'>
         {message.content}
       </div>
+      {files && files.length > 0 && (
+        <div className='flex flex-col items-end gap-1 max-w-[75%] opacity-80'>
+          {files.map((file, idx) => {
+            const filename = file.split(/[/\\]/).pop() || file
+            return (
+              <div
+                key={idx}
+                className='flex items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-[11px] text-muted-foreground'
+                title={file}
+              >
+                <PaperclipIcon className='size-[11px] shrink-0 text-muted-foreground/75' strokeWidth={2} />
+                <span className='truncate max-w-[240px]'>{filename}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -810,7 +846,7 @@ function Composer({
   onConsumeQuote,
   conversationId,
 }: {
-  onSend: (content: string) => void
+  onSend: (content: string, files?: string[]) => void
   onStop: () => void
   streaming: boolean
   stopping: boolean
@@ -833,6 +869,7 @@ function Composer({
 }) {
   const [value, setValue] = useState('')
   const [quotes, setQuotes] = useState<string[]>([])
+  const [attachedFiles, setAttachedFiles] = useState<string[]>([])
   const ref = useRef<HTMLTextAreaElement | null>(null)
 
   function autoGrow() {
@@ -849,6 +886,20 @@ function Composer({
     requestAnimationFrame(() => ref.current?.focus())
   }, [pendingQuote, onConsumeQuote])
 
+  async function handleAttachFiles() {
+    if (typeof window === 'undefined' || !window.anubis?.files) {
+      return
+    }
+    try {
+      const picked = await window.anubis.files.pick()
+      if (picked.length > 0) {
+        setAttachedFiles((prev) => Array.from(new Set([...prev, ...picked])))
+      }
+    } catch (e) {
+      console.error('Failed to pick files:', e)
+    }
+  }
+
   function buildPayload() {
     const blocks = quotes.join('\n\n')
     const body = value.trim()
@@ -857,11 +908,15 @@ function Composer({
   }
 
   function commit() {
-    const payload = buildPayload()
+    let payload = buildPayload()
+    if (!payload && attachedFiles.length > 0) {
+      payload = 'Please analyze the attached files.'
+    }
     if (!payload) return
-    onSend(payload)
+    onSend(payload, attachedFiles)
     setValue('')
     setQuotes([])
+    setAttachedFiles([])
     if (ref.current) ref.current.style.height = 'auto'
   }
 
@@ -889,7 +944,7 @@ function Composer({
       ? `\`${agent}\` not found on PATH. Install ${AGENT_INSTALL_LABEL[agent]} first.`
       : null
 
-  const hasContent = value.trim().length > 0 || quotes.length > 0
+  const hasContent = value.trim().length > 0 || quotes.length > 0 || attachedFiles.length > 0
   const sendDisabled = !streaming && (!hasContent || agentUnavailable)
 
   return (
@@ -926,6 +981,30 @@ function Composer({
             ))}
           </div>
         )}
+        {attachedFiles.length > 0 && (
+          <div className='mb-2 flex flex-wrap gap-1.5 px-1 pt-1'>
+            {attachedFiles.map((path, i) => {
+              const filename = path.split(/[/\\]/).pop() || path
+              return (
+                <div
+                  key={path}
+                  className='group relative flex items-center gap-1.5 rounded-md border border-border bg-muted/65 py-1 pl-2 pr-6 text-[11.5px] font-mono text-foreground'
+                >
+                  <PaperclipIcon className='size-3 text-muted-foreground' strokeWidth={2} />
+                  <span className='truncate max-w-[180px]' title={path}>{filename}</span>
+                  <button
+                    type='button'
+                    aria-label='Remove file'
+                    onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    className='absolute right-1 top-1/2 -translate-y-1/2 flex size-4 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+                  >
+                    <XIcon className='size-[10px]' strokeWidth={2.5} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
         <textarea
           ref={ref}
           value={value}
@@ -942,6 +1021,7 @@ function Composer({
             type='button'
             aria-label='Attach'
             disabled={streaming}
+            onClick={handleAttachFiles}
             className='flex size-[30px] flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
           >
             <PaperclipIcon className='size-[17px]' strokeWidth={2} />

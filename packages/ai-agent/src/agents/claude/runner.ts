@@ -73,6 +73,7 @@ export interface ClaudeRunOpts {
   allowedTools?: string[]
   disallowedTools?: string[]
   appendSystemPrompt?: string
+  files?: string[]
 }
 
 export interface ClaudeAgentOpts {
@@ -95,6 +96,7 @@ export class ClaudeAgent {
       allowedTools: opts.allowedTools,
       disallowedTools: opts.disallowedTools,
       appendSystemPrompt: opts.appendSystemPrompt,
+      files: opts.files,
     })
     const env = {
       ...(this.opts.env ?? process.env),

@@ -24,6 +24,7 @@ export interface TurnInput {
   prompt: string
   msgId: string
   appendSystemPrompt?: string
+  files?: string[]
   prevAgentSessionId?: string
 }
 
@@ -85,6 +86,7 @@ export class TaskManager {
         claudeCliProfile: profile.claudeCliProfile,
         extraEnv: profile.env,
         appendSystemPrompt: turn.appendSystemPrompt ?? profile.appendSystemPrompt,
+        files: turn.files,
         reasoningEffort: profile.reasoningEffort,
         sandboxMode: profile.sandboxMode,
         approvalPolicy: profile.approvalPolicy,

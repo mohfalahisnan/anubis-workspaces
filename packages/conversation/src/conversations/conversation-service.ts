@@ -1,4 +1,4 @@
-import { join, relative, isAbsolute } from 'node:path'
+import { join, relative, isAbsolute, resolve } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
@@ -15,7 +15,7 @@ export class NoCredentialsError extends Error {
 }
 import { nowMs } from '../util/time.js'
 import { computeInitialSkills } from '../skills/snapshot.js'
-import { composeAppendSystemPrompt, type ProjectContext } from '../skills/inject.js'
+import { composeAppendSystemPrompt, buildWebAgentSystemPrompt, type ProjectContext } from '../skills/inject.js'
 import type { SkillLoader } from '../skills/loader.js'
 import type { ProfileService } from '../profiles/profile-service.js'
 import type { ProfileOverride, ResolvedProfile, AgentKind } from '../profiles/types.js'
@@ -53,6 +53,7 @@ export interface CreateConversationInput {
 export interface SendMessageInput {
   content: string
   override?: ProfileOverride
+  fileReferences?: string[]
 }
 
 export interface CreateAndAwaitFirstTurnInput {
@@ -274,10 +275,30 @@ export class ConversationService {
     writeProfileSkills(cur.workspacePath, skillDefs)
     const { appendSystemPrompt: _, ...resolvedWithoutAppend } = resolved
     const resolvedForTurn: ResolvedProfile = { ...resolvedWithoutAppend, env: envWithHome }
+
+    // Web agents cannot read files from the filesystem so skills and the profile
+    // system prompt must travel inline. Build the composed prompt here so that
+    // the turn carries everything in-band.
+    const isWebAgent = cur.agent === 'gpt-web' || cur.agent === 'qwen-web'
+    const webSystemPrompt = isWebAgent
+      ? buildWebAgentSystemPrompt(resolved.appendSystemPrompt, skillDefs, projectCtx)
+      : undefined
+
+    // Resolve fileReferences to absolute paths (relative refs are anchored to the workspace).
+    const resolvedFiles: string[] | undefined = input.fileReferences?.length
+      ? input.fileReferences.map(ref => (isAbsolute(ref) ? ref : resolve(cur.workspacePath, ref)))
+      : undefined
+
     const task = await this.deps.tm.getOrBuild(
       { id: cur.id, agent: cur.agent, workspacePath: cur.workspacePath },
       resolvedForTurn,
-      { prompt: input.content, msgId, prevAgentSessionId: prevSession },
+      {
+        prompt: input.content,
+        msgId,
+        prevAgentSessionId: prevSession,
+        ...(webSystemPrompt !== undefined ? { appendSystemPrompt: webSystemPrompt } : {}),
+        ...(resolvedFiles?.length ? { files: resolvedFiles } : {}),
+      },
     )
 
     const messageRowId = newId()

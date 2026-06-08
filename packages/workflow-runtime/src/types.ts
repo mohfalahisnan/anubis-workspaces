@@ -95,6 +95,7 @@ export interface ExecutorContext {
   runId:   string
   signal:  AbortSignal
   emit:    (event: NodeRunEvent) => void
+  workspacePath?: string
 }
 
 export type NodeRunEvent =

@@ -15,6 +15,11 @@ export interface CapturedPost {
   carouselCount?: number
   capturedAt: number
   raw?: Record<string, unknown>
+  assetPaths?: {
+    absolute: string[]
+    relative: string[]
+  }
+  failedAssets?: string[]
 }
 
 interface Row {
@@ -35,6 +40,7 @@ interface Row {
 }
 
 function toPost(r: Row): CapturedPost {
+  const raw = r.raw ? (JSON.parse(r.raw) as Record<string, unknown>) : undefined
   return {
     id: r.id,
     competitorId: r.competitor_id,
@@ -49,7 +55,9 @@ function toPost(r: Row): CapturedPost {
     mediaUrl: r.media_url ?? undefined,
     carouselCount: r.carousel_count ?? undefined,
     capturedAt: r.captured_at,
-    raw: r.raw ? (JSON.parse(r.raw) as Record<string, unknown>) : undefined,
+    raw,
+    assetPaths: raw?.assetPaths as any,
+    failedAssets: raw?.failedAssets as any,
   }
 }
 

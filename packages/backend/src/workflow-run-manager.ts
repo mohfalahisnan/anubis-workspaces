@@ -212,8 +212,10 @@ export class WorkflowRunManager {
       const ctx = {
         crawler: { captureProfile: async (url: string): Promise<CapturedPost> => {
           const cfg = this.stack.appConfig.get()
+          const project = this.stack.projects.findById(active.projectId)
+          const workspacePath = project?.workdir
           const input = withCrawlerProfileDefaults(
-            { url, reporter: silentReporter(), chromePath: cfg.chromePath },
+            { url, reporter: silentReporter(), chromePath: cfg.chromePath, workspacePath },
             'public', cfg, this.dataDir,
           )
           const result: StandardCrawlerOutput = await captureInstagramData(input)
@@ -314,6 +316,7 @@ export class WorkflowRunManager {
         runId: active.runId,
         signal: active.controller.signal,
         emit: (e: NodeRunEvent) => { void wrappedEmit(e) },
+        workspacePath: this.stack.projects.findById(active.projectId)?.workdir,
       }
       const result = await runWorkflow(graph, executorRegistry, ctx, { seed })
       status = result.status
@@ -353,6 +356,8 @@ function mapCrawlerOutputToCapturedPost(result: StandardCrawlerOutput, sourceUrl
       caption: post.caption,
       mediaUrls: post.media?.urls ?? (post.media?.videoUrl ? [post.media.videoUrl] : []),
       metrics: { likes: post.likes, comments: post.comments },
+      assetPaths: post.assetPaths,
+      failedAssets: post.failedAssets,
     }
   }
   const profile = result.output.profiles[0]

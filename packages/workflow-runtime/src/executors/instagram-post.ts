@@ -17,6 +17,10 @@ export interface InstagramPostOutputPost {
   /** Per-media download failures (e.g. private CDN URL), if any. */
   mediaErrors?: string[]
   metrics?: { likes?: number; comments?: number }
+  assetPaths: {
+    absolute: string[]
+    relative: string[]
+  }
 }
 
 export interface InstagramPostOutput {
@@ -39,18 +43,30 @@ export const instagramPostExecutor: Executor<InstagramPostConfig> = {
       captured = await ctx.crawler.captureProfile(input.config.url)
     }
 
-    // Download each media URL to a run artifact so downstream nodes (and the
-    // AI Agent's prompt context) only see short file paths, not the 1–2 KB
-    // signed CDN URLs that bust Windows' 8K cmd.exe limit.
-    const mediaPaths: string[] = []
-    const mediaErrors: string[] = []
-    for (let i = 0; i < captured.mediaUrls.length; i++) {
-      const url = captured.mediaUrls[i]!
-      try {
-        const { path } = await downloadToArtifact(url, ctx, `${input.nodeId}-media-${i}`)
-        mediaPaths.push(path)
-      } catch (err) {
-        mediaErrors.push(`${url} → ${err instanceof Error ? err.message : String(err)}`)
+    let mediaPaths: string[] = []
+    let mediaErrors: string[] = []
+    let assetPaths: { absolute: string[]; relative: string[] }
+
+    if (captured.assetPaths) {
+      assetPaths = captured.assetPaths as { absolute: string[]; relative: string[] }
+      mediaPaths = assetPaths.absolute
+      if (captured.failedAssets && Array.isArray(captured.failedAssets)) {
+        mediaErrors = captured.failedAssets.map((url) => `${url} → download failed`)
+      }
+    } else {
+      // Fallback for when assetPaths is missing (e.g. in legacy data or unit tests)
+      for (let i = 0; i < captured.mediaUrls.length; i++) {
+        const url = captured.mediaUrls[i]!
+        try {
+          const { path } = await downloadToArtifact(url, ctx, `${input.nodeId}-media-${i}`)
+          mediaPaths.push(path)
+        } catch (err) {
+          mediaErrors.push(`${url} → ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+      assetPaths = {
+        absolute: mediaPaths,
+        relative: mediaPaths,
       }
     }
 
@@ -62,6 +78,7 @@ export const instagramPostExecutor: Executor<InstagramPostConfig> = {
         mediaPaths,
         ...(mediaErrors.length > 0 ? { mediaErrors } : {}),
         ...(captured.metrics ? { metrics: captured.metrics } : {}),
+        assetPaths,
       },
     }
   },

@@ -30,6 +30,7 @@ export interface RunAgentInput {
   claudeCliProfile?: string
   extraEnv?: Record<string, string>
   appendSystemPrompt?: string
+  files?: string[]
   yolo?: boolean
   reasoningEffort?: ReasoningEffort
   sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -191,6 +192,8 @@ export class AiAgentService {
         prompt: input.prompt,
         model: input.model,
         extraEnv: input.extraEnv,
+        appendSystemPrompt: input.appendSystemPrompt,
+        files: input.files,
       })
 
       return {
@@ -210,6 +213,8 @@ export class AiAgentService {
         prompt: input.prompt,
         model: input.model,
         extraEnv: input.extraEnv,
+        appendSystemPrompt: input.appendSystemPrompt,
+        files: input.files,
       })
 
       return {

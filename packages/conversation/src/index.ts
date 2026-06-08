@@ -149,7 +149,7 @@ export type { Conversation, Message, Artifact, AgentSession, ConversationExtra, 
 export type { Profile, ProfileConfig, ProfileOverride, ProfileSource, ResolvedProfile } from './profiles/types.js'
 export type { SkillDefinition, SkillIndex, SkillSource } from './skills/types.js'
 export { toIndex as toSkillIndex } from './skills/types.js'
-export { composeAppendSystemPrompt } from './skills/inject.js'
+export { composeAppendSystemPrompt, buildWebAgentSystemPrompt } from './skills/inject.js'
 export type { ProjectContext } from './skills/inject.js'
 export { computeInitialSkills } from './skills/snapshot.js'
 export type { CronJob } from './db/repositories/cron-jobs-repo.js'

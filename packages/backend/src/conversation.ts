@@ -25,6 +25,7 @@ const UpdateBody = z.object({
 const SendBody = z.object({
   content: z.string().min(1),
   override: z.record(z.string(), z.unknown()).optional(),
+  fileReferences: z.array(z.string().min(1)).optional(),
 }).strict()
 
 export const conversationRoutes = new Hono()

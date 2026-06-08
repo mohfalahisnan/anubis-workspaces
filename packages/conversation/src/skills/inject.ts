@@ -52,3 +52,25 @@ export function composeAppendSystemPrompt(
   )
   return parts.length > 0 ? parts.join('\n\n') : undefined
 }
+
+/**
+ * Build a system prompt for web agents (gpt-web, qwen-web) that cannot read
+ * files from the filesystem. Inlines full skill bodies instead of file pointers.
+ */
+export function buildWebAgentSystemPrompt(
+  profilePrompt: string | undefined,
+  skills: SkillDefinition[],
+  project?: ProjectContext,
+): string | undefined {
+  const projectBlock = project ? buildProjectBlock(project) : ''
+  const skillsBlock = skills.length > 0
+    ? '## Active Skills\n\n' + skills.map(s => {
+        const header = `### ${s.name}${s.description ? ` — ${s.description}` : ''}`
+        return `${header}\n\n${s.body.trim()}`
+      }).join('\n\n---\n\n')
+    : ''
+  const parts = [profilePrompt?.trim(), projectBlock, skillsBlock].filter(
+    (s): s is string => Boolean(s && s.length),
+  )
+  return parts.length > 0 ? parts.join('\n\n') : undefined
+}

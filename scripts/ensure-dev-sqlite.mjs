@@ -13,7 +13,6 @@ import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 function probeSqlite() {
   try {
@@ -25,6 +24,19 @@ function probeSqlite() {
   }
 }
 
+function rebuildSqliteForNode() {
+  const sqliteDir = path.dirname(require.resolve('better-sqlite3/package.json'))
+  const nodeGyp = require.resolve('node-gyp/bin/node-gyp.js')
+  return spawnSync(process.execPath, [nodeGyp, 'rebuild', '--release'], {
+    stdio: 'inherit',
+    cwd: sqliteDir,
+    env: {
+      ...process.env,
+      npm_config_build_from_source: 'true',
+    },
+  })
+}
+
 function ensureSqlite() {
   const first = probeSqlite()
   if (first.ok) return
@@ -34,14 +46,10 @@ function ensureSqlite() {
     process.exit(1)
   }
   console.log('[ensure-dev] better-sqlite3 ABI mismatch — rebuilding for system Node…')
-  const r = spawnSync(pnpm, ['rebuild', 'better-sqlite3'], {
-    stdio: 'inherit',
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      npm_config_build_from_source: 'true',
-    },
-  })
+  const r = rebuildSqliteForNode()
+  if (r.error) {
+    console.error(`[ensure-dev] failed to start better-sqlite3 rebuild: ${r.error.message}`)
+  }
   if (r.status !== 0) process.exit(r.status ?? 1)
   const second = probeSqlite()
   if (!second.ok) {

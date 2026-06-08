@@ -13,6 +13,37 @@ export interface QwenWebRunOpts {
   prompt: string
   model?: string
   extraEnv?: Record<string, string>
+  appendSystemPrompt?: string
+  files?: string[]
+}
+
+function buildFinalPrompt(
+  prompt: string,
+  appendSystemPrompt?: string,
+  files?: string[],
+): string {
+  const parts: string[] = []
+
+  if (appendSystemPrompt?.trim()) {
+    parts.push(`<system-context>\n${appendSystemPrompt.trim()}\n</system-context>`)
+  }
+
+  if (files?.length) {
+    const fileBlocks: string[] = []
+    for (const filePath of files) {
+      try {
+        const content = readFileSync(filePath, 'utf8')
+        const name = basename(filePath)
+        fileBlocks.push(`<file name="${name}">\n${content}\n</file>`)
+      } catch {
+        // skip unreadable files silently
+      }
+    }
+    if (fileBlocks.length) parts.push(fileBlocks.join('\n\n'))
+  }
+
+  parts.push(prompt)
+  return parts.join('\n\n')
 }
 
 const PROFILE_DIRS = {
@@ -104,7 +135,7 @@ export class QwenWebAgent {
     // We run Qwen using the 'login' profile.
     const crawlerInput = withCrawlerProfileDefaults(
       {
-        prompt: opts.prompt,
+        prompt: buildFinalPrompt(opts.prompt, opts.appendSystemPrompt, opts.files),
         conversationId: opts.conversationId,
         chromePath: config.chromePath,
         onDelta,

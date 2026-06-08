@@ -21,6 +21,7 @@ export type StandardCrawlerInput = {
   includeRaw?: boolean
   conversationId?: string
   prompt?: string
+  workspacePath?: string
 }
 
 export type ProfileData = {
@@ -65,6 +66,11 @@ export type PostData = {
   media?: PostMedia
   sourceProfileUrl?: string
   status?: 'profile_found' | 'profile_not_found'
+  assetPaths?: {
+    absolute: string[]
+    relative: string[]
+  }
+  failedAssets?: string[]
 }
 
 export type ChatGPTConversation = {

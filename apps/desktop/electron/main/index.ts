@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -133,6 +133,10 @@ app.whenReady().then(async () => {
   await createWindow()
 }).catch((error) => {
   console.error(error)
+  // Without this dialog, a launch failure from Explorer is invisible: no
+  // console, no window, just a process that exits. Surface the message so
+  // the user knows why the app didn't open.
+  dialog.showErrorBox('Anubis failed to start', String(error instanceof Error ? error.message : error))
   app.quit()
 })
 
@@ -146,9 +150,26 @@ app.on('window-all-closed', () => {
 })
 
 app.on('second-instance', () => {
-  if (!win) return
-
+  // The user clicked the .exe again. Bring the existing window forward, or
+  // recover if the window was closed/destroyed/parked off-screen — silently
+  // returning here would make every click appear to do nothing.
+  if (!win || win.isDestroyed()) {
+    createWindow()
+    return
+  }
   if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) win.show()
+  const bounds = win.getBounds()
+  const onscreen = screen.getAllDisplays().some((d) => {
+    const a = d.workArea
+    return (
+      bounds.x < a.x + a.width &&
+      bounds.x + bounds.width > a.x &&
+      bounds.y < a.y + a.height &&
+      bounds.y + bounds.height > a.y
+    )
+  })
+  if (!onscreen) win.center()
   win.focus()
 })
 

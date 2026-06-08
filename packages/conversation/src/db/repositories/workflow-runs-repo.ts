@@ -59,13 +59,13 @@ function toStep(r: StepRow): WorkflowRunStep {
 export class WorkflowRunsRepo {
   constructor(private db: Db) {}
 
-  createRun(input: { id: string; workflowId: string; graphSnapshot: string; now: number }): WorkflowRun {
+  createRun(input: { id: string; workflowId: string; projectId?: string; graphSnapshot: string; now: number }): WorkflowRun {
     this.db
       .prepare(
-        `INSERT INTO workflow_runs (id, workflow_id, status, graph_snapshot, started_at, finished_at, error)
-         VALUES (?, ?, 'running', ?, ?, NULL, NULL)`,
+        `INSERT INTO workflow_runs (id, workflow_id, project_id, status, graph_snapshot, started_at, finished_at, error)
+         VALUES (?, ?, ?, 'running', ?, ?, NULL, NULL)`,
       )
-      .run(input.id, input.workflowId, input.graphSnapshot, input.now)
+      .run(input.id, input.workflowId, input.projectId ?? 'default', input.graphSnapshot, input.now)
     return this.getRunOrThrow(input.id)
   }
 

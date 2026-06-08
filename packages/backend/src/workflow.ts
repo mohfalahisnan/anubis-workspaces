@@ -114,6 +114,7 @@ workflowRoutes.get('/', (c) => {
     const lastRun = stack.workflowRuns.listRunsForWorkflow(wf.id, 1)[0]
     return {
       id: wf.id, name: wf.name, description: wf.description,
+      projectId: wf.projectId,
       hasPublished: wf.publishedGraph != null,
       draftAhead: wf.publishedGraph != null && wf.draftGraph !== wf.publishedGraph,
       draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt,

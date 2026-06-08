@@ -425,6 +425,7 @@ export type ProjectListResponse = ListResponse<ProjectSummary>
 export interface CapturedPostSummary {
   id: string
   competitorId: string
+  projectId?: string
   username: string
   postUrl: string
   caption?: string

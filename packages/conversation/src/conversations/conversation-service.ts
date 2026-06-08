@@ -57,6 +57,7 @@ export interface SendMessageInput {
 export interface CreateAndAwaitFirstTurnInput {
   title: string
   profileId: string
+  projectId?: string
   override?: ProfileOverride
   content: string
   workspacePath?: string
@@ -303,6 +304,7 @@ export class ConversationService {
     const conv = this.create({
       title: input.title,
       profileId: input.profileId,
+      projectId: input.projectId,
       override: input.override,
       workspacePath: input.workspacePath,
       source: input.source,

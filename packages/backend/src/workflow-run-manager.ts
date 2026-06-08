@@ -22,6 +22,7 @@ type Decision = { decision: 'approved' | 'rejected'; notes?: string }
 interface ActiveRun {
   runId: string
   workflowId: string
+  projectId: string
   controller: AbortController
   listeners: Set<Listener>
   buffered: RunEvent[]
@@ -70,12 +71,13 @@ export class WorkflowRunManager {
     )
     const graphSnapshot = JSON.stringify(graph)
 
+    const workflowProjectId = workflow.projectId ?? 'default'
     const runId = randomUUID()
     const controller = new AbortController()
     const listeners = new Set<Listener>()
     const buffered: RunEvent[] = []
     const active: ActiveRun = {
-      runId, workflowId,
+      runId, workflowId, projectId: workflowProjectId,
       controller, listeners, buffered, finished: false, pendingApprovals: new Map(),
     }
     this.active.set(runId, active)
@@ -85,6 +87,7 @@ export class WorkflowRunManager {
     this.stack.workflowRuns.createRun({
       id: runId,
       workflowId,
+      projectId: workflowProjectId,
       graphSnapshot,
       now,
     })
@@ -222,6 +225,9 @@ export class WorkflowRunManager {
         db: { getCapturedPost: async (id: string): Promise<CapturedPost> => {
           const post = this.stack.capturedPosts.findById(id)
           if (!post) throw new Error(`captured post ${id} not found`)
+          if ((post.projectId ?? 'default') !== active.projectId) {
+            throw new Error(`captured post ${id} does not belong to workflow project ${active.projectId}`)
+          }
           return {
             id: post.id,
             caption: post.caption,
@@ -253,6 +259,7 @@ export class WorkflowRunManager {
             return this.stack.conversation.createAndAwaitFirstTurn({
               title: input.title,
               profileId: input.profileId,
+              projectId: active.projectId,
               override,
               content,
               source: input.source,
@@ -291,7 +298,7 @@ export class WorkflowRunManager {
             const id = randomUUID()
             const item = this.stack.contentItems.create({
               id,
-              projectId: input.projectId ?? 'default',
+              projectId: input.projectId ?? active.projectId,
               referencePostId: input.referencePostId,
               referenceUrl: input.referenceUrl,
               title: input.title,

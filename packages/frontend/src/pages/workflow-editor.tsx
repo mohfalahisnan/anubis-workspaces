@@ -32,7 +32,7 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
     workflowsApi.get(workflowId).then(async (wf) => {
       if (cancelled) return
       hydrate({
-        workflowId: wf.id, name: wf.name, description: wf.description,
+        workflowId: wf.id, projectId: wf.projectId, name: wf.name, description: wf.description,
         draft: JSON.parse(wf.draftGraph),
         published: wf.publishedGraph ? JSON.parse(wf.publishedGraph) : null,
         draftUpdatedAt: wf.draftUpdatedAt, publishedAt: wf.publishedAt ?? null,

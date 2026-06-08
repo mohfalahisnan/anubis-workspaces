@@ -24,6 +24,7 @@ export interface Snapshot { nodes: Node[]; edges: Edge[] }
 
 interface EditorState {
   workflowId: string | null
+  projectId: string | null
   name: string
   description?: string
   draft: Snapshot
@@ -39,7 +40,7 @@ interface EditorState {
   inspectorMode: 'config' | 'run'
 
   hydrate(args: {
-    workflowId: string; name: string; description?: string
+    workflowId: string; projectId?: string; name: string; description?: string
     draft: Snapshot; published: Snapshot | null
     draftUpdatedAt: number; publishedAt: number | null
   }): void
@@ -64,6 +65,7 @@ function clone(snap: Snapshot): Snapshot {
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   workflowId: null,
+  projectId: null,
   name: '',
   description: undefined,
   draft: { nodes: [], edges: [] },
@@ -81,6 +83,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   hydrate(a) {
     set({
       workflowId: a.workflowId,
+      projectId: a.projectId ?? 'default',
       name: a.name, description: a.description,
       draft: a.draft, published: a.published,
       draftUpdatedAt: a.draftUpdatedAt, publishedAt: a.publishedAt,

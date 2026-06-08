@@ -3,6 +3,7 @@ import { getApiBaseUrl } from '@/api'
 export interface WorkflowSummary {
   id: string
   name: string
+  projectId?: string
   description?: string
   hasPublished: boolean
   draftAhead: boolean
@@ -17,6 +18,7 @@ export interface WorkflowSummary {
 export interface WorkflowDetail {
   id: string
   name: string
+  projectId?: string
   description?: string
   draftGraph: string
   publishedGraph?: string

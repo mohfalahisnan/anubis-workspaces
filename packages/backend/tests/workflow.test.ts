@@ -140,6 +140,61 @@ describe('workflow REST', () => {
     expect(JSON.parse(runState.run.graphSnapshot).nodes[0].data).toEqual({ staticData: [{ k: 'fresh' }] })
   })
 
+  it('fails an Instagram post node when the selected post is outside the workflow project', async () => {
+    const app = await loadApp()
+    const project = await app.request('/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Workflow scoped project' }),
+    }).then((r) => r.json()) as { project: { id: string } }
+
+    const competitor = await app.request('/competitors', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: '@othercreator', projectId: 'default' }),
+    }).then((r) => r.json()) as { competitor: { id: string } }
+
+    await app.request('/posts/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        posts: [{
+          id: 'cross-project-post',
+          competitorId: competitor.competitor.id,
+          username: 'othercreator',
+          postUrl: 'https://www.instagram.com/p/cross-project-post/',
+        }],
+      }),
+    })
+
+    const created = await app.request('/workflows', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Scoped IG', projectId: project.project.id }),
+    })
+    const wf = await created.json()
+    const draft = JSON.stringify({
+      nodes: [{ id: 'ig1', type: 'instagramPost', position: { x: 0, y: 0 }, data: { source: 'existing', postId: 'cross-project-post' } }],
+      edges: [],
+    })
+    await app.request(`/workflows/${wf.id}/draft`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ draftGraph: draft }),
+    })
+    await app.request(`/workflows/${wf.id}/publish`, { method: 'POST' })
+
+    const runResp = await app.request(`/workflows/${wf.id}/runs`, { method: 'POST' })
+    expect(runResp.status).toBe(201)
+    const { runId } = await runResp.json()
+    await new Promise((r) => setTimeout(r, 10))
+
+    const runState = await app.request(`/workflows/runs/${runId}`).then((r) => r.json())
+    expect(runState.run.status).toBe('failed')
+    expect(runState.run.projectId).toBe(project.project.id)
+    expect(runState.run.error).toContain('does not belong to workflow project')
+  })
+
   it('SSE events are replayed even when the subscriber attaches after the run finishes', async () => {
     const app = await loadApp()
     // Create + publish a workflow that finishes instantly (single Table node).

@@ -22,6 +22,11 @@ release
 # Claude Code local state and git worktrees (never commit — a committed
 # worktree dir becomes a bare gitlink that breaks CI's checkout)
 .claude/
+
+# Auto-staged agent skills — regenerated each conversation turn by
+# writeProfileSkills (packages/conversation/src/profiles/agent-home.ts).
+# Canonical sources live under packages/ai-agent/skills/.
+.agents/
 .DS_Store
 *.suo
 *.ntvs*

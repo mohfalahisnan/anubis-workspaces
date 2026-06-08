@@ -39,6 +39,7 @@ function formatDate(isoString?: string) {
 
 export function InstagramPostConfigForm({ nodeId }: { nodeId: string }) {
   const draft = useEditorStore((s) => s.draft)
+  const projectId = useEditorStore((s) => s.projectId)
   const setNodes = useEditorStore((s) => s.setNodes)
   const pushHistory = useEditorStore((s) => s.pushHistory)
   const node = draft.nodes.find((n) => n.id === nodeId)
@@ -56,11 +57,15 @@ export function InstagramPostConfigForm({ nodeId }: { nodeId: string }) {
     setNodes(draft.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...data, ...patch } } : n))
   }
 
+  useEffect(() => {
+    setPosts(null)
+  }, [projectId])
+
   // Load posts on demand when the modal is opened
   useEffect(() => {
     if (isModalOpen && !posts) {
       setIsLoading(true)
-      listPosts({ limit: 200 })
+      listPosts({ limit: 200, projectId: projectId ?? undefined })
         .then((items) => {
           setPosts(items)
         })
@@ -71,12 +76,12 @@ export function InstagramPostConfigForm({ nodeId }: { nodeId: string }) {
           setIsLoading(false)
         })
     }
-  }, [isModalOpen, posts])
+  }, [isModalOpen, posts, projectId])
 
   // Legacy fallback: if there is a postId but no postSummary, try to load it from database
   useEffect(() => {
     if (data.source === 'existing' && data.postId && !data.postSummary) {
-      listPosts({ limit: 200 })
+      listPosts({ limit: 200, projectId: projectId ?? undefined })
         .then((fetchedPosts) => {
           const found = fetchedPosts.find((p) => p.id === data.postId)
           if (found) {
@@ -94,7 +99,7 @@ export function InstagramPostConfigForm({ nodeId }: { nodeId: string }) {
         })
         .catch((err) => console.error('Failed to load legacy post summary', err))
     }
-  }, [data.postId, data.source])
+  }, [data.postId, data.source, projectId])
 
   function handleSelectPost(post: CapturedPostSummary) {
     pushHistory()

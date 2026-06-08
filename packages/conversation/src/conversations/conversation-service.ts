@@ -15,7 +15,7 @@ export class NoCredentialsError extends Error {
 }
 import { nowMs } from '../util/time.js'
 import { computeInitialSkills } from '../skills/snapshot.js'
-import { composeAppendSystemPrompt } from '../skills/inject.js'
+import { composeAppendSystemPrompt, type ProjectContext } from '../skills/inject.js'
 import type { SkillLoader } from '../skills/loader.js'
 import type { ProfileService } from '../profiles/profile-service.js'
 import type { ProfileOverride, ResolvedProfile, AgentKind } from '../profiles/types.js'
@@ -32,6 +32,7 @@ import type { MessagesRepo } from '../db/repositories/messages-repo.js'
 import type { ArtifactsRepo } from '../db/repositories/artifacts-repo.js'
 import type { AgentSessionsRepo } from '../db/repositories/agent-sessions-repo.js'
 import type { KnownWorkspacesRepo } from '../db/repositories/known-workspaces-repo.js'
+import type { ProjectsRepo } from '../db/repositories/projects-repo.js'
 import type { SseBroadcaster } from '../sse/broadcaster.js'
 import type { CronService } from '../cron/cron-service.js'
 import type { TaskManager } from './task-manager.js'
@@ -93,6 +94,7 @@ export interface ConversationServiceDeps {
   artifacts: ArtifactsRepo
   sessions: AgentSessionsRepo
   knownWorkspaces: KnownWorkspacesRepo
+  projects: ProjectsRepo
   /**
    * Root directory under which each profile gets its own isolated
    * agent home folder ({agentHomeRoot}/{profileId}/{agent}/).
@@ -249,7 +251,13 @@ export class ConversationService {
     const skillDefs = cur.extra.skills
       .map(name => this.deps.skills.byName(name))
       .filter((s): s is NonNullable<typeof s> => Boolean(s))
-    const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs)
+
+    let projectCtx: ProjectContext | undefined
+    if (cur.projectId && cur.projectId !== 'default') {
+      const proj = this.deps.projects.findById(cur.projectId)
+      if (proj) projectCtx = { id: proj.id, name: proj.name, workspacePath: cur.workspacePath }
+    }
+    const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs, projectCtx)
 
     let prevSession = this.deps.sessions.findByConversation(cur.id)?.agentSessionId
     let envWithHome: Record<string, string> | undefined = resolved.env

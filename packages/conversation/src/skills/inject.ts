@@ -22,11 +22,33 @@ export function buildSkillsPointer(skills: SkillDefinition[]): string {
   ].join('\n')
 }
 
+export interface ProjectContext {
+  id: string
+  name: string
+  workspacePath?: string
+}
+
+function buildProjectBlock(project: ProjectContext): string {
+  const lines = [
+    '# currentProject',
+    `The active Anubis project is **${project.name}** (id: \`${project.id}\`).`,
+    'Use this project id when creating tasks, conversations, content items, or other project-scoped objects via the Anubis API — do not default to the \`default\` project.',
+  ]
+  if (project.workspacePath) {
+    lines.push(`Workspace path: \`${project.workspacePath}\``)
+  }
+  return lines.join('\n')
+}
+
 export function composeAppendSystemPrompt(
   profilePrompt: string | undefined,
   skills: SkillDefinition[],
+  project?: ProjectContext,
 ): string | undefined {
-  const block = buildSkillsPointer(skills)
-  const parts = [profilePrompt?.trim(), block].filter((s): s is string => Boolean(s && s.length))
+  const projectBlock = project ? buildProjectBlock(project) : ''
+  const skillsBlock = buildSkillsPointer(skills)
+  const parts = [profilePrompt?.trim(), projectBlock, skillsBlock].filter(
+    (s): s is string => Boolean(s && s.length),
+  )
   return parts.length > 0 ? parts.join('\n\n') : undefined
 }

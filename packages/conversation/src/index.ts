@@ -121,6 +121,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     artifacts: artifactsRepo,
     sessions: sessionsRepo,
     knownWorkspaces: knownWorkspacesRepo,
+    projects: projectsRepo,
     agentHomeRoot,
     workspacesRoot,
   })
@@ -149,6 +150,7 @@ export type { Profile, ProfileConfig, ProfileOverride, ProfileSource, ResolvedPr
 export type { SkillDefinition, SkillIndex, SkillSource } from './skills/types.js'
 export { toIndex as toSkillIndex } from './skills/types.js'
 export { composeAppendSystemPrompt } from './skills/inject.js'
+export type { ProjectContext } from './skills/inject.js'
 export { computeInitialSkills } from './skills/snapshot.js'
 export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'

@@ -99,6 +99,7 @@ export type ChatGPTCdpPromptInput = {
   keepTabOpen?: boolean;
   /** Called with the full assistant text so far as it streams in from the page. */
   onDelta?: (text: string) => void;
+  signal?: AbortSignal;
 };
 
 export type ChatGPTCdpPromptSuccess = {
@@ -485,6 +486,17 @@ export function createChatGPTCdpCaptureService(
       try {
         session = await (options.connectSession ?? connectCdpSession)(target.webSocketDebuggerUrl);
         debug.events.push(`${new Date().toISOString()} CDP session connected to ${target.id}`);
+
+        if (input.signal) {
+          if (input.signal.aborted) {
+            throw new Error("Aborted before prompt sent");
+          }
+          input.signal.addEventListener("abort", () => {
+            session?.close();
+            debug.events.push(`${new Date().toISOString()} CDP session closed due to AbortSignal`);
+          }, { once: true });
+        }
+
         reporter.start(phase, 1);
 
         // 1. Navigate to the EXACT target page before composing. For an existing
@@ -563,7 +575,7 @@ export function createChatGPTCdpCaptureService(
         while (Date.now() < idDeadline) {
           const urlCheck = await session.send<{ result?: { value?: string } }>("Runtime.evaluate", { expression: "window.location.href" });
           const m = String(urlCheck?.result?.value || "").match(/\/c\/([a-zA-Z0-9-]+)/i);
-          if (m) { resolvedConversationId = m[1]; break; }
+          if (m) { resolvedConversationId = m[1] ?? ""; break; }
           if (input.conversationId) break;
           await delay(1000);
         }

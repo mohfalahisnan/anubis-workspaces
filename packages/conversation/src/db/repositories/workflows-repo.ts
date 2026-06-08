@@ -6,6 +6,7 @@ export interface WorkflowRow {
   id: string
   name: string
   description: string | null
+  project_id: string | null
   draft_graph: string
   published_graph: string | null
   draft_updated_at: number
@@ -17,6 +18,7 @@ export interface WorkflowRow {
 export interface Workflow {
   id: string
   name: string
+  projectId?: string
   description?: string
   draftGraph: string
   publishedGraph?: string
@@ -30,6 +32,7 @@ function toWorkflow(r: WorkflowRow): Workflow {
   return {
     id: r.id,
     name: r.name,
+    projectId: r.project_id ?? undefined,
     description: r.description ?? undefined,
     draftGraph: r.draft_graph,
     publishedGraph: r.published_graph ?? undefined,
@@ -45,15 +48,15 @@ const EMPTY_GRAPH = JSON.stringify({ nodes: [], edges: [] })
 export class WorkflowsRepo {
   constructor(private db: Db) {}
 
-  create(input: { id: string; name: string; description?: string; now: number }): Workflow {
+  create(input: { id: string; name: string; projectId?: string; description?: string; now: number }): Workflow {
     this.db
       .prepare(
-        `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
+        `INSERT INTO workflows (id, name, project_id, description, draft_graph, published_graph,
           draft_updated_at, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
       )
       .run(
-        input.id, input.name, input.description ?? null, EMPTY_GRAPH,
+        input.id, input.name, input.projectId ?? 'default', input.description ?? null, EMPTY_GRAPH,
         input.now, input.now, input.now,
       )
     return this.getOrThrow(input.id)
@@ -64,21 +67,25 @@ export class WorkflowsRepo {
    * from an empty graph), this seeds the draft with `draftGraph` and leaves the
    * workflow unpublished so the importer reviews before publishing.
    */
-  importGraph(input: { id: string; name: string; description?: string; draftGraph: string; now: number }): Workflow {
+  importGraph(input: { id: string; name: string; projectId?: string; description?: string; draftGraph: string; now: number }): Workflow {
     this.db
       .prepare(
-        `INSERT INTO workflows (id, name, description, draft_graph, published_graph,
+        `INSERT INTO workflows (id, name, project_id, description, draft_graph, published_graph,
           draft_updated_at, published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
       )
       .run(
-        input.id, input.name, input.description ?? null, input.draftGraph,
+        input.id, input.name, input.projectId ?? 'default', input.description ?? null, input.draftGraph,
         input.now, input.now, input.now,
       )
     return this.getOrThrow(input.id)
   }
 
-  list(): Workflow[] {
+  list(projectId?: string): Workflow[] {
+    if (projectId) {
+      const rows = this.db.prepare(`SELECT * FROM workflows WHERE project_id = ? ORDER BY updated_at DESC`).all(projectId) as WorkflowRow[]
+      return rows.map(toWorkflow)
+    }
     const rows = this.db.prepare(`SELECT * FROM workflows ORDER BY updated_at DESC`).all() as WorkflowRow[]
     return rows.map(toWorkflow)
   }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { workflowsApi, type WorkflowSummary } from '@/api/workflows'
 import { useNavigation } from '@/lib/navigation'
+import { useProject } from '@/lib/use-project'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -10,14 +11,15 @@ import { WorkflowCardPreview } from './workflows/workflow-card-preview'
 
 export function WorkflowsPage() {
   const { navigate } = useNavigation()
+  const { activeProject } = useProject()
   const [items, setItems] = useState<WorkflowSummary[]>([])
   const [isCreating, setIsCreating] = useState(false)
   const [draftName, setDraftName] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    workflowsApi.list().then((r) => setItems(r.items)).catch((e) => console.error(e))
-  }, [])
+    workflowsApi.list(activeProject?.id).then((r) => setItems(r.items)).catch((e) => console.error(e))
+  }, [activeProject?.id])
 
   async function handleExport(id: string, name: string) {
     try {
@@ -47,6 +49,7 @@ export function WorkflowsPage() {
         name: parsed.name,
         description: parsed.description,
         graph: parsed.graph,
+        projectId: activeProject?.id,
       })
       navigate({ page: 'workflow-editor', workflowId: wf.id })
     } catch (e) {
@@ -57,7 +60,7 @@ export function WorkflowsPage() {
 
   async function handleCreate() {
     if (!draftName.trim()) return
-    const wf = await workflowsApi.create(draftName.trim())
+    const wf = await workflowsApi.create(draftName.trim(), undefined, activeProject?.id)
     setIsCreating(false); setDraftName('')
     navigate({ page: 'workflow-editor', workflowId: wf.id })
   }
@@ -75,6 +78,16 @@ export function WorkflowsPage() {
       console.log('Run started:', r.runId)
     } catch (e) {
       console.error(e)
+    }
+  }
+
+  async function handleStop(runId: string) {
+    try {
+      await workflowsApi.cancelRun(runId)
+      const r = await workflowsApi.list(activeProject?.id)
+      setItems(r.items)
+    } catch (e) {
+      console.error('Failed to stop run:', e)
     }
   }
 
@@ -130,7 +143,11 @@ export function WorkflowsPage() {
               </div>
               <div className='flex flex-wrap gap-2'>
                 <Button size='sm' variant='secondary' onClick={() => navigate({ page: 'workflow-editor', workflowId: item.id })}>Open</Button>
-                <Button size='sm' disabled={!item.hasPublished} onClick={() => handleRun(item.id)}>Run</Button>
+                {item.lastRun?.status === 'running' ? (
+                  <Button size='sm' variant='destructive' onClick={() => handleStop(item.lastRun!.id)}>Stop</Button>
+                ) : (
+                  <Button size='sm' disabled={!item.hasPublished} onClick={() => handleRun(item.id)}>Run</Button>
+                )}
                 <Button size='sm' variant='ghost' onClick={() => handleExport(item.id, item.name)}>Export</Button>
                 <Button size='sm' variant='ghost' onClick={() => handleDelete(item.id)}>Delete</Button>
               </div>

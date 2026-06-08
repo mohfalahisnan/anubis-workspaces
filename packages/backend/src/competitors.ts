@@ -6,6 +6,7 @@ const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/
 
 const CreateBody = z.object({
   handle: z.string().min(1),
+  projectId: z.string().min(1).optional(),
   displayName: z.string().min(1).optional(),
   niche: z.string().min(1).optional(),
   tint: z.string().regex(HEX_COLOR).optional(),
@@ -31,7 +32,8 @@ const UpdateBody = z.object({
 export const competitorRoutes = new Hono()
 
 competitorRoutes.get('/', (c) => {
-  return c.json({ ok: true, items: getStack().competitors.list() })
+  const projectId = c.req.query('projectId')
+  return c.json({ ok: true, items: getStack().competitors.list(projectId) })
 })
 
 competitorRoutes.get('/:id', (c) => {

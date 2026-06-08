@@ -63,6 +63,7 @@ export type SendChatGPTPromptInput = {
   conversationId?: string
   /** Called with the full assistant text so far as it streams in from the page. */
   onDelta?: (text: string) => void
+  signal?: AbortSignal
 }
 
 export async function captureChatGPTConversations(input: CaptureChatGPTConversationsInput = {}): Promise<StandardCrawlerOutput> {
@@ -219,6 +220,7 @@ export async function sendChatGPTPrompt(input: SendChatGPTPromptInput): Promise<
     openNewTab: input.openNewTab ?? false,
     keepTabOpen: input.keepTabOpen ?? true,
     ...(input.onDelta ? { onDelta: input.onDelta } : {}),
+    signal: input.signal,
     reporter
   })
 

@@ -8,10 +8,14 @@ import {
   type AppConfig,
   type CapturedPostListResponse,
   type CapturedPostSummary,
+  type ContentItemListResponse,
+  type ContentItemStatus,
+  type ContentItemSummary,
   type CapturePreviewPayload,
   type CaptureResultPayload,
   type CompetitorListResponse,
   type CompetitorSummary,
+  type CreateContentItemInput,
   type ConversationCreateResponse,
   type ConversationListResponse,
   type ConversationSummary,
@@ -33,9 +37,14 @@ import {
   type SkillSummary,
   type UpdateCompetitorInput,
   type UpdateCapturedPostInput,
+  type UpdateContentItemInput,
   type UpdateCronJobInput,
   type WorkspaceSummary,
   type ImportCapturedPostsInput,
+  type ProjectSummary,
+  type CreateProjectInput,
+  type UpdateProjectInput,
+  type ProjectListResponse,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -246,12 +255,13 @@ export async function getCatalog(): Promise<AgentCatalog> {
 }
 
 export async function listConversations(
-  opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow' } = {},
+  opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow'; projectId?: string } = {},
 ): Promise<ConversationSummary[]> {
   const params = new URLSearchParams()
   if (opts.limit !== undefined) params.set('limit', String(opts.limit))
   if (opts.archived !== undefined) params.set('archived', String(opts.archived))
   if (opts.source !== undefined) params.set('source', opts.source)
+  if (opts.projectId !== undefined) params.set('projectId', opts.projectId)
   const qs = params.toString()
   const path = qs ? `/conversations?${qs}` : '/conversations'
   const r = await api<ConversationListResponse>(path)
@@ -375,10 +385,12 @@ export async function importSkill(
   return { name: r.name, source: r.source, count: r.count }
 }
 
-export async function listCronJobs(conversationId?: string): Promise<CronJobSummary[]> {
-  const path = conversationId
-    ? `/cron-jobs?conversationId=${encodeURIComponent(conversationId)}`
-    : '/cron-jobs'
+export async function listCronJobs(conversationId?: string, projectId?: string): Promise<CronJobSummary[]> {
+  const params = new URLSearchParams()
+  if (conversationId) params.set('conversationId', conversationId)
+  if (projectId) params.set('projectId', projectId)
+  const qs = params.toString()
+  const path = qs ? `/cron-jobs?${qs}` : '/cron-jobs'
   const r = await api<CronJobListResponse>(path)
   return r.items
 }
@@ -400,8 +412,9 @@ export async function deleteCronJob(id: string): Promise<void> {
   })
 }
 
-export async function listCompetitors(): Promise<CompetitorSummary[]> {
-  const r = await api<CompetitorListResponse>('/competitors')
+export async function listCompetitors(projectId?: string): Promise<CompetitorSummary[]> {
+  const path = projectId ? `/competitors?projectId=${encodeURIComponent(projectId)}` : '/competitors'
+  const r = await api<CompetitorListResponse>(path)
   return r.items
 }
 
@@ -508,6 +521,7 @@ export async function importCapturedPosts(
 
 export interface ListPostsOpts {
   competitorId?: string
+  projectId?: string
   limit?: number
   orderBy?: 'recent' | 'engagement'
 }
@@ -566,6 +580,7 @@ export async function listPosts(
 ): Promise<CapturedPostSummary[]> {
   const params = new URLSearchParams()
   if (opts.competitorId) params.set('competitorId', opts.competitorId)
+  if (opts.projectId) params.set('projectId', opts.projectId)
   if (opts.limit !== undefined) params.set('limit', String(opts.limit))
   if (opts.orderBy) params.set('orderBy', opts.orderBy)
   const qs = params.toString()
@@ -589,6 +604,58 @@ export async function deletePost(id: string): Promise<void> {
   await api<{ ok: true }>(`/posts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+export interface ListContentItemsOpts {
+  projectId?: string
+  status?: ContentItemStatus
+  limit?: number
+}
+
+export async function listContentItems(
+  opts: ListContentItemsOpts = {},
+): Promise<ContentItemSummary[]> {
+  const params = new URLSearchParams()
+  if (opts.projectId) params.set('projectId', opts.projectId)
+  if (opts.status) params.set('status', opts.status)
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+  const qs = params.toString()
+  const path = qs ? `/content-items?${qs}` : '/content-items'
+  const r = await api<ContentItemListResponse>(path)
+  return r.items
+}
+
+export async function createContentItem(input: CreateContentItemInput): Promise<ContentItemSummary> {
+  const r = await api<{ ok: true; item: ContentItemSummary }>('/content-items', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.item
+}
+
+export async function updateContentItem(
+  id: string,
+  patch: UpdateContentItemInput,
+): Promise<ContentItemSummary> {
+  const r = await api<{ ok: true; item: ContentItemSummary }>(
+    `/content-items/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.item
+}
+
+export async function deleteContentItem(id: string): Promise<void> {
+  await api<{ ok: true }>(`/content-items/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function syncContentItemMetrics(id: string): Promise<ContentItemSummary> {
+  const r = await api<{ ok: true; item: ContentItemSummary }>(
+    `/content-items/${encodeURIComponent(id)}/sync-metrics`,
+    { method: 'POST' },
+  )
+  return r.item
 }
 
 /* ---------- ChatGPT Crawler Playground ---------- */
@@ -795,3 +862,31 @@ export async function streamChatGPTPrompt(
   if (!result) throw new Error('Stream ended without a result.')
   return result
 }
+
+export async function listProjects(): Promise<ProjectSummary[]> {
+  const r = await api<ProjectListResponse>('/projects')
+  return r.items
+}
+
+export async function createProject(input: CreateProjectInput): Promise<ProjectSummary> {
+  const r = await api<{ ok: true; project: ProjectSummary }>('/projects', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.project
+}
+
+export async function updateProject(id: string, patch: UpdateProjectInput): Promise<ProjectSummary> {
+  const r = await api<{ ok: true; project: ProjectSummary }>(`/projects/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+  return r.project
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await api<{ ok: true }>(`/projects/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+

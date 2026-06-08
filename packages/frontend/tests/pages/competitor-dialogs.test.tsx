@@ -15,6 +15,12 @@ vi.mock('@/api', () => ({
   openInstagramLoginChrome: vi.fn(),
 }))
 
+vi.mock('@/lib/use-project', () => ({
+  useProject: () => ({
+    activeProject: { id: 'default', name: 'Default Project' },
+  }),
+}))
+
 import { FindCompetitorsDialog } from '@/pages/competitor-dialogs'
 
 describe('<FindCompetitorsDialog>', () => {
@@ -52,6 +58,7 @@ describe('<FindCompetitorsDialog>', () => {
         displayName: 'Claye AI',
         followers: 143_100,
         bio: 'Creating the future with AI',
+        projectId: 'default',
       })
     })
     expect(onComplete).toHaveBeenCalledWith(1)

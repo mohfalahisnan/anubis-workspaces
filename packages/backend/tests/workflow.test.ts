@@ -111,6 +111,35 @@ describe('workflow REST', () => {
     expect(run.status).toBe(400)
   })
 
+  it('starts a run with node data overrides persisted in the graph snapshot', async () => {
+    const app = await loadApp()
+    const created = await app.request('/workflows', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Override run' }),
+    })
+    const wf = await created.json()
+    const draft = JSON.stringify({
+      nodes: [{ id: 't1', type: 'table', position: { x: 0, y: 0 }, data: { staticData: [{ k: 'old' }] } }],
+      edges: [],
+    })
+    await app.request(`/workflows/${wf.id}/draft`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ draftGraph: draft }),
+    })
+    await app.request(`/workflows/${wf.id}/publish`, { method: 'POST' })
+
+    const runResp = await app.request(`/workflows/${wf.id}/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nodeDataOverrides: { t1: { staticData: [{ k: 'fresh' }] } } }),
+    })
+    expect(runResp.status).toBe(201)
+    const { runId } = await runResp.json()
+    await new Promise((r) => setTimeout(r, 10))
+    const runState = await app.request(`/workflows/runs/${runId}`).then((r) => r.json())
+    expect(JSON.parse(runState.run.graphSnapshot).nodes[0].data).toEqual({ staticData: [{ k: 'fresh' }] })
+  })
+
   it('SSE events are replayed even when the subscriber attaches after the run finishes', async () => {
     const app = await loadApp()
     // Create + publish a workflow that finishes instantly (single Table node).

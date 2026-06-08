@@ -6,6 +6,7 @@ import { CodexAgent } from '../agents/codex/run.js'
 import { CodexPool } from '../agents/codex/pool.js'
 import { ClaudeAgent } from '../agents/claude/runner.js'
 import { AntigravityAgent } from '../agents/antigravity/runner.js'
+import { GptWebAgent } from '../agents/gpt-web/runner.js'
 import type { AgentEventMap, AgentStream } from '../events/stream.js'
 import { detectAgents, type AgentAvailability } from './detect-agents.js'
 
@@ -60,7 +61,8 @@ export class AiAgentService {
   private codex: CodexAgent
   private claude: ClaudeAgent
   private antigravity: AntigravityAgent
-  private availability: Record<'claude' | 'codex' | 'antigravity', AgentAvailability>
+  private gptWeb: GptWebAgent
+  private availability: Record<'claude' | 'codex' | 'antigravity' | 'gpt-web', AgentAvailability>
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
@@ -101,6 +103,7 @@ export class AiAgentService {
       command: antigravityCommand,
       env,
     })
+    this.gptWeb = new GptWebAgent()
   }
 
   catalog() {
@@ -165,6 +168,25 @@ export class AiAgentService {
         model: input.model,
         yolo: skipPermissions,
         appendSystemPrompt: input.appendSystemPrompt,
+        extraEnv: input.extraEnv,
+      })
+
+      return {
+        workspaceId,
+        sessionId,
+        stream: emitter,
+        cancel,
+      }
+    }
+
+    if (input.agent === 'gpt-web') {
+      const { emitter, cancel } = await this.gptWeb.run({
+        workspaceId,
+        sessionId,
+        conversationId: input.prevAgentSessionId,
+        cwd: input.cwd,
+        prompt: input.prompt,
+        model: input.model,
         extraEnv: input.extraEnv,
       })
 

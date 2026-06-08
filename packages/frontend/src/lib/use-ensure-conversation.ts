@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { ProfileSummary } from '@anubis/shared'
 import { createConversation, type ReasoningEffort } from '@/api'
+import { useProject } from '@/lib/use-project'
 
 interface EnsureState {
   ensure: (firstContent: string) => Promise<string>
@@ -25,6 +26,7 @@ export function useEnsureConversation(
 ): EnsureState {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { activeProject } = useProject()
 
   const ensure = useCallback(
     async (firstContent: string): Promise<string> => {
@@ -43,6 +45,7 @@ export function useEnsureConversation(
           title: deriveTitle(firstContent),
           profileId: selectedProfile.id,
           agent: selectedProfile.config.agent,
+          projectId: activeProject?.id || undefined,
           ...(workspacePath ? { workspacePath } : {}),
           ...(override ? { override } : {}),
         })
@@ -55,8 +58,9 @@ export function useEnsureConversation(
         setCreating(false)
       }
     },
-    [conversationId, selectedProfile, effort, profileDefaultEffort, workspacePath],
+    [conversationId, selectedProfile, effort, profileDefaultEffort, workspacePath, activeProject?.id],
   )
 
   return { ensure, creating, error }
 }
+

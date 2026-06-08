@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Executor } from '../types.js'
+import type { Executor, CapturedPost } from '../types.js'
 import { downloadToArtifact } from './_media-utils.js'
 
 const ConfigSchema = z.discriminatedUnion('source', [
@@ -30,10 +30,14 @@ export const instagramPostExecutor: Executor<InstagramPostConfig> = {
     return ConfigSchema.parse(raw)
   },
   async run(input, ctx): Promise<InstagramPostOutput> {
-    const captured =
-      input.config.source === 'existing'
-        ? await ctx.db.getCapturedPost(input.config.postId)
-        : await ctx.crawler.captureProfile(input.config.url)
+    let captured: CapturedPost
+    if (input.config.source === 'existing') {
+      const dbPost = await ctx.db.getCapturedPost(input.config.postId)
+      const url = dbPost.postUrl || dbPost.id
+      captured = await ctx.crawler.captureProfile(url)
+    } else {
+      captured = await ctx.crawler.captureProfile(input.config.url)
+    }
 
     // Download each media URL to a run artifact so downstream nodes (and the
     // AI Agent's prompt context) only see short file paths, not the 1–2 KB

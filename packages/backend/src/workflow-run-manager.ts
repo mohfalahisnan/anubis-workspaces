@@ -49,6 +49,7 @@ export class WorkflowRunManager {
   async start(
     workflowId: string,
     triggerContext?: { nodeId: string; payload: unknown },
+    nodeDataOverrides?: Record<string, unknown>,
   ): Promise<{ runId: string }> {
     if (this.runsByWorkflow.has(workflowId)) {
       const err = new Error('workflow already has an active run')
@@ -63,7 +64,11 @@ export class WorkflowRunManager {
       throw err
     }
 
-    WorkflowGraphSchema.parse(JSON.parse(workflow.publishedGraph))
+    const graph = applyNodeDataOverrides(
+      WorkflowGraphSchema.parse(JSON.parse(workflow.publishedGraph)),
+      nodeDataOverrides,
+    )
+    const graphSnapshot = JSON.stringify(graph)
 
     const runId = randomUUID()
     const controller = new AbortController()
@@ -80,7 +85,7 @@ export class WorkflowRunManager {
     this.stack.workflowRuns.createRun({
       id: runId,
       workflowId,
-      graphSnapshot: workflow.publishedGraph,
+      graphSnapshot,
       now,
     })
 
@@ -94,7 +99,7 @@ export class WorkflowRunManager {
       ? { [triggerContext.nodeId]: triggerContext.payload }
       : undefined
 
-    void this.runAndPersist(active, JSON.parse(workflow.publishedGraph), emit, now, seed).finally(() => {
+    void this.runAndPersist(active, graph, emit, now, seed).finally(() => {
       // Free the workflow slot so the user can start another run immediately.
       this.runsByWorkflow.delete(workflowId)
       // Keep the active entry (with buffered events) alive for a grace period
@@ -222,6 +227,7 @@ export class WorkflowRunManager {
             caption: post.caption,
             mediaUrls: post.mediaUrl ? [post.mediaUrl] : [],
             metrics: { likes: post.likes, comments: post.comments },
+            postUrl: post.postUrl,
           }
         }},
         fs: { writeRunArtifact: async (runId: string, nodeId: string, ext: string, data: Buffer) => {
@@ -271,6 +277,32 @@ export class WorkflowRunManager {
               if (active.controller.signal.aborted) onAbort()
               else active.controller.signal.addEventListener('abort', onAbort, { once: true })
             }),
+        },
+        planner: {
+          save: async (input: {
+            projectId?: string
+            referencePostId?: string
+            referenceUrl?: string
+            title: string
+            status?: 'idea' | 'review' | 'scheduled' | 'published' | 'rejected'
+            rawBrief?: string
+            improvedDraft?: string
+          }) => {
+            const id = randomUUID()
+            const item = this.stack.contentItems.create({
+              id,
+              projectId: input.projectId ?? 'default',
+              referencePostId: input.referencePostId,
+              referenceUrl: input.referenceUrl,
+              title: input.title,
+              status: input.status,
+              rawBrief: input.rawBrief,
+              improvedDraft: input.improvedDraft,
+              sourceWorkflowRunId: active.runId,
+              now: Date.now(),
+            })
+            return { id: item.id }
+          }
         },
         runId: active.runId,
         signal: active.controller.signal,
@@ -325,4 +357,27 @@ function mapCrawlerOutputToCapturedPost(result: StandardCrawlerOutput, sourceUrl
     }
   }
   throw new Error(`crawler returned no posts or profiles for url: ${sourceUrl}`)
+}
+
+function applyNodeDataOverrides(
+  graph: ReturnType<typeof WorkflowGraphSchema.parse>,
+  overrides?: Record<string, unknown>,
+): ReturnType<typeof WorkflowGraphSchema.parse> {
+  if (!overrides || Object.keys(overrides).length === 0) return graph
+  const ids = new Set(graph.nodes.map((node) => node.id))
+  for (const id of Object.keys(overrides)) {
+    if (!ids.has(id)) {
+      const err = new Error(`node override targets unknown node: ${id}`)
+      ;(err as { code?: number }).code = 400
+      throw err
+    }
+  }
+  return WorkflowGraphSchema.parse({
+    nodes: graph.nodes.map((node) => (
+      Object.prototype.hasOwnProperty.call(overrides, node.id)
+        ? { ...node, data: overrides[node.id] }
+        : node
+    )),
+    edges: graph.edges,
+  })
 }

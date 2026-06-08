@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<string, string> = {
   humanApproval: 'Human Review',
   lessonWriter: 'Lesson',
   originalCopy: 'Original Copy',
+  savePlanner: 'Save to Planner',
 }
 
 const TYPE_DOTS: Record<string, string> = {
@@ -29,6 +30,7 @@ const TYPE_DOTS: Record<string, string> = {
   humanApproval: 'bg-[#d9a441]',
   lessonWriter: 'bg-[#d9a441]',
   originalCopy: 'bg-[#22c55e]',
+  savePlanner: 'bg-[#22c55e]',
 }
 
 interface PreviewNodeData {

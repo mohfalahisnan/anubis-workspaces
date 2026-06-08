@@ -14,6 +14,7 @@ import { MediaDisplayExecutableNode }           from './media-display'
 import { OriginalCopyExecutableNode }           from './original-copy'
 import { ScheduleTriggerExecutableNode }        from './schedule-trigger'
 import { FileWatchTriggerExecutableNode }       from './file-watch-trigger'
+import { SavePlannerExecutableNode }            from './save-planner'
 
 export const executableNodeTypes: NodeTypes = {
   instagramPost:       InstagramPostExecutableNode as never,
@@ -31,6 +32,7 @@ export const executableNodeTypes: NodeTypes = {
   originalCopy:        OriginalCopyExecutableNode as never,
   scheduleTrigger:     ScheduleTriggerExecutableNode as never,
   fileWatchTrigger:    FileWatchTriggerExecutableNode as never,
+  savePlanner:         SavePlannerExecutableNode as never,
 }
 
 /**
@@ -74,4 +76,5 @@ export const NODE_PALETTE = [
   { type: 'markdownDisplay',     label: 'Markdown',               category: 'output'    },
   { type: 'mediaDisplay',        label: 'Media',                  category: 'output'    },
   { type: 'originalCopy',        label: 'Original Copy',          category: 'output'    },
+  { type: 'savePlanner',         label: 'Save to Planner',        category: 'output'    },
 ] as const satisfies ReadonlyArray<{ type: string; label: string; category: NodeCategory }>

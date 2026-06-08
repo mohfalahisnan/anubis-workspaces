@@ -77,4 +77,54 @@ describe('runWorkflow bounded loop', () => {
     expect(seenLessons[0]).toBeUndefined()  // first pass: no lesson yet
     expect(seenLessons[1]).toBe('lesson-1') // second pass: sees lesson from the first rejection
   })
+
+  it('does not let falsely loop-marked forward edges make an approval node run as a source', async () => {
+    const order: string[] = []
+    const graph: WorkflowGraph = {
+      nodes: [
+        { id: 'ig', type: 'step', position: { x: 0, y: 0 }, data: {} },
+        { id: 'improve', type: 'step', position: { x: 1, y: 0 }, data: {} },
+        { id: 'draft', type: 'step', position: { x: 2, y: 0 }, data: {} },
+        { id: 'review', type: 'step', position: { x: 3, y: 0 }, data: {} },
+        { id: 'human', type: 'approval', position: { x: 4, y: 0 }, data: {} },
+        { id: 'lesson', type: 'step', position: { x: 4, y: 1 }, data: {} },
+        { id: 'done', type: 'step', position: { x: 5, y: 0 }, data: {} },
+      ],
+      edges: [
+        { id: 'e-ig-improve', source: 'ig', target: 'improve' },
+        { id: 'e-improve-draft', source: 'improve', target: 'draft' },
+        { id: 'e-draft-review', source: 'draft', target: 'review' },
+        { id: 'e-human-lesson', source: 'human', target: 'lesson', sourceHandle: 'rejected' },
+        { id: 'e-human-done', source: 'human', target: 'done', sourceHandle: 'approved' },
+        { id: 'e-review-human', source: 'review', target: 'human', data: { loop: true } },
+        { id: 'e-draft-human', source: 'draft', target: 'human', data: { loop: true } },
+        { id: 'e-lesson-loop', source: 'lesson', target: 'improve', data: { loop: true } },
+      ],
+    }
+    const registry: Record<string, Executor<unknown>> = {
+      step: {
+        type: 'step',
+        validateConfig: (c) => c,
+        run: async (i) => {
+          order.push(i.nodeId)
+          return { text: i.nodeId }
+        },
+      },
+      approval: {
+        type: 'approval',
+        validateConfig: (c) => c,
+        run: async (i) => {
+          order.push(i.nodeId)
+          expect(Object.keys(i.upstream).sort()).toEqual(['draft', 'review'])
+          return { kind: 'approval', decision: 'approved' }
+        },
+      },
+    }
+
+    const res = await runWorkflow(graph, registry, ctx())
+    expect(res.status).toBe('succeeded')
+    expect(order.indexOf('human')).toBeGreaterThan(order.indexOf('review'))
+    expect(res.stepStatuses.done).toBe('succeeded')
+    expect(res.stepStatuses.lesson).toBe('skipped')
+  })
 })

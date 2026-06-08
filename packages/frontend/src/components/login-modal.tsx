@@ -25,6 +25,10 @@ const NOT_INSTALLED_COPY: Record<AgentKind, { title: string; body: string }> = {
     title: 'Antigravity CLI',
     body: 'Install the Antigravity CLI (https://antigravity.google/docs/cli-overview) and make sure `agy` is on your PATH, then close and reopen this app.',
   },
+  'gpt-web': {
+    title: 'GPT Web Runner',
+    body: 'Configure the GPT Web environment and make sure the crawler agent is running, then close and reopen this app.',
+  },
 }
 
 type Status =

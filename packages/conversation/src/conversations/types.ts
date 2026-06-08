@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AgentSchema, ProfileOverrideSchema } from '../profiles/types.js'
+import type { AgentKind } from '../profiles/types.js'
 
 export const ConversationStatusSchema = z.enum(['pending', 'running', 'finished', 'error'])
 export type ConversationStatus = z.infer<typeof ConversationStatusSchema>
@@ -22,9 +23,10 @@ export type ConversationExtra = z.infer<typeof ConversationExtraSchema>
 export interface Conversation {
   id: string
   title: string
-  agent: 'claude' | 'codex' | 'antigravity'
+  agent: AgentKind
   status: ConversationStatus
   profileId?: string
+  projectId?: string
   workspacePath: string
   extra: ConversationExtra
   createdAt: number
@@ -58,7 +60,7 @@ export interface Artifact {
 
 export interface AgentSession {
   conversationId: string
-  agent: 'claude' | 'codex' | 'antigravity'
+  agent: AgentKind
   agentSessionId: string
   model?: string
   updatedAt: number

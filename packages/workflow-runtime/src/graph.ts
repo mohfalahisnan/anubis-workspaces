@@ -46,13 +46,61 @@ export function isLoopEdge(e: WorkflowEdge): boolean {
   return e.data?.loop === true
 }
 
+function isAcyclic(graph: WorkflowGraph): boolean {
+  try {
+    topologicalSort(graph)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function loopCandidateSortKey(graph: WorkflowGraph, edge: WorkflowEdge): number {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
+  const source = nodeById.get(edge.source)
+  const target = nodeById.get(edge.target)
+  if (!source || !target) return 1
+  if (target.position.x > source.position.x) return 0
+  if (target.position.x === source.position.x && target.position.y >= source.position.y) return 0
+  return 1
+}
+
+/**
+ * Split edges into forward edges and true loop back-edges. The editor stores
+ * `data.loop` on connections that looked cyclic at connect time, but older
+ * graphs can contain false positives when a forward edge was connected after a
+ * rejection loop already existed. Treat a loop-marked edge as forward whenever
+ * adding it preserves the acyclic forward graph; process visually-forward
+ * candidates first so those false positives are restored before real back-edges
+ * are tested.
+ */
+export function partitionWorkflowEdges(graph: WorkflowGraph): { forward: WorkflowEdge[]; loops: WorkflowEdge[] } {
+  validateGraphStructure(graph)
+  const forward = graph.edges.filter((e) => !isLoopEdge(e))
+  const loopCandidates = graph.edges
+    .filter(isLoopEdge)
+    .sort((a, b) => loopCandidateSortKey(graph, a) - loopCandidateSortKey(graph, b))
+  const loops: WorkflowEdge[] = []
+
+  for (const edge of loopCandidates) {
+    const withCandidate = [...forward, edge]
+    if (isAcyclic({ nodes: graph.nodes, edges: withCandidate })) {
+      forward.push(edge)
+    } else {
+      loops.push(edge)
+    }
+  }
+
+  return { forward, loops }
+}
+
 /**
  * Reject cycles formed by non-loop edges only. Loop edges (`data.loop`) are
  * permitted to be back-edges — they re-arm a bounded loop body at runtime.
  */
 export function assertAcyclicExceptLoops(graph: WorkflowGraph): void {
   validateGraphStructure(graph)
-  const forward = graph.edges.filter((e) => !isLoopEdge(e))
+  const { forward } = partitionWorkflowEdges(graph)
   topologicalSort({ nodes: graph.nodes, edges: forward })
 }
 

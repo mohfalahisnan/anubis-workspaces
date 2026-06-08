@@ -8,7 +8,7 @@ import { hasCredentials } from '../profiles/agent-home.js'
 
 export class NoCredentialsError extends Error {
   readonly code = NO_CREDENTIALS_ERROR_CODE
-  constructor(public readonly profileId: string, public readonly agent: 'claude' | 'codex' | 'antigravity') {
+  constructor(public readonly profileId: string, public readonly agent: AgentKind) {
     super(`no credentials for profile ${profileId} (${agent})`)
     this.name = 'NoCredentialsError'
   }
@@ -18,7 +18,7 @@ import { computeInitialSkills } from '../skills/snapshot.js'
 import { composeAppendSystemPrompt } from '../skills/inject.js'
 import type { SkillLoader } from '../skills/loader.js'
 import type { ProfileService } from '../profiles/profile-service.js'
-import type { ProfileOverride, ResolvedProfile } from '../profiles/types.js'
+import type { ProfileOverride, ResolvedProfile, AgentKind } from '../profiles/types.js'
 import {
   ensureAgentHome,
   envFor,
@@ -41,9 +41,10 @@ import { StreamRelay } from './stream-relay.js'
 export interface CreateConversationInput {
   title: string
   profileId?: string
+  projectId?: string
   override?: ProfileOverride
   workspacePath?: string
-  agent?: 'claude' | 'codex' | 'antigravity'
+  agent?: AgentKind
   source?: 'workflow'
   workflow?: { runId: string; nodeId: string }
 }
@@ -124,6 +125,7 @@ export class ConversationService {
       agent: resolved.agent,
       status: 'pending',
       profileId: input.profileId,
+      projectId: input.projectId ?? 'default',
       workspacePath,
       extra: {
         skills,
@@ -152,11 +154,12 @@ export class ConversationService {
     this.deps.knownWorkspaces.remember(path)
   }
 
-  list(opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow' } = {}): Conversation[] {
+  list(opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow'; projectId?: string } = {}): Conversation[] {
     return this.deps.conversations.list({
       limit: opts.limit ?? 50,
       archived: opts.archived,
       source: opts.source,
+      projectId: opts.projectId,
     })
   }
 
@@ -372,7 +375,7 @@ export class ConversationService {
    * Returns the on-disk path to a profile's isolated agent home,
    * regardless of whether it has been created yet.
    */
-  agentHomePath(profileId: string, agent: 'claude' | 'codex' | 'antigravity'): string {
+  agentHomePath(profileId: string, agent: AgentKind): string {
     return homePathFor(this.deps.agentHomeRoot, profileId, agent)
   }
 
@@ -381,14 +384,14 @@ export class ConversationService {
    * uses this profile will create a fresh one — auth tokens, MCP
    * config, and session history all reset.
    */
-  resetProfileHome(profileId: string, agent: 'claude' | 'codex' | 'antigravity'): { existed: boolean } {
+  resetProfileHome(profileId: string, agent: AgentKind): { existed: boolean } {
     return resetProfileHome(this.deps.agentHomeRoot, profileId, agent)
   }
 
   private resolveOrThrow(
     profileId: string | null,
     override: ProfileOverride | undefined,
-    agentHint: 'claude' | 'codex' | 'antigravity' | undefined,
+    agentHint: AgentKind | undefined,
   ): ResolvedProfile {
     const finalOverride: ProfileOverride = { ...(override ?? {}) }
     if (agentHint && !profileId && !finalOverride.agent) finalOverride.agent = agentHint

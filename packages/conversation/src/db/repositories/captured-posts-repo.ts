@@ -3,6 +3,7 @@ import type { Db } from '../client.js'
 export interface CapturedPost {
   id: string
   competitorId: string
+  projectId?: string
   username: string
   postUrl: string
   caption?: string
@@ -19,6 +20,7 @@ export interface CapturedPost {
 interface Row {
   id: string
   competitor_id: string
+  project_id: string | null
   username: string
   post_url: string
   caption: string | null
@@ -36,6 +38,7 @@ function toPost(r: Row): CapturedPost {
   return {
     id: r.id,
     competitorId: r.competitor_id,
+    projectId: r.project_id ?? undefined,
     username: r.username,
     postUrl: r.post_url,
     caption: r.caption ?? undefined,
@@ -71,6 +74,7 @@ function postKey(post: Pick<CapturedPost, 'competitorId' | 'postUrl'>): string {
 
 export interface ListPostsOpts {
   competitorId?: string
+  projectId?: string
   limit?: number
   orderBy?: 'recent' | 'engagement'
 }
@@ -93,10 +97,10 @@ export class CapturedPostsRepo {
     this.db
       .prepare(`
         INSERT INTO captured_posts (
-          id, competitor_id, username, post_url, caption, likes, comments,
+          id, competitor_id, project_id, username, post_url, caption, likes, comments,
           posted_at, media_kind, media_url, carousel_count, captured_at, raw
         ) VALUES (
-          @id, @competitorId, @username, @postUrl, @caption, @likes, @comments,
+          @id, @competitorId, @projectId, @username, @postUrl, @caption, @likes, @comments,
           @postedAt, @mediaKind, @mediaUrl, @carouselCount, @capturedAt, @raw
         )
         ON CONFLICT(competitor_id, post_url) DO UPDATE SET
@@ -113,6 +117,7 @@ export class CapturedPostsRepo {
       .run({
         id: p.id,
         competitorId: p.competitorId,
+        projectId: p.projectId ?? 'default',
         username: p.username,
         postUrl,
         caption: p.caption ?? null,
@@ -148,6 +153,7 @@ export class CapturedPostsRepo {
     const where: string[] = []
     const params: unknown[] = []
     if (opts.competitorId) { where.push('cp.competitor_id = ?'); params.push(opts.competitorId) }
+    if (opts.projectId) { where.push('cp.project_id = ?'); params.push(opts.projectId) }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
     const sql = `SELECT cp.* FROM captured_posts cp ${whereSql} ORDER BY ${order}`

@@ -54,6 +54,7 @@ export interface CapturedPost {
   caption?: string
   mediaUrls: string[]
   metrics?: { likes?: number; comments?: number }
+  postUrl?: string
   [key: string]: unknown
 }
 
@@ -75,6 +76,17 @@ export interface ExecutorContext {
   }
   approvals: {
     waitFor(nodeId: string, opts: { title?: string; instructions?: string; upstream: unknown }): Promise<{ decision: 'approved' | 'rejected'; notes?: string }>
+  }
+  planner?: {
+    save(input: {
+      projectId?: string
+      referencePostId?: string
+      referenceUrl?: string
+      title: string
+      status?: 'idea' | 'review' | 'scheduled' | 'published' | 'rejected'
+      rawBrief?: string
+      improvedDraft?: string
+    }): Promise<{ id: string }>
   }
   /** Persistent store of workflow lessons, written as markdown and injected into agent prompts. */
   lessons: {

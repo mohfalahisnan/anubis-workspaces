@@ -59,6 +59,7 @@ export function shutdownTriggers(): void {
 
 const CreateBody = z.object({
   name: z.string().min(1),
+  projectId: z.string().min(1).optional(),
   description: z.string().optional(),
 })
 
@@ -68,12 +69,16 @@ const PatchMetaBody = z.object({
 })
 
 const DraftBody = z.object({ draftGraph: z.string().min(2) })
+const RunBody = z.object({
+  nodeDataOverrides: z.record(z.string(), z.unknown()).optional(),
+}).strict()
 
 /** Versioned envelope for a portable workflow file. */
 const EXPORT_VERSION = 1
 const ImportBody = z.object({
   anubisWorkflowExport: z.literal(EXPORT_VERSION).optional(),
   name: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   graph: WorkflowGraphSchema,
 })
@@ -84,7 +89,7 @@ workflowRoutes.post('/', async (c) => {
   const body = CreateBody.parse(await c.req.json())
   const stack = getStack()
   const now = Date.now()
-  const wf = stack.workflows.create({ id: randomUUID(), name: body.name, description: body.description, now })
+  const wf = stack.workflows.create({ id: randomUUID(), name: body.name, projectId: body.projectId, description: body.description, now })
   return c.json(wf, 201)
 })
 
@@ -94,6 +99,7 @@ workflowRoutes.post('/import', async (c) => {
   const wf = stack.workflows.importGraph({
     id: randomUUID(),
     name: body.name?.trim() || 'Imported workflow',
+    projectId: body.projectId,
     description: body.description ?? undefined,
     draftGraph: JSON.stringify(body.graph),
     now: Date.now(),
@@ -103,7 +109,8 @@ workflowRoutes.post('/import', async (c) => {
 
 workflowRoutes.get('/', (c) => {
   const stack = getStack()
-  const items = stack.workflows.list().map((wf) => {
+  const projectId = c.req.query('projectId')
+  const items = stack.workflows.list(projectId).map((wf) => {
     const lastRun = stack.workflowRuns.listRunsForWorkflow(wf.id, 1)[0]
     return {
       id: wf.id, name: wf.name, description: wf.description,
@@ -211,7 +218,9 @@ workflowRoutes.post('/:id/runs', async (c) => {
   const stack = getStack()
   const mgr = getRunManager(stack)
   try {
-    const { runId } = await mgr.start(c.req.param('id'))
+    const raw = await c.req.text()
+    const body = raw.trim() ? RunBody.parse(JSON.parse(raw)) : {}
+    const { runId } = await mgr.start(c.req.param('id'), undefined, body.nodeDataOverrides)
     return c.json({ runId }, 201)
   } catch (err) {
     const code = (err as { code?: number }).code

@@ -3,6 +3,7 @@ import type { Db } from '../client.js'
 export interface CronJob {
   id: string
   conversationId: string
+  projectId?: string
   name: string
   schedule: string
   scheduleDescription?: string
@@ -16,6 +17,7 @@ export interface CronJob {
 interface Row {
   id: string
   conversation_id: string
+  project_id: string | null
   name: string
   schedule: string
   schedule_desc: string | null
@@ -30,6 +32,7 @@ function toJob(r: Row): CronJob {
   return {
     id: r.id,
     conversationId: r.conversation_id,
+    projectId: r.project_id ?? undefined,
     name: r.name,
     schedule: r.schedule,
     scheduleDescription: r.schedule_desc ?? undefined,
@@ -46,10 +49,15 @@ export class CronJobsRepo {
 
   insert(j: CronJob): void {
     this.db.prepare(`
-      INSERT INTO cron_jobs (id, conversation_id, name, schedule, schedule_desc, prompt, enabled, last_run_at, created_at, updated_at)
-      VALUES (@id, @conversationId, @name, @schedule, @scheduleDescription, @prompt, @enabled, @lastRunAt, @createdAt, @updatedAt)
+      INSERT INTO cron_jobs (id, conversation_id, project_id, name, schedule, schedule_desc, prompt, enabled, last_run_at, created_at, updated_at)
+      VALUES (
+        @id, @conversationId,
+        COALESCE(@projectId, (SELECT project_id FROM conversations WHERE id = @conversationId), 'default'),
+        @name, @schedule, @scheduleDescription, @prompt, @enabled, @lastRunAt, @createdAt, @updatedAt
+      )
     `).run({
-      id: j.id, conversationId: j.conversationId, name: j.name, schedule: j.schedule,
+      id: j.id, conversationId: j.conversationId, projectId: j.projectId ?? null,
+      name: j.name, schedule: j.schedule,
       scheduleDescription: j.scheduleDescription ?? null, prompt: j.prompt,
       enabled: j.enabled ? 1 : 0, lastRunAt: j.lastRunAt ?? null,
       createdAt: j.createdAt, updatedAt: j.updatedAt,
@@ -76,10 +84,13 @@ export class CronJobsRepo {
     return r ? toJob(r) : null
   }
 
-  list(conversationId?: string): CronJob[] {
-    const rows = conversationId
-      ? this.db.prepare('SELECT * FROM cron_jobs WHERE conversation_id = ? ORDER BY created_at DESC').all(conversationId) as Row[]
-      : this.db.prepare('SELECT * FROM cron_jobs ORDER BY created_at DESC').all() as Row[]
+  list(conversationId?: string, projectId?: string): CronJob[] {
+    const where: string[] = []
+    const params: unknown[] = []
+    if (conversationId) { where.push('conversation_id = ?'); params.push(conversationId) }
+    if (projectId) { where.push('project_id = ?'); params.push(projectId) }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+    const rows = this.db.prepare(`SELECT * FROM cron_jobs ${whereSql} ORDER BY created_at DESC`).all(...params) as Row[]
     return rows.map(toJob)
   }
 

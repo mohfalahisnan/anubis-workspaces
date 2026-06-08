@@ -5,6 +5,7 @@ import type { Competitor, CompetitorsRepo } from '../db/repositories/competitors
 
 export interface CreateCompetitorInput {
   handle: string
+  projectId?: string
   displayName?: string
   niche?: string
   tint?: string
@@ -63,10 +64,10 @@ function pickTintFor(handle: string): string {
 export class CompetitorsService {
   constructor(private repo: CompetitorsRepo) {}
 
-  list(): Competitor[] {
+  list(projectId?: string): Competitor[] {
     const seen = new Set<string>()
     const out: Competitor[] = []
-    for (const competitor of this.repo.list()) {
+    for (const competitor of this.repo.list(projectId)) {
       const key = handleKey(competitor.handle)
       if (seen.has(key)) continue
       seen.add(key)
@@ -88,6 +89,7 @@ export class CompetitorsService {
     const competitor: Competitor = {
       id: newId(),
       handle,
+      projectId: input.projectId,
       displayName: input.displayName?.trim() || undefined,
       niche: input.niche?.trim() || undefined,
       tint: input.tint ?? pickTintFor(handle),

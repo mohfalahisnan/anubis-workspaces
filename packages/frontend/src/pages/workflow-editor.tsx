@@ -10,6 +10,7 @@ import { InspectorPanel } from '@/components/workflow-editor/inspector-panel'
 import { Button } from '@/components/ui/button'
 import { ReactFlowProvider } from '@xyflow/react'
 import { RunStatusBanner } from '@/components/workflow-editor/run-status-banner'
+import { cn } from '@/lib/utils'
 
 export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
   const { navigate } = useNavigation()
@@ -21,7 +22,7 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
   const applyRunEvent = useEditorStore((s) => s.applyRunEvent)
   const activeRun     = useEditorStore((s) => s.activeRun)
   const markPublished = useEditorStore((s) => s.markPublished)
-  const [error, setError] = useState<string | null>(null)
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [hasTrigger, setHasTrigger] = useState(false)
   const [armed, setArmed] = useState(false)
 
@@ -47,7 +48,7 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
         setActiveRun({ runId, steps: {}, status: 'running' })
         closeStream = await openRunEventStream(runId, (ev) => applyRunEvent(ev))
       } catch { /* missing /active-run is non-fatal */ }
-    }).catch((e) => setError(String(e)))
+    }).catch((e) => setNotification({ message: String(e), type: 'error' }))
     return () => {
       cancelled = true
       closeStream?.()
@@ -59,9 +60,19 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
 
   async function publish() {
     try {
+      const isRepublish = !!publishedAt
       const wf = await workflowsApi.publish(workflowId)
-      if (wf.publishedAt) markPublished(wf.publishedAt, JSON.parse(wf.publishedGraph ?? '{"nodes":[],"edges":[]}'))
-    } catch (e) { setError(String(e)) }
+      if (wf.publishedAt) {
+        markPublished(wf.publishedAt, JSON.parse(wf.publishedGraph ?? '{"nodes":[],"edges":[]}'))
+        setNotification({
+          message: isRepublish ? 'Workflow republished successfully!' : 'Workflow published successfully!',
+          type: 'success'
+        })
+        setTimeout(() => setNotification((prev) => prev?.message.includes('published') ? null : prev), 4000)
+      }
+    } catch (e) {
+      setNotification({ message: `Failed to publish workflow: ${e instanceof Error ? e.message : String(e)}`, type: 'error' })
+    }
   }
 
   async function startRun() {
@@ -69,14 +80,29 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
       const { runId } = await workflowsApi.startRun(workflowId)
       setActiveRun({ runId, steps: {}, status: 'running' })
       await openRunEventStream(runId, (ev) => applyRunEvent(ev))
-    } catch (e) { setError(String(e)) }
+    } catch (e) {
+      setNotification({ message: String(e), type: 'error' })
+    }
+  }
+
+  async function stopRun() {
+    if (!activeRun?.runId) return
+    try {
+      await workflowsApi.cancelRun(activeRun.runId)
+      setNotification({ message: 'Workflow run stopped.', type: 'success' })
+      setTimeout(() => setNotification((prev) => prev?.message === 'Workflow run stopped.' ? null : prev), 4000)
+    } catch (e) {
+      setNotification({ message: `Failed to stop run: ${e instanceof Error ? e.message : String(e)}`, type: 'error' })
+    }
   }
 
   async function toggleArm() {
     try {
       const r = armed ? await workflowsApi.disarm(workflowId) : await workflowsApi.arm(workflowId)
       setArmed(r.armed)
-    } catch (e) { setError(String(e)) }
+    } catch (e) {
+      setNotification({ message: String(e), type: 'error' })
+    }
   }
 
   return (
@@ -91,11 +117,27 @@ export function WorkflowEditorPage({ workflowId }: { workflowId: string }) {
               {armed ? '■ Disarm' : '⚡ Arm'}
             </Button>
           ) : (
-            <Button size='sm' onClick={startRun} disabled={!publishedAt || activeRun?.status === 'running'}>▶ Run published</Button>
+            activeRun?.status === 'running' ? (
+              <Button size='sm' variant='destructive' onClick={stopRun}>■ Stop</Button>
+            ) : (
+              <Button size='sm' onClick={startRun} disabled={!publishedAt}>▶ Run published</Button>
+            )
           )}
         </div>
       </div>
-      {error ? <p className='px-6 py-2 text-xs text-red-300'>{error}</p> : null}
+      {notification ? (
+        <div
+          className={cn(
+            'px-6 py-2.5 text-xs border-b border-border flex items-center justify-between transition-colors duration-150',
+            notification.type === 'success'
+              ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] text-[color-mix(in_oklab,var(--anubis-gold)_80%,white)] border-[color-mix(in_oklab,var(--anubis-gold)_20%,transparent)]'
+              : 'bg-destructive/10 text-destructive border-destructive/20'
+          )}
+        >
+          <span>{notification.message}</span>
+          <button type='button' onClick={() => setNotification(null)} className='hover:text-foreground font-medium underline'>Dismiss</button>
+        </div>
+      ) : null}
       {activeRun ? <RunStatusBanner /> : null}
       <div className='flex min-h-0 flex-1'>
         <NodePalette />

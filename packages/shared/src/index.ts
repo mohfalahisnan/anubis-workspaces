@@ -10,10 +10,11 @@ export interface ApiHealthResponse {
   time: string
 }
 
-export type AgentKind = 'claude' | 'codex' | 'antigravity'
+export type AgentKind = 'claude' | 'codex' | 'antigravity' | 'gpt-web'
 export type ProfileSource = 'builtin' | 'user'
 export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
+export type ContentItemStatus = 'idea' | 'brief' | 'draft' | 'review' | 'scheduled' | 'published' | 'rejected'
 export type SkillSource =
   | 'builtin-auto'
   | 'builtin-opt-in'
@@ -71,6 +72,7 @@ export interface ConversationSummary {
   agent: AgentKind
   status: ConversationStatus
   profileId?: string
+  projectId?: string
   workspacePath: string
   extra: ConversationExtra
   createdAt: number
@@ -105,6 +107,7 @@ export interface SkillDetail extends SkillSummary {
 export interface CronJobSummary {
   id: string
   conversationId: string
+  projectId?: string
   name: string
   schedule: string
   scheduleDescription?: string
@@ -126,6 +129,7 @@ export interface UpdateCronJobInput {
 export interface CompetitorSummary {
   id: string
   handle: string
+  projectId?: string
   displayName?: string
   niche?: string
   tint?: string
@@ -142,6 +146,7 @@ export interface CompetitorSummary {
 
 export interface CreateCompetitorInput {
   handle: string
+  projectId?: string
   displayName?: string
   niche?: string
   tint?: string
@@ -349,6 +354,7 @@ export interface DiscoveredCandidate {
 export interface CreateConversationInput {
   title: string
   profileId?: string
+  projectId?: string
   workspacePath?: string
   agent?: AgentKind
   override?: Record<string, unknown>
@@ -388,6 +394,32 @@ export type MessageListResponse = ListResponse<MessageSummary>
 export type CompetitorListResponse = ListResponse<CompetitorSummary>
 export type WorkspaceListResponse = ListResponse<WorkspaceSummary>
 
+export interface ProjectSummary {
+  id: string
+  name: string
+  emoji?: string
+  color?: string
+  description?: string
+  workdir?: string
+  createdAt: number
+  updatedAt: number
+}
+export interface CreateProjectInput {
+  name: string
+  emoji?: string
+  color?: string
+  description?: string
+  workdir?: string
+}
+export interface UpdateProjectInput {
+  name?: string
+  emoji?: string
+  color?: string
+  description?: string
+  workdir?: string
+}
+export type ProjectListResponse = ListResponse<ProjectSummary>
+
 export interface CapturedPostSummary {
   id: string
   competitorId: string
@@ -415,6 +447,64 @@ export interface CapturedPostSummary {
 }
 
 export type CapturedPostListResponse = ListResponse<CapturedPostSummary>
+
+export interface ContentItemAnalytics {
+  likes?: number
+  comments?: number
+  saves?: number
+  syncedAt?: number
+}
+
+export interface ContentItemSummary {
+  id: string
+  projectId?: string
+  referencePostId?: string
+  referenceUrl?: string
+  title: string
+  status: ContentItemStatus
+  rawBrief?: string
+  improvedDraft?: string
+  rejectionReason?: string
+  publishedUrl?: string
+  publishedAt?: string
+  analytics: ContentItemAnalytics
+  sourceWorkflowRunId?: string
+  sourceConversationId?: string
+  createdAt: number
+  updatedAt: number
+  referencePost?: CapturedPostSummary
+}
+
+export interface CreateContentItemInput {
+  projectId?: string
+  referencePostId?: string
+  referenceUrl?: string
+  title: string
+  status?: ContentItemStatus
+  rawBrief?: string
+  improvedDraft?: string
+  sourceWorkflowRunId?: string
+  sourceConversationId?: string
+}
+
+export interface UpdateContentItemInput {
+  title?: string
+  status?: ContentItemStatus
+  rawBrief?: string
+  improvedDraft?: string
+  rejectionReason?: string | null
+  publishedUrl?: string | null
+  publishedAt?: string | null
+  analytics?: {
+    likes?: number | null
+    comments?: number | null
+    saves?: number | null
+  }
+  sourceWorkflowRunId?: string | null
+  sourceConversationId?: string | null
+}
+
+export type ContentItemListResponse = ListResponse<ContentItemSummary>
 
 export interface CaptureResultPayload {
   ok: true

@@ -7,6 +7,7 @@ import type { MessagesRepo } from '../db/repositories/messages-repo.js'
 import type { ArtifactsRepo } from '../db/repositories/artifacts-repo.js'
 import type { AgentSessionsRepo } from '../db/repositories/agent-sessions-repo.js'
 import type { SseBroadcaster, SseEvent } from '../sse/broadcaster.js'
+import type { AgentKind } from '../profiles/types.js'
 
 export interface StreamRelayOpts {
   conversationId: string
@@ -18,7 +19,7 @@ export interface StreamRelayOpts {
   sessions: AgentSessionsRepo
   sse: SseBroadcaster
   cronHandler: (cmd: CronCommand, conversationId: string) => Promise<string>
-  agent?: 'claude' | 'codex' | 'antigravity'
+  agent?: AgentKind
   flushEvery?: number
 }
 

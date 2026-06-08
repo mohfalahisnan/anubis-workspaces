@@ -60,15 +60,15 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const workflowsApi = {
-  list:        () => jsonFetch<{ items: WorkflowSummary[] }>('/workflows'),
-  create:      (name: string, description?: string) =>
+  list:        (projectId?: string) => jsonFetch<{ items: WorkflowSummary[] }>(projectId ? `/workflows?projectId=${encodeURIComponent(projectId)}` : '/workflows'),
+  create:      (name: string, description?: string, projectId?: string) =>
                 jsonFetch<WorkflowDetail>('/workflows', {
                   method: 'POST',
-                  body: JSON.stringify({ name, description }),
+                  body: JSON.stringify({ name, description, projectId }),
                 }),
   get:         (id: string) => jsonFetch<WorkflowDetail>(`/workflows/${id}`),
   export:      (id: string) => jsonFetch<WorkflowExport>(`/workflows/${id}/export`),
-  import:      (payload: { name?: string; description?: string | null; graph: unknown }) =>
+  import:      (payload: { name?: string; description?: string | null; graph: unknown; projectId?: string }) =>
                 jsonFetch<WorkflowDetail>('/workflows/import', { method: 'POST', body: JSON.stringify(payload) }),
   patchMeta:   (id: string, patch: { name?: string; description?: string | null }) =>
                 jsonFetch<WorkflowDetail>(`/workflows/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
@@ -76,7 +76,11 @@ export const workflowsApi = {
                 jsonFetch<WorkflowDetail>(`/workflows/${id}/draft`, { method: 'PUT', body: JSON.stringify({ draftGraph }) }),
   publish:     (id: string) => jsonFetch<WorkflowDetail>(`/workflows/${id}/publish`, { method: 'POST' }),
   remove:      (id: string) => jsonFetch<void>(`/workflows/${id}`, { method: 'DELETE' }),
-  startRun:    (id: string) => jsonFetch<{ runId: string }>(`/workflows/${id}/runs`, { method: 'POST' }),
+  startRun:    (id: string, body?: { nodeDataOverrides?: Record<string, unknown> }) =>
+                jsonFetch<{ runId: string }>(`/workflows/${id}/runs`, {
+                  method: 'POST',
+                  body: body ? JSON.stringify(body) : undefined,
+                }),
   activeRun:   (id: string) => jsonFetch<{ runId: string | null }>(`/workflows/${id}/active-run`),
   listRuns:    (id: string) => jsonFetch<{ items: Array<{ id: string; status: string; startedAt: number }> }>(`/workflows/${id}/runs`),
   getRun:      (runId: string) =>

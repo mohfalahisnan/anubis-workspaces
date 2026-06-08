@@ -101,7 +101,7 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const posts: CapturedPost[] = uniqueCapturedPosts(result.output.posts
     .filter((p) => Boolean(p.postUrl))
     .slice(0, targetPosts)
-    .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now)))
+    .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now, competitor.projectId)))
 
   const profileEntry =
     result.output.profiles.find((p) => p.username === usernameNoAt) ??
@@ -144,6 +144,7 @@ captureRoutes.post('/competitors/:id', async (c) => {
 /** GET /posts — flat captured-post feed for the Content page. */
 const ListQuery = z.object({
   competitorId: z.string().optional(),
+  projectId: z.string().optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
   orderBy: z.enum(['recent', 'engagement']).optional(),
 }).strict()
@@ -162,6 +163,7 @@ const ImportPostsBody = z.object({
   posts: z.array(z.object({
     id: z.string().min(1).optional(),
     competitorId: z.string().min(1),
+    projectId: z.string().min(1).optional(),
     username: z.string().min(1),
     postUrl: z.string().min(1),
     caption: z.string().optional(),
@@ -192,11 +194,12 @@ postRoutes.get('/', (c) => {
   const opts = parsed.data
   const rows = stack.capturedPosts.list({
     competitorId: opts.competitorId,
+    projectId: opts.projectId,
     limit: opts.limit ?? 60,
     orderBy: opts.orderBy ?? 'recent',
   })
 
-  const competitorsById = new Map(stack.competitors.list().map((c) => [c.id, c]))
+  const competitorsById = new Map(stack.competitors.list(opts.projectId).map((c) => [c.id, c]))
   const items = rows.map((row) => {
     const owner = competitorsById.get(row.competitorId)
     return {
@@ -221,6 +224,7 @@ postRoutes.post('/import', async (c) => {
     return {
       id: post.id ?? randomUUID(),
       competitorId: post.competitorId,
+      projectId: post.projectId ?? owner.projectId,
       username: post.username,
       postUrl: post.postUrl,
       caption: post.caption,
@@ -267,12 +271,14 @@ function postDataToCapturedPost(
   username: string,
   p: PostData,
   capturedAt: number,
+  projectId?: string,
 ): CapturedPost {
   const kind = p.media?.kind
   const urls = p.media?.urls ?? []
   return {
     id: randomUUID(),
     competitorId,
+    projectId,
     username: p.username ?? username,
     postUrl: p.postUrl,
     caption: p.caption,

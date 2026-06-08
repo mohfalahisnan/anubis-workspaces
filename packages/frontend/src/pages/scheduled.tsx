@@ -9,6 +9,7 @@ import {
 import type { CronJobSummary } from '@anubis/shared'
 
 import { deleteCronJob, listCronJobs, updateCronJob } from '@/api'
+import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 
 /* -----------------------------------------------------------
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils'
 type Banner = { kind: 'error' | 'success'; message: string }
 
 export function ScheduledPage() {
+  const { activeProject } = useProject()
   const [jobs, setJobs] = useState<CronJobSummary[] | null>(null)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
@@ -31,7 +33,7 @@ export function ScheduledPage() {
 
   async function refresh() {
     try {
-      setJobs(await listCronJobs())
+      setJobs(await listCronJobs(undefined, activeProject?.id || undefined))
     } catch (e) {
       setBanner({
         kind: 'error',
@@ -42,7 +44,7 @@ export function ScheduledPage() {
 
   useEffect(() => {
     void refresh()
-  }, [])
+  }, [activeProject?.id])
 
   async function handleToggle(job: CronJobSummary) {
     setBusy(true)

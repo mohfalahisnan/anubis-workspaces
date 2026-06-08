@@ -11,13 +11,16 @@ import { isRunInProgress, nodeDimmed, edgeRunState, EDGE_RUN_STYLE } from '@/com
 import { executableNodeTypes } from './executable-nodes'
 import { useEditorStore } from './editor-store'
 
-function wouldCreateCycle(nodes: Node[], edges: Edge[], candidate: Connection): boolean {
+export function wouldCreateCycle(nodes: Node[], edges: Edge[], candidate: Connection): boolean {
   if (!candidate.source || !candidate.target) return false
   if (candidate.source === candidate.target) return true
   const next = [...edges, { id: 'tmp', source: candidate.source, target: candidate.target } as Edge]
   const adj = new Map<string, string[]>()
   for (const n of nodes) adj.set(n.id, [])
-  for (const e of next) (adj.get(e.source) ?? []).push(e.target)
+  for (const e of next) {
+    if (e.id !== 'tmp' && e.data?.loop === true) continue
+    adj.get(e.source)?.push(e.target)
+  }
   const queue: string[] = [candidate.target]
   const seen = new Set<string>()
   while (queue.length) {

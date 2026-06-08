@@ -18,7 +18,7 @@ describe('WorkflowsRepo.seedBuiltins', () => {
 
     const wf = repo.get('builtin-ig-content-pipeline')
     expect(wf).not.toBeNull()
-    expect(wf!.name).toBe('IG Content Pipeline')
+    expect(wf!.name).toMatch(/IG content pipeline/i)
     // Ships pre-published so it's runnable once configured.
     expect(wf!.publishedGraph).toBeTruthy()
     expect(wf!.draftGraph).toBe(wf!.publishedGraph)
@@ -37,14 +37,21 @@ describe('WorkflowsRepo.seedBuiltins', () => {
     expect(byType).toContain('aiAgentConversation')
     expect(byType).toContain('originalCopy')
     expect(byType).toContain('humanApproval')
+    expect(byType).toContain('lessonWriter')
 
     // The Original Copy viewer is fed from the source, not the analyst.
     const original = graph.edges.find((e) => e.target === 'original-copy')
-    expect(original?.source).toBe('ig-source')
+    expect(original?.source).toBe('instagram-post')
 
     // The approved review branch feeds the final display.
-    const approved = graph.edges.find((e) => e.source === 'review' && e.target === 'final-copy')
+    const approved = graph.edges.find((e) => e.source === 'human-approval' && e.target === 'md-final')
     expect(approved?.sourceHandle).toBe('approved')
+
+    // The rejected branch loops a lesson back into the Improve agent.
+    const rejected = graph.edges.find((e) => e.source === 'human-approval' && e.target === 'lesson-rejected')
+    expect(rejected?.sourceHandle).toBe('rejected')
+    const loopBack = graph.edges.find((e) => e.source === 'lesson-rejected' && e.target === 'ai-improve')
+    expect(loopBack).toBeTruthy()
   })
 
   it('is idempotent — re-seeding does not duplicate', () => {

@@ -103,4 +103,17 @@ export const BUILTIN_PROFILES: Profile[] = [
     createdAt: NOW,
     updatedAt: NOW,
   },
+  {
+    id: 'gpt-web-default',
+    name: 'GPT Web',
+    description: 'ChatGPT Web interface via crawler CDP automation.',
+    source: 'builtin',
+    config: {
+      agent: 'gpt-web',
+      model: 'chatgpt-web',
+    },
+    sortOrder: 80,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
 ]

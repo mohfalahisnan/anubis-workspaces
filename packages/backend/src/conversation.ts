@@ -8,8 +8,9 @@ import { getStack } from './services.js'
 const CreateBody = z.object({
   title: z.string().min(1),
   profileId: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
   workspacePath: z.string().min(1).optional(),
-  agent: z.enum(['claude', 'codex', 'antigravity']).optional(),
+  agent: z.enum(['claude', 'codex', 'antigravity', 'gpt-web']).optional(),
   override: z.record(z.string(), z.unknown()).optional(),
 }).strict()
 
@@ -40,7 +41,8 @@ conversationRoutes.get('/', (c) => {
   const archived = archivedRaw === undefined ? undefined : archivedRaw === 'true'
   const sourceRaw = c.req.query('source')
   const source = sourceRaw === 'manual' || sourceRaw === 'workflow' ? sourceRaw : undefined
-  return c.json({ ok: true, items: getStack().conversation.list({ limit, archived, source }) })
+  const projectId = c.req.query('projectId')
+  return c.json({ ok: true, items: getStack().conversation.list({ limit, archived, source, projectId }) })
 })
 
 conversationRoutes.get('/:id', (c) => {

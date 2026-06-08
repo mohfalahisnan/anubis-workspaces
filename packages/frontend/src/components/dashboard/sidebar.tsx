@@ -3,6 +3,7 @@ import { AnubisMark } from '@/components/brand/anubis-mark'
 import { Badge } from '@/components/ui/badge'
 import { useNavigation, type Route } from '@/lib/navigation'
 import { navItems, type NavItem } from './data'
+import { ProjectSelector } from './project-selector'
 
 export function Sidebar() {
   const { route, navigate } = useNavigation()
@@ -24,9 +25,7 @@ export function Sidebar() {
       </button>
 
       <nav className='flex flex-1 flex-col gap-0.5 px-3 py-4'>
-        <div className='px-2 pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground'>
-          Workspace
-        </div>
+        <ProjectSelector />
         {navItems.map((item) => {
           const active = route.page === item.page
           return (
@@ -81,6 +80,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'conversations' }
     case 'content':
       return { page: 'content' }
+    case 'planner':
+      return { page: 'planner' }
     case 'profiles':
       return { page: 'profiles' }
     case 'skills':

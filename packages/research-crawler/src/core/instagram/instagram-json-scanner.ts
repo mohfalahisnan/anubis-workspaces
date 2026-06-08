@@ -57,8 +57,10 @@ export function extractInstagramShortcode(url: string): string | undefined {
   }
   const parts = parsed.pathname.split("/").filter(Boolean);
   for (let index = 0; index < parts.length - 1; index += 1) {
-    if (SHORTCODE_PATH_SEGMENTS.has(parts[index])) {
-      const shortcode = parts[index + 1].trim();
+    const part = parts[index];
+    if (part && SHORTCODE_PATH_SEGMENTS.has(part)) {
+      const nextPart = parts[index + 1];
+      const shortcode = nextPart ? nextPart.trim() : "";
       return shortcode ? shortcode : undefined;
     }
   }

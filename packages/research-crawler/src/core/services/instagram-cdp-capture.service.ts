@@ -133,8 +133,9 @@ export function createInstagramCdpCaptureService(
         try {
           const parsedUrl = new URL(input.url.trim());
           const parts = parsedUrl.pathname.split('/').filter(Boolean);
-          if (parts.length > 0 && parts[0] !== 'p' && parts[0] !== 'reel') {
-            urlUsername = parts[0].toLowerCase();
+          const firstPart = parts[0];
+          if (firstPart && firstPart !== 'p' && firstPart !== 'reel') {
+            urlUsername = firstPart.toLowerCase();
           }
         } catch {}
       }

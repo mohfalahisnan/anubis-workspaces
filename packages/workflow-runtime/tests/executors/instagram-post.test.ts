@@ -32,8 +32,12 @@ beforeEach(() => {
 afterEach(() => { global.fetch = ORIG_FETCH })
 
 describe('instagramPostExecutor', () => {
-  it('reads existing post from db and downloads its media to artifacts (mediaUrls → mediaPaths)', async () => {
+  it('reads existing post from db, calls crawler to get a fresh copy, and downloads its media to artifacts', async () => {
     const dbGet = vi.fn().mockResolvedValue({
+      id: 'p99',
+      postUrl: 'https://instagram.com/p/p99',
+    })
+    const crawlerCapture = vi.fn().mockResolvedValue({
       id: 'p99',
       caption: 'hi',
       mediaUrls: ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg'],
@@ -43,10 +47,11 @@ describe('instagramPostExecutor', () => {
 
     const out = await instagramPostExecutor.run(
       { nodeId: 'n1', config: { source: 'existing', postId: 'p99' }, upstream: {} },
-      ctxWith({ dbGet, writeArtifact }),
+      ctxWith({ dbGet, crawlerCapture, writeArtifact }),
     )
 
     expect(dbGet).toHaveBeenCalledWith('p99')
+    expect(crawlerCapture).toHaveBeenCalledWith('https://instagram.com/p/p99')
     expect(writeArtifact).toHaveBeenCalledTimes(2)
     expect(out).toEqual({
       kind: 'instagramPost',
@@ -84,7 +89,8 @@ describe('instagramPostExecutor', () => {
     const out = await instagramPostExecutor.run(
       { nodeId: 'n1', config: { source: 'existing', postId: 'p' }, upstream: {} },
       ctxWith({
-        dbGet: async () => ({ id: 'p', mediaUrls: ['https://ok.example.com/a.jpg', 'https://forbidden.example.com/b.jpg'] }),
+        dbGet: async () => ({ id: 'p', postUrl: 'https://instagram.com/p/p' }),
+        crawlerCapture: async () => ({ id: 'p', mediaUrls: ['https://ok.example.com/a.jpg', 'https://forbidden.example.com/b.jpg'] }),
       }),
     )
     expect(out.post.mediaPaths.length).toBe(1)

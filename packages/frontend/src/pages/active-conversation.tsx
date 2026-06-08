@@ -30,6 +30,7 @@ import { useCatalog } from '@/lib/use-catalog'
 import { useDefaultProfile } from '@/lib/use-default-profile'
 import { useEnsureConversation } from '@/lib/use-ensure-conversation'
 import { useWorkspaces } from '@/lib/use-workspaces'
+import { useProject } from '@/lib/use-project'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
@@ -39,6 +40,7 @@ const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
   claude: 'Claude Code',
   codex: 'Codex CLI',
   antigravity: 'the Antigravity CLI',
+  'gpt-web': 'GPT Web',
 }
 
 function useProfiles() {
@@ -56,6 +58,7 @@ function useProfiles() {
 
 export function ActiveConversationPage({ conversationId }: { conversationId?: string }) {
   const { navigate } = useNavigation()
+  const { activeProject } = useProject()
   const { profiles, refetchProfiles } = useProfiles()
   const { catalog } = useCatalog()
   const {
@@ -259,14 +262,20 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const tokens = Math.round(partialChars / 4)
   const isLive = !!streaming && !forceStopped
 
-  // For a brand-new conversation, default the working directory to the most
-  // recently used saved folder once the list loads. Seed only once (while the
+  // For a brand-new conversation, default the working directory to the active project's
+  // workdir, or the most recently used saved folder. Seed only once (while the
   // picked value is still null) so the user's later choice isn't overwritten.
   useEffect(() => {
     if (conversationId) return
     if (pickedWorkdir !== null) return
+    
+    if (activeProject?.workdir) {
+      setPickedWorkdir(activeProject.workdir)
+      return
+    }
+    
     if (workspaces.length > 0) setPickedWorkdir(workspaces[0]!.path)
-  }, [conversationId, workspaces, pickedWorkdir])
+  }, [conversationId, workspaces, pickedWorkdir, activeProject?.workdir])
 
   // The value the workdir picker shows. For an existing conversation it is the
   // conversation's folder; for a new one it is the local picked value.

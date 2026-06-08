@@ -14,6 +14,7 @@ import {
 
 import type { CompetitorLevelsConfig, CompetitorLevelOverride, CompetitorSummary } from '@anubis/shared'
 import { effectiveLevel } from '@anubis/shared'
+import { useProject } from '@/lib/use-project'
 
 import {
   captureCompetitor,
@@ -51,6 +52,7 @@ import {
 type Banner = { kind: 'error' | 'success'; message: string }
 
 export function CompetitorsPage() {
+  const { activeProject } = useProject()
   const [items, setItems] = useState<CompetitorSummary[] | null>(null)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
@@ -71,7 +73,7 @@ export function CompetitorsPage() {
 
   async function refresh() {
     try {
-      setItems(dedupeCompetitors(await listCompetitors()))
+      setItems(dedupeCompetitors(await listCompetitors(activeProject?.id || undefined)))
     } catch (e) {
       setItems([])
       setBanner({
@@ -84,7 +86,7 @@ export function CompetitorsPage() {
   useEffect(() => {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [activeProject?.id])
 
   async function handleCapture(c: CompetitorSummary) {
     setCapturing((prev) => new Set(prev).add(c.id))
@@ -828,6 +830,7 @@ function AddCompetitorDialog({
   onClose: () => void
   onCreated: () => void
 }) {
+  const { activeProject } = useProject()
   const [handle, setHandle] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [niche, setNiche] = useState('')
@@ -857,6 +860,7 @@ function AddCompetitorDialog({
         handle: handle.trim(),
         displayName: displayName.trim() || undefined,
         niche: niche.trim() || undefined,
+        projectId: activeProject?.id,
       })
       onCreated()
     } catch (e) {

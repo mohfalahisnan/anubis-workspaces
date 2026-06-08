@@ -1,6 +1,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { SkillDefinition } from '../skills/types.js'
+import type { AgentKind } from './types.js'
 
 /* ============================================================
    Per-profile agent home directories.
@@ -36,7 +37,7 @@ export interface EnsureResult {
 export function homePathFor(
   agentHomeRoot: string,
   profileId: string,
-  agent: 'claude' | 'codex' | 'antigravity',
+  agent: AgentKind,
 ): string {
   return join(agentHomeRoot, profileId, agent)
 }
@@ -44,7 +45,7 @@ export function homePathFor(
 export function ensureAgentHome(
   agentHomeRoot: string,
   profileId: string,
-  agent: 'claude' | 'codex' | 'antigravity',
+  agent: AgentKind,
 ): EnsureResult {
   const path = homePathFor(agentHomeRoot, profileId, agent)
   if (existsSync(path)) return { path, isNew: false }
@@ -53,10 +54,11 @@ export function ensureAgentHome(
 }
 
 export function envFor(
-  agent: 'claude' | 'codex' | 'antigravity',
+  agent: AgentKind,
   homePath: string,
 ): Record<string, string> {
   if (agent === 'codex') return { CODEX_HOME: homePath }
+  if (agent === 'gpt-web') return {}
   // The Antigravity CLI (`agy`) is built on the Gemini CLI and relocates its
   // home (config + per-project state under ~/.gemini) via GEMINI_DIR — verified
   // against the agy v1.0.5 binary. This isolates a profile's config/state, but
@@ -70,7 +72,7 @@ export function envFor(
 export function resetProfileHome(
   agentHomeRoot: string,
   profileId: string,
-  agent: 'claude' | 'codex' | 'antigravity',
+  agent: AgentKind,
 ): { existed: boolean } {
   const path = homePathFor(agentHomeRoot, profileId, agent)
   if (!existsSync(path)) return { existed: false }
@@ -91,7 +93,7 @@ export const CREDENTIAL_FILE: Record<'claude' | 'codex', string> = {
 
 export function hasCredentials(
   profileId: string,
-  agent: 'claude' | 'codex' | 'antigravity',
+  agent: AgentKind,
   agentHomeRoot: string,
 ): boolean {
   // agy (Antigravity) keeps credentials in the OS keyring (Keychain / Windows
@@ -99,15 +101,15 @@ export function hasCredentials(
   // nothing on disk to detect, so we don't gate antigravity turns on a marker
   // file — auth is handled globally via `agy` login or an API key in the env.
   // Returning true here avoids falsely blocking every run with NoCredentials.
-  if (agent === 'antigravity') return true
+  if (agent === 'antigravity' || agent === 'gpt-web') return true
   const home = homePathFor(agentHomeRoot, profileId, agent)
-  return existsSync(join(home, CREDENTIAL_FILE[agent]))
+  return existsSync(join(home, CREDENTIAL_FILE[agent as 'claude' | 'codex']))
 }
 
 export interface CopyHomeOpts {
   systemSource: string
   profileId: string
-  agent: 'claude' | 'codex' | 'antigravity'
+  agent: AgentKind
   agentHomeRoot: string
 }
 
@@ -252,7 +254,7 @@ export function writeProfileSkills(
 export interface CopyProfileHomeOpts {
   srcProfileId: string
   destProfileId: string
-  agent: 'claude' | 'codex' | 'antigravity'
+  agent: AgentKind
   agentHomeRoot: string
 }
 

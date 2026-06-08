@@ -23,6 +23,7 @@ import {
   listCompetitors,
   openInstagramLoginChrome,
 } from '@/api'
+import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -73,6 +74,8 @@ export function CaptureSelectionDialog({
   const [headless, setHeadless] = useState(true)
   const [targetPostsPerProfile, setTargetPostsPerProfile] = useState(12)
 
+  const { activeProject } = useProject()
+
   useEffect(() => {
     if (!open) return
     let active = true
@@ -82,7 +85,7 @@ export function CaptureSelectionDialog({
     setRunMode('public')
     setHeadless(true)
     setTargetPostsPerProfile(12)
-    listCompetitors()
+    listCompetitors(activeProject?.id)
       .then((rows) => {
         if (!active) return
         const uniqueRows = dedupeCompetitors(rows)
@@ -102,7 +105,7 @@ export function CaptureSelectionDialog({
     return () => {
       active = false
     }
-  }, [open])
+  }, [open, activeProject?.id])
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -341,6 +344,7 @@ export function FindCompetitorsDialog({
   onClose: () => void
   onComplete: (added: number) => void
 }) {
+  const { activeProject } = useProject()
   const [form, setForm] = useState<DiscoveryFormState>(DEFAULT_FORM)
   const [stage, setStage] = useState<'form' | 'running' | 'results'>('form')
   const [candidates, setCandidates] = useState<DiscoveredCandidate[]>([])
@@ -390,7 +394,7 @@ export function FindCompetitorsDialog({
       if (form.source === 'keyword') input.keyword = form.keyword.trim()
       const found = await discoverCompetitors(input)
       const tracked = new Set(
-        (await listCompetitors()).map((competitor) => usernameKey(competitor.handle)),
+        (await listCompetitors(activeProject?.id)).map((competitor) => usernameKey(competitor.handle)),
       )
       // Dedupe by username (the crawler sometimes returns the same
       // handle twice when it surfaces them through different paths).
@@ -423,6 +427,7 @@ export function FindCompetitorsDialog({
           displayName: candidate.fullName?.trim() || undefined,
           followers: candidate.followers,
           bio: candidate.bio?.trim() || undefined,
+          projectId: activeProject?.id,
         })
         added++
       } catch (e) {

@@ -26,8 +26,8 @@ export class CronService {
     }
   }
 
-  list(conversationId?: string): CronJob[] {
-    return this.opts.repo.list(conversationId)
+  list(conversationId?: string, projectId?: string): CronJob[] {
+    return this.opts.repo.list(conversationId, projectId)
   }
 
   update(id: string, patch: Parameters<CronJobsRepo['update']>[1]): CronJob | null {

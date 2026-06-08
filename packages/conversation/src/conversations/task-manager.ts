@@ -1,11 +1,11 @@
 import type { AgentEventMap, AiAgentService } from '@anubis/ai-agent'
 import { TypedEmitter } from '@anubis/ai-agent'
 import { nowMs } from '../util/time.js'
-import type { ResolvedProfile } from '../profiles/types.js'
+import type { ResolvedProfile, AgentKind } from '../profiles/types.js'
 
 export interface AgentTask {
   conversationId: string
-  agent: 'claude' | 'codex' | 'antigravity'
+  agent: AgentKind
   status: 'pending' | 'running' | 'finished' | 'error'
   agentSessionId?: string
   lastActivityAt: number
@@ -16,7 +16,7 @@ export interface AgentTask {
 
 export interface ConversationLite {
   id: string
-  agent: 'claude' | 'codex' | 'antigravity'
+  agent: AgentKind
   workspacePath: string
 }
 

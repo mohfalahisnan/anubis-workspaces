@@ -6,6 +6,7 @@ export type StepStatus = 'pending' | 'running' | 'awaiting' | 'succeeded' | 'fai
 export interface WorkflowRun {
   id: string
   workflowId: string
+  projectId?: string
   status: RunStatus
   graphSnapshot: string
   startedAt: number
@@ -25,7 +26,7 @@ export interface WorkflowRunStep {
 }
 
 interface RunRow {
-  id: string; workflow_id: string; status: RunStatus; graph_snapshot: string
+  id: string; workflow_id: string; project_id: string | null; status: RunStatus; graph_snapshot: string
   started_at: number; finished_at: number | null; error: string | null
 }
 
@@ -37,7 +38,8 @@ interface StepRow {
 
 function toRun(r: RunRow): WorkflowRun {
   return {
-    id: r.id, workflowId: r.workflow_id, status: r.status, graphSnapshot: r.graph_snapshot,
+    id: r.id, workflowId: r.workflow_id, projectId: r.project_id ?? undefined,
+    status: r.status, graphSnapshot: r.graph_snapshot,
     startedAt: r.started_at,
     finishedAt: r.finished_at ?? undefined,
     error: r.error ?? undefined,

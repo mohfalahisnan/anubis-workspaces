@@ -8,10 +8,12 @@ import {
   listProfiles,
   listSkills,
 } from '@/api'
+import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import { useNavigation, type PageKey } from '@/lib/navigation'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
+import { PlannerPage } from '@/pages/planner'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
 import { CompetitorsPage } from '@/pages/competitors'
@@ -34,6 +36,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   conversations: 'Conversations',
   'active-conversation': 'Conversations',
   content: 'Content',
+  planner: 'Planner',
   profiles: 'Profiles',
   'profile-editor': 'Profiles · Edit',
   skills: 'Skills',
@@ -105,6 +108,7 @@ function LiveStatusRow({ counts }: { counts: LiveCounts }) {
 }
 
 function useLiveCounts(): LiveCounts {
+  const { activeProject } = useProject()
   const [counts, setCounts] = useState<LiveCounts>({})
 
   useEffect(() => {
@@ -113,10 +117,10 @@ function useLiveCounts(): LiveCounts {
     async function fetchAll() {
       const [profiles, conversations, skills, cron, competitors] = await Promise.allSettled([
         listProfiles(),
-        listConversations({ limit: 200 }),
+        listConversations({ limit: 200, projectId: activeProject?.id || undefined }),
         listSkills(),
-        listCronJobs(),
-        listCompetitors(),
+        listCronJobs(undefined, activeProject?.id || undefined),
+        listCompetitors(activeProject?.id || undefined),
       ])
       if (!active) return
       setCounts({
@@ -134,7 +138,7 @@ function useLiveCounts(): LiveCounts {
     return () => {
       active = false
     }
-  }, [])
+  }, [activeProject?.id])
 
   return counts
 }
@@ -199,6 +203,8 @@ function CurrentPage() {
       return <ActiveConversationPage conversationId={route.conversationId} />
     case 'content':
       return <ContentPage />
+    case 'planner':
+      return <PlannerPage />
     case 'profiles':
       return <ProfilesPage />
     case 'profile-editor':

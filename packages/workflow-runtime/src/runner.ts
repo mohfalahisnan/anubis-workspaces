@@ -1,4 +1,4 @@
-import { assertAcyclicExceptLoops, isLoopEdge } from './graph.js'
+import { assertAcyclicExceptLoops, partitionWorkflowEdges } from './graph.js'
 import type {
   Executor, ExecutorContext, RunStatus, StepStatus, WorkflowEdge, WorkflowGraph,
 } from './types.js'
@@ -43,8 +43,7 @@ export async function runWorkflow(
   }
 
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
-  const forward = graph.edges.filter((e) => !isLoopEdge(e))
-  const loops = graph.edges.filter(isLoopEdge)
+  const { forward, loops } = partitionWorkflowEdges(graph)
   const inForward = (id: string) => forward.filter((e) => e.target === id)
   const outForward = (id: string) => forward.filter((e) => e.source === id)
 

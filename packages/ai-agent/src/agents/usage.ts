@@ -90,6 +90,13 @@ function extractAntigravityUsage(raw: any): ExtractedUsage {
   }
 }
 
+function extractGptWebUsage(raw: any): ExtractedUsage {
+  return {
+    model: raw?.model ?? 'chatgpt-web',
+    raw: { usage: raw },
+  }
+}
+
 export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
   switch (agent) {
     case 'codex':
@@ -98,5 +105,7 @@ export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
       return extractClaudeUsage(raw)
     case 'antigravity':
       return extractAntigravityUsage(raw)
+    case 'gpt-web':
+      return extractGptWebUsage(raw)
   }
 }

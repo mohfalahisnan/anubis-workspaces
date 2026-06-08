@@ -4,6 +4,7 @@ import type { Db } from '../client.js'
 export interface Competitor {
   id: string
   handle: string
+  projectId?: string
   displayName?: string
   niche?: string
   tint?: string
@@ -22,6 +23,7 @@ export interface Competitor {
 interface Row {
   id: string
   handle: string
+  project_id: string | null
   display_name: string | null
   niche: string | null
   tint: string | null
@@ -41,6 +43,7 @@ function toCompetitor(r: Row): Competitor {
   return {
     id: r.id,
     handle: r.handle,
+    projectId: r.project_id ?? undefined,
     displayName: r.display_name ?? undefined,
     niche: r.niche ?? undefined,
     tint: r.tint ?? undefined,
@@ -63,17 +66,18 @@ export class CompetitorsRepo {
   insert(c: Competitor): void {
     this.db.prepare(`
       INSERT INTO competitors (
-        id, handle, display_name, niche, tint, followers, avg_likes,
+        id, handle, project_id, display_name, niche, tint, followers, avg_likes,
         post_count, last_refreshed_at, notes, bio, level,
         added_at, updated_at, deleted_at
       ) VALUES (
-        @id, @handle, @displayName, @niche, @tint, @followers, @avgLikes,
+        @id, @handle, @projectId, @displayName, @niche, @tint, @followers, @avgLikes,
         @postCount, @lastRefreshedAt, @notes, @bio, @level,
         @addedAt, @updatedAt, @deletedAt
       )
     `).run({
       id: c.id,
       handle: c.handle,
+      projectId: c.projectId ?? 'default',
       displayName: c.displayName ?? null,
       niche: c.niche ?? null,
       tint: c.tint ?? null,
@@ -104,7 +108,13 @@ export class CompetitorsRepo {
     return r ? toCompetitor(r) : null
   }
 
-  list(): Competitor[] {
+  list(projectId?: string): Competitor[] {
+    if (projectId) {
+      const rows = this.db
+        .prepare('SELECT * FROM competitors WHERE deleted_at IS NULL AND project_id = ? ORDER BY added_at DESC')
+        .all(projectId) as Row[]
+      return rows.map(toCompetitor)
+    }
     const rows = this.db
       .prepare('SELECT * FROM competitors WHERE deleted_at IS NULL ORDER BY added_at DESC')
       .all() as Row[]

@@ -2,7 +2,8 @@ import type { Db } from './client.js'
 
 export interface Migration {
   version: number
-  sql: string
+  sql?: string
+  up?: (db: Db) => void
 }
 
 export function runMigrations(db: Db, migrations: Migration[]): void {
@@ -19,7 +20,8 @@ export function runMigrations(db: Db, migrations: Migration[]): void {
   for (const m of ordered) {
     if (applied.has(m.version)) continue
     db.transaction(() => {
-      db.exec(m.sql)
+      if (m.sql) db.exec(m.sql)
+      if (m.up) m.up(db)
       insert.run(m.version, Date.now())
     })()
   }

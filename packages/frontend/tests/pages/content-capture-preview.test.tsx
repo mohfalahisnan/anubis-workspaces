@@ -32,6 +32,12 @@ vi.mock('@/hooks/use-level-multipliers', () => ({
   useLevelMultipliers: () => undefined,
 }))
 
+vi.mock('@/lib/use-project', () => ({
+  useProject: () => ({
+    activeProject: { id: 'default', name: 'Default Project' },
+  }),
+}))
+
 import { ContentPage } from '@/pages/content'
 
 const competitor: CompetitorSummary = {

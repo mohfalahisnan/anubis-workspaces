@@ -15,9 +15,11 @@ import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
 import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
 import { CompetitorsService } from './competitors/competitors-service.js'
 import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
 import { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
 import { WorkflowTriggersRepo } from './db/repositories/workflow-triggers-repo.js'
+import { ProjectsRepo } from './db/repositories/projects-repo.js'
 import { AppConfigService } from './config/app-config.js'
 import { ProfileService } from './profiles/profile-service.js'
 import { SkillLoader, type SkillRoots } from './skills/loader.js'
@@ -39,6 +41,7 @@ export interface ConversationStack {
   profiles: ProfileService
   competitors: CompetitorsService
   capturedPosts: CapturedPostsRepo
+  contentItems: ContentItemsRepo
   workflows: WorkflowsRepo
   workflowRuns: WorkflowRunsRepo
   workflowTriggers: WorkflowTriggersRepo
@@ -49,6 +52,7 @@ export interface ConversationStack {
   taskManager: TaskManager
   aiAgent: AiAgentService
   knownWorkspaces: KnownWorkspacesRepo
+  projects: ProjectsRepo
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   shutdown(): Promise<void>
@@ -70,6 +74,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const sessionsRepo = new AgentSessionsRepo(db)
   const cronRepo = new CronJobsRepo(db)
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
+  const projectsRepo = new ProjectsRepo(db)
 
   const profiles = new ProfileService(profilesRepo)
   profiles.seedBuiltins()
@@ -85,6 +90,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   }
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
   const capturedPosts = new CapturedPostsRepo(db)
+  const contentItems = new ContentItemsRepo(db)
   const workflowsRepo = new WorkflowsRepo(db)
   workflowsRepo.seedBuiltins()
   const workflowRunsRepo = new WorkflowRunsRepo(db)
@@ -119,12 +125,13 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   return {
-    conversation, profiles, competitors, capturedPosts,
+    conversation, profiles, competitors, capturedPosts, contentItems,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,
     appConfig, skills, sse, cron, taskManager: tm, aiAgent,
     knownWorkspaces: knownWorkspacesRepo,
+    projects: projectsRepo,
     agentHomeRoot,
     async shutdown() {
       cron.shutdown()
@@ -144,6 +151,8 @@ export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'
 export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-posts-repo.js'
 export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+export type { ContentItem, ListContentItemsOpts, UpdateContentItemPatch } from './db/repositories/content-items-repo.js'
+export { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 export type { KnownWorkspace } from './db/repositories/known-workspaces-repo.js'
 export { KnownWorkspacesRepo } from './db/repositories/known-workspaces-repo.js'
 export type { Workflow } from './db/repositories/workflows-repo.js'
@@ -175,3 +184,6 @@ export type { ImportSkillOpts, ImportSkillResult, SkillCategory } from './skills
 export { CronService } from './cron/cron-service.js'
 export { SseBroadcaster } from './sse/broadcaster.js'
 export type { SseEvent } from './sse/broadcaster.js'
+export type { Project } from './db/repositories/projects-repo.js'
+export { ProjectsRepo } from './db/repositories/projects-repo.js'
+export { newId } from './util/ids.js'

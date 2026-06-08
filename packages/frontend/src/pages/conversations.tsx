@@ -1,9 +1,10 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ArrowUpRightIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { ArrowUpRightIcon, PlusIcon, Trash2Icon, CheckIcon } from 'lucide-react'
 
 import type { ConversationSummary } from '@anubis/shared'
 
 import { deleteConversation, listConversations } from '@/api'
+import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import { AnubisMark } from '@/components/brand/anubis-mark'
 import { useNavigation } from '@/lib/navigation'
@@ -16,17 +17,6 @@ type Row = {
   status: 'idle' | 'running' | 'error'
   source: 'manual' | 'workflow'
 }
-
-const FALLBACK_ROWS: Row[] = [
-  { id: 'mock-1', title: "Audit @kayla.studio's last 30 posts",        profile: 'Claude · Research', time: '2m',        status: 'running', source: 'manual' },
-  { id: 'mock-2', title: 'Draft June content calendar from brief',     profile: 'Claude · Writing',  time: '18m',       status: 'idle', source: 'manual' },
-  { id: 'mock-3', title: 'Refactor the StreamRelay flush logic',       profile: 'Codex · Coding',    time: '1h',        status: 'idle', source: 'manual' },
-  { id: 'mock-4', title: 'Compare top 5 productivity creators',        profile: 'Workflow · Claude', time: '3h',        status: 'idle', source: 'workflow' },
-  { id: 'mock-5', title: 'Migrate auth to the new token schema',       profile: 'Codex · Coding',    time: '5h',        status: 'error', source: 'manual' },
-  { id: 'mock-6', title: 'Pull weekly research digest',                profile: 'Claude · Research', time: 'Yesterday', status: 'idle', source: 'manual' },
-  { id: 'mock-7', title: 'Spike: try Codex on the design system PR',   profile: 'Codex · Coding',    time: 'Yesterday', status: 'running', source: 'manual' },
-  { id: 'mock-8', title: 'Investigate the flaky stream-relay test',    profile: 'Workflow · Claude', time: '2d',        status: 'idle', source: 'workflow' },
-]
 
 type ConversationFilter = 'all' | 'manual' | 'workflow'
 
@@ -61,38 +51,94 @@ function rowFromSummary(c: ConversationSummary): Row {
   }
 }
 
-function fallbackRows(filter: ConversationFilter): Row[] {
-  if (filter === 'all') return FALLBACK_ROWS
-  return FALLBACK_ROWS.filter((row) => row.source === filter)
-}
-
 export function ConversationsPage() {
   const { navigate } = useNavigation()
-  const [rows, setRows] = useState<Row[] | null>(null)
+  const { activeProject } = useProject()
+  const [rows, setRows] = useState<Row[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all')
 
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
   function openConversation(id: string) {
     setSelectedId(id)
-    navigate({ page: 'active-conversation', conversationId: id.startsWith('mock-') ? undefined : id })
+    navigate({ page: 'active-conversation', conversationId: id })
   }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === displayRows.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(displayRows.map((r) => r.id)))
+    }
+  }
+
+  // Clear selections when the filter changes
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [conversationFilter])
 
   async function removeConversation(id: string, title: string) {
     const ok = window.confirm(`Delete "${title}"? This cannot be undone.`)
     if (!ok) return
     // Optimistic: drop locally first so the row vanishes immediately.
-    setRows((prev) => (prev ?? fallbackRows(conversationFilter)).filter((r) => r.id !== id))
+    setRows((prev) => prev.filter((r) => r.id !== id))
     if (selectedId === id) setSelectedId(null)
-    if (id.startsWith('mock-')) return
     try {
       await deleteConversation(id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       // Re-fetch on failure so the UI matches server state.
       const source = conversationFilter === 'all' ? undefined : conversationFilter
-      const items = await listConversations({ limit: 50, source }).catch(() => [])
+      const items = await listConversations({ limit: 50, source, projectId: activeProject?.id || undefined }).catch(() => [])
       if (items.length > 0) setRows(items.map(rowFromSummary))
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const ok = window.confirm(`Delete ${ids.length} selected conversation${ids.length === 1 ? '' : 's'}? This cannot be undone.`)
+    if (!ok) return
+
+    // Optimistically filter rows
+    setRows((prev) => prev.filter((r) => !selectedIds.has(r.id)))
+
+    if (selectedId && selectedIds.has(selectedId)) {
+      setSelectedId(null)
+    }
+
+    setSelectMode(false)
+    setSelectedIds(new Set())
+
+    try {
+      await Promise.all(
+        ids.map(async (id) => {
+          await deleteConversation(id)
+        })
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      // Re-fetch state
+      const source = conversationFilter === 'all' ? undefined : conversationFilter
+      const items = await listConversations({ limit: 50, source, projectId: activeProject?.id || undefined }).catch(() => [])
+      if (items.length > 0) {
+        setRows(items.map(rowFromSummary))
+      } else {
+        setRows([])
+      }
     }
   }
 
@@ -100,39 +146,33 @@ export function ConversationsPage() {
     let active = true
     setError(null)
     const source = conversationFilter === 'all' ? undefined : conversationFilter
-    listConversations({ limit: 50, source })
+    listConversations({ limit: 50, source, projectId: activeProject?.id || undefined })
       .then((items) => {
         if (!active) return
-        if (items.length === 0) {
-          setRows(conversationFilter === 'all' ? FALLBACK_ROWS : [])
-        } else {
-          setRows(items.map(rowFromSummary))
-        }
+        setRows(items.map(rowFromSummary))
       })
       .catch((e: unknown) => {
         if (!active) return
         setError(e instanceof Error ? e.message : String(e))
-        setRows(fallbackRows(conversationFilter))
+        setRows([])
       })
     return () => {
       active = false
     }
-  }, [conversationFilter])
+  }, [conversationFilter, activeProject?.id])
 
-  const displayRows = rows ?? fallbackRows(conversationFilter)
+  const displayRows = rows
 
-  // Auto-pick the 4th row by default when first loaded (matches mockup)
+  // Auto-pick the first row by default when first loaded
   useEffect(() => {
     if (displayRows.length === 0) {
       setSelectedId(null)
     } else if (selectedId && displayRows.some((row) => row.id === selectedId)) {
       return
-    } else if (selectedId === null && displayRows.length >= 4 && conversationFilter === 'all') {
-      setSelectedId(displayRows[3]!.id)
     } else if (displayRows[0]) {
       setSelectedId(displayRows[0].id)
     }
-  }, [conversationFilter, displayRows, selectedId])
+  }, [displayRows, selectedId])
 
   const count = displayRows.length
 
@@ -144,9 +184,41 @@ export function ConversationsPage() {
           <span className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
             Conversations
           </span>
-          <span className='inline-flex h-5 min-w-[20px] items-center justify-center rounded-md border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground'>
-            {count}
-          </span>
+          <div className="flex items-center gap-2">
+            {selectMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground font-semibold"
+                >
+                  {selectedIds.size === displayRows.length ? 'None' : 'All'}
+                </button>
+                <span className="text-muted-foreground/30">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectMode(false)
+                    setSelectedIds(new Set())
+                  }}
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground font-semibold"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSelectMode(true)}
+                className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground font-semibold"
+              >
+                Select
+              </button>
+            )}
+            <span className='inline-flex h-5 min-w-[20px] items-center justify-center rounded-md border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground'>
+              {count}
+            </span>
+          </div>
         </div>
         <div className='flex h-10 flex-shrink-0 items-center border-b border-border px-3'>
           <div className='grid h-7 w-full grid-cols-3 rounded-md border border-border bg-muted/45 p-0.5'>
@@ -170,7 +242,7 @@ export function ConversationsPage() {
         <div className='flex-1 overflow-y-auto overflow-x-hidden'>
           {error && (
             <div className='px-4 py-3 text-[11px] text-muted-foreground'>
-              Backend offline — showing sample conversations.
+              Failed to load conversations.
             </div>
           )}
           {displayRows.map((row, i) => {
@@ -180,9 +252,12 @@ export function ConversationsPage() {
                 key={row.id}
                 row={row}
                 selected={selected}
+                selectMode={selectMode}
+                checked={selectedIds.has(row.id)}
                 showTopBorder={i > 0}
                 onClick={() => openConversation(row.id)}
                 onDelete={() => void removeConversation(row.id, row.title)}
+                onToggleSelect={() => toggleSelect(row.id)}
               />
             )
           })}
@@ -192,6 +267,22 @@ export function ConversationsPage() {
             </div>
           )}
         </div>
+
+        {selectMode && selectedIds.size > 0 && (
+          <div className="flex-shrink-0 border-t border-border bg-muted/30 p-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted-foreground font-mono">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="inline-flex h-7 items-center gap-1 rounded bg-destructive px-3 text-xs font-semibold text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2Icon className="size-3.5" />
+              Delete {selectedIds.size}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Right empty-state pane */}
@@ -240,15 +331,21 @@ export function ConversationsPage() {
 function ConvRow({
   row,
   selected,
+  selectMode,
+  checked,
   showTopBorder,
   onClick,
   onDelete,
+  onToggleSelect,
 }: {
   row: Row
   selected: boolean
+  selectMode: boolean
+  checked: boolean
   showTopBorder: boolean
   onClick: () => void
   onDelete: () => void
+  onToggleSelect: () => void
 }) {
   function handleDeleteClick(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation()
@@ -259,22 +356,38 @@ function ConvRow({
     <div
       role='button'
       tabIndex={0}
-      onClick={onClick}
+      onClick={selectMode ? onToggleSelect : onClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          onClick()
+          if (selectMode) onToggleSelect()
+          else onClick()
         }
       }}
       aria-selected={selected || undefined}
       className={cn(
         'group/conv-row relative flex h-16 w-full cursor-pointer items-center gap-2.5 border-l-2 px-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--anubis-gold-hi)]',
         showTopBorder && 'shadow-[inset_0_1px_0_color-mix(in_oklab,var(--border)_60%,transparent)]',
-        selected
+        selected && !selectMode
           ? 'border-l-[var(--anubis-gold)] bg-muted'
           : 'border-l-transparent hover:bg-muted/55',
+        checked && selectMode && 'bg-muted/30 border-l-[var(--anubis-gold)]',
       )}
     >
+      {selectMode && (
+        <span
+          aria-hidden
+          className={cn(
+            'flex size-[15px] shrink-0 items-center justify-center rounded border transition-colors',
+            checked
+              ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
+              : 'border-border bg-background text-transparent',
+          )}
+        >
+          <CheckIcon className='size-2.5' strokeWidth={3.5} />
+        </span>
+      )}
+
       <span className='flex min-w-0 flex-1 flex-col gap-[5px]'>
         <span className='truncate text-[14px] leading-tight tracking-[-0.01em] text-foreground'>
           {row.title}
@@ -287,15 +400,17 @@ function ConvRow({
         </span>
       </span>
 
-      <button
-        type='button'
-        onClick={handleDeleteClick}
-        aria-label={`Delete conversation ${row.title}`}
-        title='Delete conversation'
-        className='flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/15 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive group-hover/conv-row:opacity-100'
-      >
-        <Trash2Icon className='size-[14px]' strokeWidth={2} />
-      </button>
+      {!selectMode && (
+        <button
+          type='button'
+          onClick={handleDeleteClick}
+          aria-label={`Delete conversation ${row.title}`}
+          title='Delete conversation'
+          className='flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/15 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive group-hover/conv-row:opacity-100'
+        >
+          <Trash2Icon className='size-[14px]' strokeWidth={2} />
+        </button>
+      )}
 
       <StatusDot status={row.status} />
     </div>

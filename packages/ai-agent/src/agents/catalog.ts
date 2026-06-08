@@ -1,6 +1,6 @@
-export type Agent = 'codex' | 'claude' | 'antigravity'
+export type Agent = 'codex' | 'claude' | 'antigravity' | 'gpt-web'
 
-export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity']
+export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity', 'gpt-web']
 
 export type ModelCategory =
   | 'recommended'
@@ -90,6 +90,13 @@ export const MODELS: Record<Agent, ModelInfo[]> = {
       description: 'Open-weight GPT-OSS 120B model available through Antigravity.',
     },
   ],
+  'gpt-web': [
+    {
+      id: 'chatgpt-web',
+      category: 'recommended',
+      description: 'ChatGPT Web interface via crawler CDP automation.',
+    },
+  ],
 }
 
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
@@ -99,6 +106,7 @@ export const DEFAULT_MODEL: Record<Agent, string> = {
   codex: 'gpt-5.5',
   claude: 'claude-sonnet-4-6',
   antigravity: 'gemini-3.1-pro',
+  'gpt-web': 'chatgpt-web',
 }
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium'

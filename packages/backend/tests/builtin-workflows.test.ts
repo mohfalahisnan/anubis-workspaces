@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BUILTIN_WORKFLOWS } from '@anubis/conversation'
-import { WorkflowGraphSchema, executorRegistry, topologicalSort } from '@anubis/workflow-runtime'
+import { WorkflowGraphSchema, executorRegistry, assertAcyclicExceptLoops } from '@anubis/workflow-runtime'
 
 /**
  * Guards the seeded starter workflows against the runtime: every built-in must
@@ -8,8 +8,8 @@ import { WorkflowGraphSchema, executorRegistry, topologicalSort } from '@anubis/
  * executor, so we never ship a workflow the engine can't run.
  */
 describe('built-in workflows', () => {
-  it('exposes at least the IG content pipeline', () => {
-    expect(BUILTIN_WORKFLOWS.some((w) => w.id === 'builtin-ig-content-pipeline')).toBe(true)
+  it('ships exactly the IG content pipeline as the only built-in', () => {
+    expect(BUILTIN_WORKFLOWS.map((w) => w.id)).toEqual(['builtin-ig-content-pipeline'])
   })
 
   for (const wf of BUILTIN_WORKFLOWS) {
@@ -21,7 +21,7 @@ describe('built-in workflows', () => {
       })
 
       it('is acyclic with edges that reference real nodes (runnable topology)', () => {
-        expect(() => topologicalSort(graph)).not.toThrow()
+        expect(() => assertAcyclicExceptLoops(graph)).not.toThrow()
       })
 
       it('uses only node types with a registered executor', () => {

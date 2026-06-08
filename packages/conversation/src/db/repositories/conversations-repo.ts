@@ -9,6 +9,7 @@ interface Row {
   agent: string
   status: string
   profile_id: string | null
+  project_id: string | null
   workspace_path: string
   extra: string
   created_at: number
@@ -23,6 +24,7 @@ function toConv(r: Row): Conversation {
     agent: r.agent as Conversation['agent'],
     status: r.status as ConversationStatus,
     profileId: r.profile_id ?? undefined,
+    projectId: r.project_id ?? undefined,
     workspacePath: r.workspace_path,
     extra: ConversationExtraSchema.parse(JSON.parse(r.extra)),
     createdAt: r.created_at,
@@ -36,11 +38,12 @@ export class ConversationsRepo {
 
   insert(c: Conversation): void {
     this.db.prepare(`
-      INSERT INTO conversations (id, title, agent, status, profile_id, workspace_path, extra, created_at, updated_at, deleted_at)
-      VALUES (@id, @title, @agent, @status, @profileId, @workspacePath, @extra, @createdAt, @updatedAt, @deletedAt)
+      INSERT INTO conversations (id, title, agent, status, profile_id, project_id, workspace_path, extra, created_at, updated_at, deleted_at)
+      VALUES (@id, @title, @agent, @status, @profileId, @projectId, @workspacePath, @extra, @createdAt, @updatedAt, @deletedAt)
     `).run({
       id: c.id, title: c.title, agent: c.agent, status: c.status,
-      profileId: c.profileId ?? null, workspacePath: c.workspacePath,
+      profileId: c.profileId ?? null, projectId: c.projectId ?? 'default',
+      workspacePath: c.workspacePath,
       extra: JSON.stringify(c.extra), createdAt: c.createdAt, updatedAt: c.updatedAt,
       deletedAt: c.deletedAt ?? null,
     })
@@ -51,10 +54,13 @@ export class ConversationsRepo {
     return r ? toConv(r) : null
   }
 
-  list(opts: { limit: number; archived?: boolean; source?: 'manual' | 'workflow' }): Conversation[] {
+  list(opts: { limit: number; archived?: boolean; source?: 'manual' | 'workflow'; projectId?: string }): Conversation[] {
+    const where: string[] = ['deleted_at IS NULL']
+    const params: unknown[] = []
+    if (opts.projectId) { where.push('project_id = ?'); params.push(opts.projectId) }
     const rows = this.db.prepare(`
-      SELECT * FROM conversations WHERE deleted_at IS NULL ORDER BY updated_at DESC
-    `).all() as Row[]
+      SELECT * FROM conversations WHERE ${where.join(' AND ')} ORDER BY updated_at DESC
+    `).all(...params) as Row[]
     let convs = rows.map(toConv)
     if (opts.archived !== undefined) {
       convs = convs.filter(c => (c.extra.archived ?? false) === opts.archived)

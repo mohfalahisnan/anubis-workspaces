@@ -30,12 +30,12 @@ import {
   listPosts,
   updatePost,
 } from '@/api'
+import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
-import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
 import { ViewToggle } from '@/components/view-toggle'
-import { levelTint, levelTip, resolveLevel } from '@/lib/competitor-level'
+import { levelTip, resolveLevel } from '@/lib/competitor-level'
 import { PostMultiplierBadge } from '@/components/post-multiplier-badge'
 import { PostMultiplierFilter, matchesMultiplierFilter, type MultiplierFilter } from '@/components/post-multiplier-filter'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
@@ -48,6 +48,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 
 type Format = 'carousel' | 'reel' | 'static'
 
@@ -161,8 +168,22 @@ type Banner =
   | { kind: 'success' | 'warning'; message: string; errors?: { handle: string; message: string }[] }
   | { kind: 'error'; message: string }
 
+const PERFORMANCE_COLOR: Record<import('@anubis/shared').MultiplierRating, string> = {
+  green: '#5E8F55',
+  yellow: '#C9A645',
+  red: '#B5483E',
+  unrated: '#6B6F78',
+}
+
+function performanceTint(rating: import('@anubis/shared').MultiplierRating, surface: 'card' | 'row'): string {
+  const pct = surface === 'card' ? '10%' : '8%'
+  const base = surface === 'card' ? 'var(--card)' : 'transparent'
+  return `color-mix(in oklab, ${PERFORMANCE_COLOR[rating]} ${pct}, ${base})`
+}
+
 export function ContentPage() {
   const { navigate } = useNavigation()
+  const { activeProject } = useProject()
   const [posts, setPosts] = useState<CapturedPostSummary[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [capturing, setCapturing] = useState<CaptureProgress | null>(null)
@@ -173,15 +194,11 @@ export function ContentPage() {
   const [banner, setBanner] = useState<Banner | null>(null)
   const [view, setView] = useState<'grid' | 'table'>('grid')
   const [stars, setStars] = useState<Record<string, boolean>>({})
-  const [query, setQuery] = useState('')
-  const [competitorFilter, setCompetitorFilter] = useState('all')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [editingPost, setEditingPost] = useState<CapturedPostSummary | null>(null)
+  const [selectedDetailPost, setSelectedDetailPost] = useState<CapturedPostSummary | null>(null)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
-  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
   const [multiplierFilter, setMultiplierFilter] = useState<MultiplierFilter>('all')
   const { config: levelsCfg } = useCompetitorLevels()
   const multipliersCfg = useLevelMultipliers()
@@ -189,7 +206,7 @@ export function ContentPage() {
   async function refresh() {
     setBusy(true)
     try {
-      const items = await listPosts({ limit: 120, orderBy: 'recent' })
+      const items = await listPosts({ limit: 120, orderBy: 'recent', projectId: activeProject?.id || undefined })
       setPosts(dedupeCapturedPosts(items))
     } catch {
       // Backend offline or request failed → show the empty state, not stale data.
@@ -202,7 +219,7 @@ export function ContentPage() {
   useEffect(() => {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [activeProject?.id])
 
   function toggleStar(key: string) {
     setStars((s) => ({ ...s, [key]: !s[key] }))
@@ -389,26 +406,13 @@ export function ContentPage() {
 
   const allCards = dedupeCapturedPosts(posts ?? []).map(realPostToCard)
   const cards = allCards
-    .filter((card) => matchesFilters(card, {
-      query,
-      competitor: competitorFilter,
-      dateFrom,
-      dateTo,
-    }))
-    .filter((card) =>
-      matchesLevelFilter(
-        effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg),
-        levelFilter,
-      ),
-    )
     .filter((card) => {
       const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
       const { rating } = multiplierRatingFor(level, card.post?.likes, card.post?.competitorAvgLikes, multipliersCfg)
       return matchesMultiplierFilter(rating, multiplierFilter)
     })
-  const competitors = [...new Set(allCards.map((card) => card.handle))].sort()
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
-  const filtersActive = query || competitorFilter !== 'all' || dateFrom || dateTo || levelFilter !== 'all' || multiplierFilter !== 'all'
+  const filtersActive = multiplierFilter !== 'all'
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -495,75 +499,26 @@ export function ContentPage() {
           <>
             {/* Sticky filter rail */}
             <div className='sticky top-0 z-[5] -mx-1 bg-background pb-3.5 pt-[18px]'>
-          <div className='flex min-h-14 flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2'>
-            <label className='mr-1.5 flex min-w-[220px] flex-[1_1_280px] items-center gap-2 text-muted-foreground'>
-              <SearchIcon className='size-[15px]' strokeWidth={2} />
-              <input
-                type='text'
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder='Search captions, handles…'
-                className='min-w-0 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-muted-foreground'
-              />
-            </label>
-            <label className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground'>
-              Competitor
-              <select
-                value={competitorFilter}
-                onChange={(e) => setCompetitorFilter(e.target.value)}
-                className='bg-transparent font-medium text-foreground outline-none'
-              >
-                <option value='all'>All</option>
-                {competitors.map((handle) => (
-                  <option key={handle} value={handle}>{handle}</option>
-                ))}
-              </select>
-              <ChevronDownIcon className='size-3' strokeWidth={2} />
-            </label>
-            <label className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground'>
-              <CalendarIcon className='size-3.5' strokeWidth={2} />
-              From
-              <input
-                type='date'
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className='bg-transparent font-mono text-[12px] text-foreground outline-none'
-              />
-            </label>
-            <label className='inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[12.5px] text-muted-foreground'>
-              To
-              <input
-                type='date'
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className='bg-transparent font-mono text-[12px] text-foreground outline-none'
-              />
-            </label>
-            {filtersActive && (
-              <button
-                type='button'
-                onClick={() => {
-                  setQuery('')
-                  setCompetitorFilter('all')
-                  setDateFrom('')
-                  setDateTo('')
-                  setLevelFilter('all')
-                  setMultiplierFilter('all')
-                }}
-                className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
-              >
-                <XIcon className='size-3.5' strokeWidth={2} />
-                Clear
-              </button>
-            )}
-
-            <ViewToggle view={view} onChange={setView} className='ml-auto' />
-          </div>
-          <div className='mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 px-1'>
-            <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
-            <PostMultiplierFilter value={multiplierFilter} onChange={setMultiplierFilter} />
-          </div>
-        </div>
+              <div className='flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2'>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='text-[12.5px] font-medium text-muted-foreground mr-1'>Performance:</span>
+                  <PostMultiplierFilter value={multiplierFilter} onChange={setMultiplierFilter} />
+                  {filtersActive && (
+                    <button
+                      type='button'
+                      onClick={() => {
+                        setMultiplierFilter('all')
+                      }}
+                      className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+                    >
+                      <XIcon className='size-3.5' strokeWidth={2} />
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <ViewToggle view={view} onChange={setView} className='ml-auto' />
+              </div>
+            </div>
 
         {selectMode && (
           <BulkSelectBar
@@ -597,6 +552,7 @@ export function ContentPage() {
                 selectMode={selectMode}
                 selected={card.post ? selected.has(card.post.id) : false}
                 onToggleSelect={card.post ? () => toggleSelected(card.post!.id) : undefined}
+                onClickDetail={() => card.post && setSelectedDetailPost(card.post)}
               />
             ))}
           </div>
@@ -604,6 +560,7 @@ export function ContentPage() {
           <PostTable
             cards={cards}
             levelsCfg={levelsCfg}
+            multipliersCfg={multipliersCfg}
             stars={stars}
             onStar={toggleStar}
             onEdit={(post) => setEditingPost(post)}
@@ -611,6 +568,7 @@ export function ContentPage() {
             selectMode={selectMode}
             selected={selected}
             onToggleSelect={toggleSelected}
+            onClickDetail={(post) => setSelectedDetailPost(post)}
           />
         )}
           </>
@@ -649,6 +607,25 @@ export function ContentPage() {
         label='post'
         onCancel={() => setBulkConfirm(false)}
         onConfirm={() => void handleBulkDeletePosts()}
+      />
+
+      <DetailPostSheet
+        post={selectedDetailPost}
+        onClose={() => setSelectedDetailPost(null)}
+        levelsCfg={levelsCfg}
+        multipliersCfg={multipliersCfg}
+        starred={selectedDetailPost ? !!stars[selectedDetailPost.id] : false}
+        onStar={() => selectedDetailPost && toggleStar(selectedDetailPost.id)}
+        onEdit={selectedDetailPost ? () => {
+          const p = selectedDetailPost;
+          setSelectedDetailPost(null);
+          setEditingPost(p);
+        } : undefined}
+        onDelete={selectedDetailPost ? () => {
+          const p = selectedDetailPost;
+          setSelectedDetailPost(null);
+          void handleDeletePost(p);
+        } : undefined}
       />
     </div>
   )
@@ -768,6 +745,7 @@ function PostCard({
   onToggleSelect,
   levelsCfg,
   multipliersCfg,
+  onClickDetail,
 }: {
   card: CardModel
   starred: boolean
@@ -779,17 +757,24 @@ function PostCard({
   onToggleSelect?: () => void
   levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
   multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
+  onClickDetail?: () => void
 }) {
   const selectable = selectMode && !!onToggleSelect
-  const level = resolveLevel(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)
+  const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
+  const { rating } = multiplierRatingFor(
+    level,
+    card.post?.likes,
+    card.post?.competitorAvgLikes,
+    multipliersCfg,
+  )
   const tip = levelTip(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)
   return (
     <article
-      role={selectable ? 'button' : undefined}
+      role={(selectable || (!selectMode && onClickDetail)) ? 'button' : undefined}
       aria-pressed={selectable ? selected : undefined}
-      onClick={selectable ? onToggleSelect : undefined}
+      onClick={selectMode ? onToggleSelect : onClickDetail}
       title={tip}
-      style={{ background: levelTint(level, 'card') }}
+      style={{ background: performanceTint(rating, 'card') }}
       className={cn(
         'group relative overflow-hidden rounded-[13px] border border-border bg-card transition-all',
         selectMode
@@ -798,7 +783,7 @@ function PostCard({
               ? 'cursor-pointer border-[var(--anubis-gold)] ring-1 ring-[var(--anubis-gold)]'
               : 'cursor-pointer hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))]'
             : 'opacity-50'
-          : 'hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
+          : 'cursor-pointer hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--anubis-gold)_24%,var(--border))] hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.85)]',
       )}
     >
       {selectable && (
@@ -828,6 +813,7 @@ function PostCard({
               href={card.postUrl}
               target='_blank'
               rel='noreferrer'
+              onClick={(e) => e.stopPropagation()}
               className='truncate hover:underline'
             >
               {card.handle}
@@ -895,6 +881,7 @@ function PostCard({
 function PostTable({
   cards,
   levelsCfg,
+  multipliersCfg,
   stars,
   onStar,
   onEdit,
@@ -902,9 +889,11 @@ function PostTable({
   selectMode,
   selected,
   onToggleSelect,
+  onClickDetail,
 }: {
   cards: CardModel[]
   levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
+  multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
   stars: Record<string, boolean>
   onStar: (key: string) => void
   onEdit: (post: CapturedPostSummary) => void
@@ -912,6 +901,7 @@ function PostTable({
   selectMode: boolean
   selected: Set<string>
   onToggleSelect: (id: string) => void
+  onClickDetail?: (post: CapturedPostSummary) => void
 }) {
   return (
     <div className='overflow-hidden rounded-md border border-border bg-card'>
@@ -934,20 +924,26 @@ function PostTable({
               const id = card.post?.id
               const isSelected = !!id && selected.has(id)
               const selectable = selectMode && !!id
-              const level = resolveLevel(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)
+              const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
+              const { rating } = multiplierRatingFor(
+                level,
+                card.post?.likes,
+                card.post?.competitorAvgLikes,
+                multipliersCfg,
+              )
               return (
                 <tr
                   key={card.key}
-                  onClick={selectable ? () => onToggleSelect(id!) : undefined}
+                  onClick={selectMode ? (selectable ? () => onToggleSelect(id!) : undefined) : (card.post ? () => onClickDetail?.(card.post!) : undefined)}
                   title={levelTip(card.post?.competitorFollowers, card.post?.competitorLevel, levelsCfg)}
                   style={{
                     background: isSelected
                       ? 'color-mix(in oklab, var(--anubis-gold) 8%, transparent)'
-                      : levelTint(level, 'row'),
+                      : performanceTint(rating, 'row'),
                   }}
                   className={cn(
                     'border-b border-border/70 last:border-0',
-                    selectable && 'cursor-pointer',
+                    (selectable || (!selectMode && card.post)) && 'cursor-pointer',
                     selectMode && !selectable && 'opacity-50',
                   )}
                 >
@@ -1025,7 +1021,10 @@ function IconButton({
       type='button'
       aria-label={label}
       title={label}
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick?.()
+      }}
       disabled={disabled || !onClick}
       className={cn(
         'inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors disabled:opacity-40',
@@ -1776,4 +1775,197 @@ function shortRelativeMs(ms: number): string {
   if (day < 7) return `${day}d`
   const wk = Math.round(day / 7)
   return `${wk}w`
+}
+
+interface DetailPostSheetProps {
+  post: CapturedPostSummary | null
+  onClose: () => void
+  levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
+  multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
+  starred: boolean
+  onStar: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+}
+
+function DetailPostSheet({
+  post,
+  onClose,
+  levelsCfg,
+  multipliersCfg,
+  starred,
+  onStar,
+  onEdit,
+  onDelete,
+}: DetailPostSheetProps) {
+  if (!post) return null
+
+  const card = realPostToCard(post)
+  const level = effectiveLevel(post.competitorLevel, post.competitorFollowers, levelsCfg)
+  const { rating, multiplier } = multiplierRatingFor(
+    level,
+    post.likes,
+    post.competitorAvgLikes,
+    multipliersCfg,
+  )
+
+  return (
+    <Sheet open={!!post} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="max-w-md overflow-y-auto flex flex-col gap-6 bg-card text-foreground">
+        <SheetHeader className="border-b border-border/55 pb-4">
+          <SheetTitle className="text-xl font-bold tracking-tight">Post Details</SheetTitle>
+          <SheetDescription className="text-xs text-muted-foreground">
+            Detailed view and metrics for this captured content.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-5 flex-1">
+          {/* Account info and performance rating */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-muted font-mono text-[14px] font-semibold text-muted-foreground select-none border border-border">
+                {card.handle.replace(/^@/, '').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div className="font-mono text-[13.5px] font-semibold text-foreground flex items-center gap-1">
+                  {card.postUrl ? (
+                    <a
+                      href={card.postUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:underline inline-flex items-center gap-1.5"
+                    >
+                      {card.handle}
+                      <ArrowUpRightIcon className="size-3.5 text-muted-foreground" />
+                    </a>
+                  ) : (
+                    card.handle
+                  )}
+                </div>
+                <div className="text-[12px] text-muted-foreground mt-0.5" title={absolutePostDate(post)}>
+                  Posted {card.date}
+                </div>
+              </div>
+            </div>
+
+            <PostMultiplierBadge
+              likes={post.likes}
+              competitorFollowers={post.competitorFollowers}
+              competitorAvgLikes={post.competitorAvgLikes}
+              competitorLevelOverride={post.competitorLevel}
+              levelsConfig={levelsCfg}
+              multipliersConfig={multipliersCfg}
+            />
+          </div>
+
+          {/* Media Pane */}
+          <div className="relative overflow-hidden rounded-xl border border-border aspect-video bg-muted flex items-center justify-center">
+            {card.mediaUrl ? (
+              <img
+                src={card.mediaUrl}
+                alt=""
+                className="size-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <FormatGlyph format={card.format} />
+                <span className="text-[11px] text-muted-foreground font-mono">{card.chip}</span>
+              </div>
+            )}
+            {card.mediaUrl && card.format === 'reel' && (
+              <span className="pointer-events-none absolute flex size-12 items-center justify-center rounded-full bg-[rgba(11,12,15,0.45)] backdrop-blur">
+                <PlayIcon className="size-5 translate-x-[1px] fill-white/95 text-white/95" />
+              </span>
+            )}
+          </div>
+
+          {/* Caption */}
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-mono uppercase tracking-[0.08em] text-muted-foreground">Caption</span>
+            <div className="rounded-lg border border-border/80 bg-muted/30 p-3.5 text-[13.5px] leading-relaxed text-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
+              {post.caption || <span className="italic text-muted-foreground">(No caption)</span>}
+            </div>
+          </div>
+
+          {/* Metrics Grid */}
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-mono uppercase tracking-[0.08em] text-muted-foreground">Metrics & Performance</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-border bg-muted/20 p-3 flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1 select-none">
+                  <HeartIcon className="size-3" /> Likes
+                </span>
+                <span className="text-base font-mono font-semibold tracking-tight">
+                  {post.likes?.toLocaleString() ?? '—'}
+                </span>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-3 flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1 select-none">
+                  <MessageCircleIcon className="size-3" /> Comments
+                </span>
+                <span className="text-base font-mono font-semibold tracking-tight">
+                  {post.comments?.toLocaleString() ?? '—'}
+                </span>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-3 flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium select-none">Avg Likes</span>
+                <span className="text-base font-mono font-semibold tracking-tight">
+                  {post.competitorAvgLikes?.toLocaleString() ?? '—'}
+                </span>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/20 p-3 flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground font-medium select-none">Performance Multiplier</span>
+                <span className="text-base font-mono font-semibold tracking-tight">
+                  {multiplier == null ? '—' : `${multiplier.toFixed(2)}x`}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="mt-auto flex items-center justify-between border-t border-border/60 pt-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onStar}
+              className={cn(
+                "inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-[13px] font-medium transition-colors hover:bg-muted",
+                starred
+                  ? "text-[var(--anubis-gold)] border-[var(--anubis-gold)] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]"
+                  : "text-foreground"
+              )}
+            >
+              <StarIcon className="size-4" fill={starred ? "currentColor" : "none"} />
+              {starred ? "Starred" : "Star Post"}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                <Edit3Icon className="size-3.5" />
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-destructive px-3 text-[13px] font-semibold text-destructive-foreground transition-colors hover:bg-destructive/90"
+              >
+                <Trash2Icon className="size-3.5" />
+                Delete
+              </button>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
 }

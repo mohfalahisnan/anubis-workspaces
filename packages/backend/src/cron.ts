@@ -14,7 +14,8 @@ export const cronRoutes = new Hono()
 
 cronRoutes.get('/', (c) => {
   const conv = c.req.query('conversationId') || undefined
-  return c.json({ ok: true, items: getStack().cron.list(conv) })
+  const projectId = c.req.query('projectId') || undefined
+  return c.json({ ok: true, items: getStack().cron.list(conv, projectId) })
 })
 
 cronRoutes.patch('/:id', async (c) => {

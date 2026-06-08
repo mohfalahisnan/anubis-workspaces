@@ -7,6 +7,12 @@ vi.mock('@/api', () => ({
   createConversation: vi.fn(),
 }))
 
+vi.mock('@/lib/use-project', () => ({
+  useProject: () => ({
+    activeProject: { id: 'default', name: 'Default Project' },
+  }),
+}))
+
 import { createConversation } from '@/api'
 
 const PROFILE: ProfileSummary = {
@@ -61,6 +67,7 @@ describe('useEnsureConversation', () => {
       title: 'say hi to the world',
       profileId: 'p1',
       agent: 'claude',
+      projectId: 'default',
     })
   })
 

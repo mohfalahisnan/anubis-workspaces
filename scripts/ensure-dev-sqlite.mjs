@@ -34,7 +34,14 @@ function ensureSqlite() {
     process.exit(1)
   }
   console.log('[ensure-dev] better-sqlite3 ABI mismatch — rebuilding for system Node…')
-  const r = spawnSync(pnpm, ['rebuild', 'better-sqlite3'], { stdio: 'inherit', cwd: repoRoot })
+  const r = spawnSync(pnpm, ['rebuild', 'better-sqlite3'], {
+    stdio: 'inherit',
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      npm_config_build_from_source: 'true',
+    },
+  })
   if (r.status !== 0) process.exit(r.status ?? 1)
   const second = probeSqlite()
   if (!second.ok) {

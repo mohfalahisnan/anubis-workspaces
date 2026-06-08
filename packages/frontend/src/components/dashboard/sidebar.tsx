@@ -59,15 +59,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className='m-3 rounded-md border border-border bg-card p-4'>
-        <div className='text-sm font-medium'>Free plan</div>
-        <p className='mt-1 text-xs text-muted-foreground'>
-          642 / 1,000 content credits used this month.
-        </p>
-        <div className='mt-3 h-1.5 w-full overflow-hidden rounded-full bg-border'>
-          <div className='h-full rounded-full bg-[var(--anubis-gold)]' style={{ width: '64%' }} />
-        </div>
-      </div>
+      {/* TODO: Reintroduce subscription or usage UI here once real billing state exists. */}
     </aside>
   )
 }

@@ -7,7 +7,7 @@ import { AGENT_NOT_INSTALLED_ERROR_CODE } from '@anubis/shared'
 import { getStack } from './services.js'
 
 const ProfileConfig = z.object({
-  agent: z.enum(['claude', 'codex', 'antigravity', 'gpt-web']),
+  agent: z.enum(['claude', 'codex', 'antigravity', 'gpt-web', 'qwen-web']),
 }).passthrough()
 
 const CreateBody = z.object({
@@ -116,6 +116,9 @@ profileRoutes.post('/:id/login/terminal', async (c) => {
   const agent = profile.config.agent
   if (agent === 'gpt-web') {
     return c.json({ ok: false, error: 'Terminal login not supported for ChatGPT Web. Please log in via the browser.' }, 400)
+  }
+  if (agent === 'qwen-web') {
+    return c.json({ ok: false, error: 'Terminal login not supported for Qwen Web. Please log in via the browser.' }, 400)
   }
   const availability = stack.aiAgent.catalog().agentAvailability[agent]
   if (!availability.available) {

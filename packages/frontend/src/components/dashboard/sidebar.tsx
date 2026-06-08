@@ -98,6 +98,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'workflows' }
     case 'crawler-playground':
       return { page: 'crawler-playground' }
+    case 'qwen-playground':
+      return { page: 'qwen-playground' }
     case 'settings':
       return { page: 'settings' }
     default:

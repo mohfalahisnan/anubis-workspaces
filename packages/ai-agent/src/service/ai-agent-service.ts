@@ -7,6 +7,7 @@ import { CodexPool } from '../agents/codex/pool.js'
 import { ClaudeAgent } from '../agents/claude/runner.js'
 import { AntigravityAgent } from '../agents/antigravity/runner.js'
 import { GptWebAgent } from '../agents/gpt-web/runner.js'
+import { QwenWebAgent } from '../agents/qwen-web/runner.js'
 import type { AgentEventMap, AgentStream } from '../events/stream.js'
 import { detectAgents, type AgentAvailability } from './detect-agents.js'
 
@@ -62,7 +63,8 @@ export class AiAgentService {
   private claude: ClaudeAgent
   private antigravity: AntigravityAgent
   private gptWeb: GptWebAgent
-  private availability: Record<'claude' | 'codex' | 'antigravity' | 'gpt-web', AgentAvailability>
+  private qwenWeb: QwenWebAgent
+  private availability: Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web', AgentAvailability>
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
@@ -104,6 +106,7 @@ export class AiAgentService {
       env,
     })
     this.gptWeb = new GptWebAgent()
+    this.qwenWeb = new QwenWebAgent()
   }
 
   catalog() {
@@ -181,6 +184,25 @@ export class AiAgentService {
 
     if (input.agent === 'gpt-web') {
       const { emitter, cancel } = await this.gptWeb.run({
+        workspaceId,
+        sessionId,
+        conversationId: input.prevAgentSessionId,
+        cwd: input.cwd,
+        prompt: input.prompt,
+        model: input.model,
+        extraEnv: input.extraEnv,
+      })
+
+      return {
+        workspaceId,
+        sessionId,
+        stream: emitter,
+        cancel,
+      }
+    }
+
+    if (input.agent === 'qwen-web') {
+      const { emitter, cancel } = await this.qwenWeb.run({
         workspaceId,
         sessionId,
         conversationId: input.prevAgentSessionId,

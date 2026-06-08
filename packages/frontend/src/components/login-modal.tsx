@@ -29,6 +29,10 @@ const NOT_INSTALLED_COPY: Record<AgentKind, { title: string; body: string }> = {
     title: 'GPT Web Runner',
     body: 'Configure the GPT Web environment and make sure the crawler agent is running, then close and reopen this app.',
   },
+  'qwen-web': {
+    title: 'Qwen Web Runner',
+    body: 'Configure the Qwen Web environment and make sure the crawler agent is running, then close and reopen this app.',
+  },
 }
 
 type Status =

@@ -116,4 +116,17 @@ export const BUILTIN_PROFILES: Profile[] = [
     createdAt: NOW,
     updatedAt: NOW,
   },
+  {
+    id: 'qwen-web-default',
+    name: 'Qwen Web',
+    description: 'Qwen (chat.qwen.ai) Web interface via crawler CDP automation.',
+    source: 'builtin',
+    config: {
+      agent: 'qwen-web',
+      model: 'qwen-web',
+    },
+    sortOrder: 81,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
 ]

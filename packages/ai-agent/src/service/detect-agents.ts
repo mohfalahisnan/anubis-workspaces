@@ -84,7 +84,7 @@ function lookupAntigravity(): AgentAvailability {
   return { available: false, source: 'detected' }
 }
 
-export function detectAgents(): Record<'claude' | 'codex' | 'antigravity' | 'gpt-web', AgentAvailability> {
+export function detectAgents(): Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web', AgentAvailability> {
   const claudeCmd = process.env.ANUBIS_CLAUDE_COMMAND
   const codexCmd = process.env.ANUBIS_CODEX_COMMAND
   const antigravityCmd = process.env.ANUBIS_ANTIGRAVITY_COMMAND
@@ -99,5 +99,6 @@ export function detectAgents(): Record<'claude' | 'codex' | 'antigravity' | 'gpt
       ? { available: true, path: antigravityCmd, source: 'env-override' }
       : lookupAntigravity(),
     'gpt-web': { available: true, source: 'detected' },
+    'qwen-web': { available: true, source: 'detected' },
   }
 }

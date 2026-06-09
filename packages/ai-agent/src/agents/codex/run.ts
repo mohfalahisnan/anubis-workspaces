@@ -17,6 +17,7 @@ export interface CodexRunOpts {
   sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
   approvalPolicy?: 'untrusted' | 'on-request' | 'on-failure' | 'never'
   appendSystemPrompt?: string
+  extraEnv?: Record<string, string>
   onSession?: (sessionId: string) => void
 }
 
@@ -60,6 +61,7 @@ export class CodexAgent {
     const child = await this.pool.acquire({
       workspaceId: opts.workspaceId,
       sessionId: opts.sessionId,
+      extraEnv: opts.extraEnv,
     })
 
     // If the spawned child errors during init (e.g. ENOENT because the

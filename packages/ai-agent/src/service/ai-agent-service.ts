@@ -90,11 +90,14 @@ export class AiAgentService {
 
     const pool = new CodexPool({
       idleMs: opts.codexIdleMs ?? 10 * 60 * 1000,
-      spawn: () =>
+      spawn: (key) =>
         CodexAgent.spawnCodex({
           command: codexCommand,
           cwd: process.cwd(),
-          env,
+          env: {
+            ...env,
+            ...(key.extraEnv ?? {}),
+          },
         }),
     })
 
@@ -154,6 +157,7 @@ export class AiAgentService {
         appendSystemPrompt,
         sandboxMode: input.yolo ? 'danger-full-access' : input.sandboxMode,
         approvalPolicy: input.yolo ? 'never' : input.approvalPolicy,
+        extraEnv: input.extraEnv,
         onSession: (id) => {
           agentSessionId = id
         },

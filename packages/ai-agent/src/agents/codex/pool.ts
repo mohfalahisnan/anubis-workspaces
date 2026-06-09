@@ -4,6 +4,7 @@ import { killProcessTree } from '../process-tree.js'
 export interface PoolKey {
   workspaceId: string
   sessionId: string
+  extraEnv?: Record<string, string>
 }
 
 export interface CodexPoolOpts {

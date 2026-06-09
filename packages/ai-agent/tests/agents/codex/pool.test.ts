@@ -17,4 +17,21 @@ describe('CodexPool evict', () => {
 
     expect(killProcessTree).toHaveBeenCalledWith(999)
   })
+
+  it('passes extraEnv to the spawn callback', async () => {
+    const child = { pid: 999, kill: vi.fn(), stdin: { end: vi.fn() } } as never
+    const spawnSpy = vi.fn(() => child)
+    const pool = new CodexPool({ idleMs: 10_000, spawn: spawnSpy })
+    await pool.acquire({
+      workspaceId: 'w',
+      sessionId: 's',
+      extraEnv: { MY_VAR: 'val' },
+    })
+
+    expect(spawnSpy).toHaveBeenCalledWith({
+      workspaceId: 'w',
+      sessionId: 's',
+      extraEnv: { MY_VAR: 'val' },
+    })
+  })
 })

@@ -106,6 +106,33 @@ export interface SkillDetail extends SkillSummary {
   body: string
 }
 
+export type CronActionType = 'message' | 'competitor-discovery' | 'capture-posts'
+export type CronCaptureProfile = 'public' | 'login'
+
+export interface CompetitorDiscoveryCronConfig {
+  projectId: string
+  /**
+   * One of:
+   * - `explore`
+   * - `#hashtag`
+   * - freeform keyword text
+   */
+  query: string
+  captureProfile: CronCaptureProfile
+  defaultLevel?: CompetitorLevelOverride
+}
+
+export interface CapturePostsCronConfig {
+  projectId: string
+  handles: 'all' | string[]
+  captureProfile: CronCaptureProfile
+  postLimit?: number
+}
+
+export type CronActionConfig =
+  | CompetitorDiscoveryCronConfig
+  | CapturePostsCronConfig
+
 export interface CronJobSummary {
   id: string
   conversationId: string
@@ -113,6 +140,8 @@ export interface CronJobSummary {
   name: string
   schedule: string
   scheduleDescription?: string
+  actionType: CronActionType
+  actionConfig?: CronActionConfig
   prompt: string
   enabled: boolean
   lastRunAt?: number
@@ -124,6 +153,8 @@ export interface UpdateCronJobInput {
   name?: string
   schedule?: string
   scheduleDescription?: string
+  actionType?: CronActionType
+  actionConfig?: CronActionConfig
   prompt?: string
   enabled?: boolean
 }

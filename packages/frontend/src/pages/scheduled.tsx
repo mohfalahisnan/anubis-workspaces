@@ -17,9 +17,9 @@ import { cn } from '@/lib/utils'
    -----------------------------------------------------------
    Lists every cron job your agents have created via the
    [CRON_CREATE] block. Each row can be enabled/disabled with
-   the toggle, expanded to inspect the stored prompt, or
-   deleted entirely. Creation lives on the agent side — there
-   is no "New scheduled job" button by design.
+   the toggle, expanded to inspect the stored action payload,
+   or deleted entirely. Creation lives on the agent side —
+   there is no "New scheduled job" button by design.
    ----------------------------------------------------------- */
 
 type Banner = { kind: 'error' | 'success'; message: string }
@@ -204,13 +204,19 @@ export function ScheduledPage() {
                             <div className='flex flex-col gap-3'>
                               <div>
                                 <p className='mb-1 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground'>
-                                  Prompt
+                                  Action
                                 </p>
                                 <pre className='whitespace-pre-wrap break-words rounded-md border border-border bg-background p-3 font-mono text-[12px] leading-[1.6] text-foreground'>
-                                  {job.prompt.trim()}
+                                  {formatJobDetail(job)}
                                 </pre>
                               </div>
                               <div className='flex items-center gap-4 text-[11px] text-muted-foreground'>
+                                <span>
+                                  Type:{' '}
+                                  <span className='font-mono text-foreground/80'>
+                                    {job.actionType}
+                                  </span>
+                                </span>
                                 <span>
                                   Conversation:{' '}
                                   <span className='font-mono text-foreground/80'>
@@ -329,6 +335,11 @@ function LoadingTable() {
   )
 }
 
+function formatJobDetail(job: CronJobSummary): string {
+  if (job.actionType === 'message') return job.prompt.trim() || '<empty prompt>'
+  return JSON.stringify(job.actionConfig ?? {}, null, 2)
+}
+
 function EmptyState() {
   return (
     <div className='mt-10 flex flex-col items-center gap-4 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center'>
@@ -349,4 +360,3 @@ function EmptyState() {
     </div>
   )
 }
-

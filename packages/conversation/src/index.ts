@@ -29,12 +29,14 @@ import { CronService } from './cron/cron-service.js'
 import { NodeCronScheduler } from './cron/node-cron-scheduler.js'
 import { TaskManager } from './conversations/task-manager.js'
 import { ConversationService } from './conversations/conversation-service.js'
+import type { CronJob } from './db/repositories/cron-jobs-repo.js'
 
 export interface CreateConversationServiceOpts {
   dataDir: string
   skillRoots: SkillRoots
   aiAgent?: AiAgentService
   idleMs?: number
+  cronActionRunner?: (job: CronJob, stack: ConversationStack) => Promise<void>
 }
 
 export interface ConversationStack {
@@ -104,12 +106,24 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const sse = new SseBroadcaster()
   const aiAgent = opts.aiAgent ?? createAiAgentService()
   const tm = new TaskManager(aiAgent, { idleMs: opts.idleMs ?? 10 * 60_000 })
+  let stackRef: ConversationStack | null = null
 
   const cron = new CronService({
     repo: cronRepo,
-    fire: async (conversationId, prompt) => {
-      try { await conversation.sendMessage(conversationId, { content: prompt }) }
-      catch (e) { console.error('[cron] fire failed', conversationId, e) }
+    fire: async (job) => {
+      try {
+        if (job.actionType === 'message') {
+          await conversation.sendMessage(job.conversationId, { content: job.prompt })
+          return
+        }
+        if (!stackRef || !opts.cronActionRunner) {
+          console.warn('[cron] no action runner for job', job.id, job.actionType)
+          return
+        }
+        await opts.cronActionRunner(job, stackRef)
+      } catch (e) {
+        console.error('[cron] fire failed', job.id, job.actionType, e)
+      }
     },
     scheduler: new NodeCronScheduler(),
   })
@@ -128,7 +142,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   cron.loadFromDb()
 
-  return {
+  const stack: ConversationStack = {
     conversation, profiles, competitors, capturedPosts, contentItems, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
@@ -143,6 +157,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
       db.close()
     },
   }
+  stackRef = stack
+  return stack
 }
 
 export type { Conversation, Message, Artifact, AgentSession, ConversationExtra, ConversationStatus, MessageRole } from './conversations/types.js'

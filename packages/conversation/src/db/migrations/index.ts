@@ -96,4 +96,5 @@ export const MIGRATIONS: Migration[] = [
   load(19, '019_content_items.sql'),
   load(20, '020_content_item_reference_url.sql'),
   load(21, '021_tasks.sql'),
+  load(22, '022_cron_job_actions.sql'),
 ]

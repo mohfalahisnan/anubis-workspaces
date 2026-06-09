@@ -1,4 +1,5 @@
 import type { Db } from '../client.js'
+import type { CronActionConfig, CronActionType } from '@anubis/shared'
 
 export interface CronJob {
   id: string
@@ -7,6 +8,8 @@ export interface CronJob {
   name: string
   schedule: string
   scheduleDescription?: string
+  actionType: CronActionType
+  actionConfig?: CronActionConfig
   prompt: string
   enabled: boolean
   lastRunAt?: number
@@ -21,6 +24,8 @@ interface Row {
   name: string
   schedule: string
   schedule_desc: string | null
+  action_type: CronActionType | null
+  action_config: string | null
   prompt: string
   enabled: number
   last_run_at: number | null
@@ -36,6 +41,8 @@ function toJob(r: Row): CronJob {
     name: r.name,
     schedule: r.schedule,
     scheduleDescription: r.schedule_desc ?? undefined,
+    actionType: r.action_type ?? 'message',
+    actionConfig: r.action_config ? (JSON.parse(r.action_config) as CronActionConfig) : undefined,
     prompt: r.prompt,
     enabled: !!r.enabled,
     lastRunAt: r.last_run_at ?? undefined,
@@ -49,29 +56,42 @@ export class CronJobsRepo {
 
   insert(j: CronJob): void {
     this.db.prepare(`
-      INSERT INTO cron_jobs (id, conversation_id, project_id, name, schedule, schedule_desc, prompt, enabled, last_run_at, created_at, updated_at)
+      INSERT INTO cron_jobs (id, conversation_id, project_id, name, schedule, schedule_desc, action_type, action_config, prompt, enabled, last_run_at, created_at, updated_at)
       VALUES (
         @id, @conversationId,
         COALESCE(@projectId, (SELECT project_id FROM conversations WHERE id = @conversationId), 'default'),
-        @name, @schedule, @scheduleDescription, @prompt, @enabled, @lastRunAt, @createdAt, @updatedAt
+        @name, @schedule, @scheduleDescription, @actionType, @actionConfig, @prompt, @enabled, @lastRunAt, @createdAt, @updatedAt
       )
     `).run({
       id: j.id, conversationId: j.conversationId, projectId: j.projectId ?? null,
       name: j.name, schedule: j.schedule,
-      scheduleDescription: j.scheduleDescription ?? null, prompt: j.prompt,
+      scheduleDescription: j.scheduleDescription ?? null,
+      actionType: j.actionType,
+      actionConfig: j.actionConfig ? JSON.stringify(j.actionConfig) : null,
+      prompt: j.prompt,
       enabled: j.enabled ? 1 : 0, lastRunAt: j.lastRunAt ?? null,
       createdAt: j.createdAt, updatedAt: j.updatedAt,
     })
   }
 
-  update(id: string, patch: Partial<Pick<CronJob, 'name' | 'schedule' | 'scheduleDescription' | 'prompt' | 'enabled'>>): CronJob | null {
+  update(id: string, patch: Partial<Pick<CronJob, 'name' | 'schedule' | 'scheduleDescription' | 'actionType' | 'actionConfig' | 'prompt' | 'enabled'>>): CronJob | null {
     const cur = this.findById(id)
     if (!cur) return null
     const next: CronJob = { ...cur, ...patch, updatedAt: Date.now() }
     this.db.prepare(`
-      UPDATE cron_jobs SET name = ?, schedule = ?, schedule_desc = ?, prompt = ?, enabled = ?, updated_at = ?
+      UPDATE cron_jobs SET name = ?, schedule = ?, schedule_desc = ?, action_type = ?, action_config = ?, prompt = ?, enabled = ?, updated_at = ?
       WHERE id = ?
-    `).run(next.name, next.schedule, next.scheduleDescription ?? null, next.prompt, next.enabled ? 1 : 0, next.updatedAt, id)
+    `).run(
+      next.name,
+      next.schedule,
+      next.scheduleDescription ?? null,
+      next.actionType,
+      next.actionConfig ? JSON.stringify(next.actionConfig) : null,
+      next.prompt,
+      next.enabled ? 1 : 0,
+      next.updatedAt,
+      id,
+    )
     return next
   }
 

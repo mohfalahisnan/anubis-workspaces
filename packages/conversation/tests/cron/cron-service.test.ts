@@ -32,6 +32,7 @@ describe('CronService', () => {
     const summary = svc.handle({ kind: 'create', params: { name: 'X', schedule: '* * * * *', message: 'go' } }, 'c1')
     expect(summary).toContain('Created')
     expect(svc.list('c1')).toHaveLength(1)
+    expect(svc.list('c1')[0]!.actionType).toBe('message')
   })
 
   it('handle(delete) removes by id and returns a confirmation', () => {
@@ -78,5 +79,33 @@ describe('CronService', () => {
     })
     svc2.loadFromDb()
     expect(scheduler.schedule).toHaveBeenCalledTimes(1)
+  })
+
+  it('stores non-message cron actions with typed config', () => {
+    svc.handle({
+      kind: 'create',
+      params: {
+        name: 'Discover',
+        schedule: '0 9 * * 1',
+        actionType: 'competitor-discovery',
+        actionConfig: {
+          projectId: 'p1',
+          query: '#spacephotography',
+          captureProfile: 'login',
+          defaultLevel: 'green',
+        },
+      },
+    }, 'c1')
+
+    expect(svc.list('c1')[0]!).toMatchObject({
+      actionType: 'competitor-discovery',
+      actionConfig: {
+        projectId: 'p1',
+        query: '#spacephotography',
+        captureProfile: 'login',
+        defaultLevel: 'green',
+      },
+      prompt: '',
+    })
   })
 })

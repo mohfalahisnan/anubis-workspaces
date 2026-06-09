@@ -1,14 +1,25 @@
+import type {
+  CapturePostsCronConfig,
+  CompetitorDiscoveryCronConfig,
+  CronActionConfig,
+  CronActionType,
+} from '@anubis/shared'
+
 export interface CronCreateParams {
   name: string
   schedule: string
   scheduleDescription?: string
-  message: string
+  actionType?: CronActionType
+  actionConfig?: CronActionConfig
+  message?: string
 }
 
 export interface CronUpdateParams {
   name?: string
   schedule?: string
   scheduleDescription?: string
+  actionType?: CronActionType
+  actionConfig?: CronActionConfig
   message?: string
 }
 
@@ -32,20 +43,79 @@ function parseKv(body: string): Record<string, string> {
   return out
 }
 
+function parseActionType(raw?: string): CronActionType | undefined {
+  if (!raw) return undefined
+  if (raw === 'message' || raw === 'competitor-discovery' || raw === 'capture-posts') return raw
+  return undefined
+}
+
+function parseActionConfig(raw: string | undefined, actionType: CronActionType | undefined): CronActionConfig | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (actionType === 'competitor-discovery' && isCompetitorDiscoveryConfig(parsed)) return parsed
+    if (actionType === 'capture-posts' && isCapturePostsConfig(parsed)) return parsed
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
+function isCaptureProfile(value: unknown): value is 'public' | 'login' {
+  return value === 'public' || value === 'login'
+}
+
+function isCompetitorDiscoveryConfig(value: unknown): value is CompetitorDiscoveryCronConfig {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.projectId === 'string' &&
+    typeof v.query === 'string' &&
+    isCaptureProfile(v.captureProfile) &&
+    (v.defaultLevel === undefined || v.defaultLevel === 'black' || v.defaultLevel === 'green' || v.defaultLevel === 'yellow' || v.defaultLevel === 'red')
+  )
+}
+
+function isCapturePostsConfig(value: unknown): value is CapturePostsCronConfig {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.projectId === 'string' &&
+    (v.handles === 'all' || (Array.isArray(v.handles) && v.handles.every((item) => typeof item === 'string'))) &&
+    isCaptureProfile(v.captureProfile) &&
+    (v.postLimit === undefined || (Number.isInteger(v.postLimit) && Number(v.postLimit) > 0))
+  )
+}
+
 function pickCreate(kv: Record<string, string>): CronCreateParams | null {
-  const name = kv.name, schedule = kv.schedule, message = kv.message
-  if (!name || !schedule || !message) return null
-  const out: CronCreateParams = { name, schedule, message }
+  const name = kv.name
+  const schedule = kv.schedule
+  const actionType = parseActionType(kv.action_type) ?? 'message'
+  const actionConfig = parseActionConfig(kv.config_json, actionType)
+  const message = kv.message
+  if (!name || !schedule) return null
+  if (actionType === 'message' && !message) return null
+  if (actionType !== 'message' && !actionConfig) return null
+  const out: CronCreateParams = { name, schedule }
   if (kv.schedule_description) out.scheduleDescription = kv.schedule_description
+  if (actionType !== 'message') out.actionType = actionType
+  if (actionConfig) out.actionConfig = actionConfig
+  if (message) out.message = message
   return out
 }
 
 function pickUpdate(kv: Record<string, string>): CronUpdateParams {
   const out: CronUpdateParams = {}
+  const actionType = parseActionType(kv.action_type)
   if (kv.name) out.name = kv.name
   if (kv.schedule) out.schedule = kv.schedule
   if (kv.schedule_description) out.scheduleDescription = kv.schedule_description
   if (kv.message) out.message = kv.message
+  if (actionType) {
+    out.actionType = actionType
+    const actionConfig = parseActionConfig(kv.config_json, actionType)
+    if (actionConfig) out.actionConfig = actionConfig
+  }
   return out
 }
 

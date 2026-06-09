@@ -11,7 +11,7 @@ export interface CronScheduler {
 
 export interface CronServiceOpts {
   repo: CronJobsRepo
-  fire: (conversationId: string, prompt: string) => Promise<void>
+  fire: (job: CronJob) => Promise<void>
   scheduler: CronScheduler
 }
 
@@ -51,7 +51,9 @@ export class CronService {
         name: cmd.params.name,
         schedule: cmd.params.schedule,
         scheduleDescription: cmd.params.scheduleDescription,
-        prompt: cmd.params.message,
+        actionType: cmd.params.actionType ?? 'message',
+        actionConfig: cmd.params.actionConfig,
+        prompt: cmd.params.message ?? '',
         enabled: true,
         createdAt: now,
         updatedAt: now,
@@ -87,7 +89,7 @@ export class CronService {
   private scheduleJob(job: CronJob): void {
     const handle = this.opts.scheduler.schedule(job.schedule, () => {
       this.opts.repo.touchLastRun(job.id, nowMs())
-      void this.opts.fire(job.conversationId, job.prompt)
+      void this.opts.fire(job)
     })
     handle.start()
     this.handles.set(job.id, handle)

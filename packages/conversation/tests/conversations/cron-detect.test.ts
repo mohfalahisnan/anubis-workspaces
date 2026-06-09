@@ -34,6 +34,41 @@ describe('detectCronCommands', () => {
     }])
   })
 
+  it('parses competitor-discovery cron jobs with config_json', () => {
+    const text = `[CRON_CREATE]\nname: Discover creators\nschedule: 0 9 * * 1\naction_type: competitor-discovery\nconfig_json: {"projectId":"p1","query":"#spacephotography","captureProfile":"login","defaultLevel":"green"}\n[/CRON_CREATE]`
+    expect(detectCronCommands(text)).toEqual([{
+      kind: 'create',
+      params: {
+        name: 'Discover creators',
+        schedule: '0 9 * * 1',
+        actionType: 'competitor-discovery',
+        actionConfig: {
+          projectId: 'p1',
+          query: '#spacephotography',
+          captureProfile: 'login',
+          defaultLevel: 'green',
+        },
+      },
+    }])
+  })
+
+  it('parses capture-posts cron updates with config_json', () => {
+    const text = `[CRON_UPDATE: job-1]\naction_type: capture-posts\nconfig_json: {"projectId":"p1","handles":"all","captureProfile":"public","postLimit":12}\n[/CRON_UPDATE]`
+    expect(detectCronCommands(text)).toEqual([{
+      kind: 'update',
+      id: 'job-1',
+      params: {
+        actionType: 'capture-posts',
+        actionConfig: {
+          projectId: 'p1',
+          handles: 'all',
+          captureProfile: 'public',
+          postLimit: 12,
+        },
+      },
+    }])
+  })
+
   it('returns empty for text without commands', () => {
     expect(detectCronCommands('hello world')).toEqual([])
   })

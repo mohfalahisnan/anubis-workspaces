@@ -2,6 +2,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConversationService, type ConversationStack } from '@anubis/conversation'
 import { getBuiltinSkillRoots } from '@anubis/ai-agent'
+import { runCronActionJob } from './cron-actions.js'
 
 let stack: ConversationStack | null = null
 
@@ -29,6 +30,7 @@ export function getStack(): ConversationStack {
       userAutoInject: join(userSkillsRoot, 'auto-inject'),
       userOptIn: join(userSkillsRoot, 'opt-in'),
     },
+    cronActionRunner: (job, services) => runCronActionJob(job, services, dataDir),
   })
   return stack
 }

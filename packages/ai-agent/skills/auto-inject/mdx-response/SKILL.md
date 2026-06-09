@@ -4,116 +4,74 @@ description: Format assistant responses as MDX using the whitelisted components 
 when_to_use: Always - this is the default response format for the Anubis desktop UI. Any reply the user sees is rendered by the MDX pipeline. Prefer a component over a markdown table/list whenever the data fits one of the supported shapes. Use HtmlPreview / ReactPreview when the user asks for a dashboard, real-time view, visual workflow, or any UI more elaborate than a single table or chart.
 ---
 
-# MDX Response Format
+# MDX Response
 
-Every assistant message in this app passes through the MDX renderer at
-`packages/frontend/src/components/mdx`. Plain GitHub-flavoured markdown is
-rendered by Streamdown. **Only the seven tags in the whitelist below are
-parsed as components** — every other `<Tag>` flows through unchanged as
-text. Anything outside the whitelist is wasted typing.
+Every reply renders through MDX. Plain markdown works. Only the 7 tags below are real components — every other `<Tag>` renders as text.
 
-## Output rules
+## Rules
 
-- Write a normal markdown reply. Drop a component in where it carries the
-  message better than prose (a table of metrics, a yes/no confirmation, a
-  trend over time, a live dashboard).
-- Do **not** invent components. The renderer hard-fails to a grey fallback
-  box for unknown tags.
-- Props are quoted strings (`name="value"`) or JSON in braces
-  (`name={[1,2,3]}`). Single quotes, unquoted values, and JS expressions are
-  rejected.
-- JSON inside `{ ... }` is parsed by `JSON.parse`. Keys and strings must be
-  double-quoted. No trailing commas, no comments.
-- Components can be self-closing (`<DataTable ... />`) or paired
-  (`<Buttons>...</Buttons>`).
-- Mix freely with markdown: paragraphs, headings, fences, lists, and tables
-  outside the whitelist behave exactly like normal markdown.
+- Don't invent components. Unknown tags → grey fallback box.
+- Props: `name="string"` or `name={JSON}`. Single quotes / unquoted values / JS expressions = rejected.
+- JSON in `{ ... }` is `JSON.parse`d. Double-quoted keys, no trailing commas, no comments.
+- Self-closing (`<DataTable ... />`) or paired (`<Buttons>...</Buttons>`).
+- Mix freely with markdown.
+- Lead with one sentence of prose, then the component. Don't wrap the whole reply in one component.
+- No markdown inside props. Props are JSON / strings only.
+- `<HtmlPreview>` / `<ReactPreview>` children captured raw — no markdown inside.
+- Empty components (`rows: []`, `items: {}`, `data: []`) render to nothing. Skip them.
 
 ## Whitelist
 
-### `<Buttons>` + `<Button send="..." style="primary|secondary|danger">`
+### `<Button>` / `<Buttons>`
 
-Use when the next step is a small set of discrete actions the user should
-trigger by clicking. The button label is the child text; `send` is the
-literal message that gets posted back into the conversation when clicked.
+1–4 click-to-send actions. Child text = label. `send` = message posted on click. `style`: `primary` (default) | `secondary` | `danger`.
 
 ```mdx
 <Buttons>
   <Button send="Yes, capture @nasa now" style="primary">Capture @nasa</Button>
-  <Button send="Show me the captured profile first" style="secondary">Preview first</Button>
   <Button send="Cancel" style="danger">Cancel</Button>
 </Buttons>
 ```
 
-Default `style` is `primary`. Skip `<Buttons>` and emit a single `<Button />`
-inline if there's only one action.
+Single action → emit `<Button />` inline, skip `<Buttons>`.
 
-### `<DataTable columns={[...]} rows={[[...], ...]} />`
+### `<DataTable columns={[...]} rows={[[...]]} />`
 
-Tabular data with a fixed column order. Cells may be string, number, boolean,
-or `null` (renders as `—`). Prefer this over a markdown table when the values
-are numeric or when there are more than ~3 columns.
+3+ rows of homogeneous data. Cells: string | number | boolean | null (`—`).
 
 ```mdx
 <DataTable
   columns={["handle", "followers", "avg_likes"]}
-  rows={[
-    ["@nasa", 98200000, 412000],
-    ["@spacex", 39100000, 287500],
-    ["@esa", 4800000, 41200]
-  ]}
+  rows={[["@nasa", 98200000, 412000], ["@spacex", 39100000, 287500]]}
 />
 ```
 
 ### `<KeyValueList items={{ ... }} />`
 
-A two-column metadata block: label on the left, value on the right. Use for
-a small set of named fields (a captured profile summary, a job's
-parameters, a health response).
+≤ ~8 named fields. Label left, value right.
 
 ```mdx
-<KeyValueList items={{
-  "handle": "@nasa",
-  "followers": 98200000,
-  "posts_captured": 36,
-  "last_capture": "2026-06-04T09:14:00Z",
-  "status": "ready"
-}} />
+<KeyValueList items={{ "handle": "@nasa", "followers": 98200000, "status": "ready" }} />
 ```
 
 ### `<LineChart data={[...]} xKey="..." yKey="..." title="..." />`
 
-Single-series line chart for a static set of points already in hand. For a
-live chart that fetches its own data, use `<ReactPreview />` instead.
+Single series, static data already in hand. For live data use `<ReactPreview>`.
 
 ```mdx
-<LineChart
-  title="Likes per post (last 5)"
-  xKey="date"
-  yKey="likes"
-  data={[
-    {"date": "05-25", "likes": 312000},
-    {"date": "05-27", "likes": 405000},
-    {"date": "05-29", "likes": 289000},
-    {"date": "06-01", "likes": 511000},
-    {"date": "06-03", "likes": 478000}
-  ]}
-/>
+<LineChart title="Likes" xKey="date" yKey="likes"
+  data={[{"date":"05-25","likes":312000},{"date":"05-27","likes":405000}]} />
 ```
 
 ### `<HtmlPreview>...</HtmlPreview>`
 
-Render raw HTML/CSS/JS inside a sandboxed iframe. Use for dashboards,
-custom charts, interactive widgets, or any view richer than a single table.
-The iframe **auto-resizes** to its content and falls back to `maxHeight`
-(default 720px, scrollable) if the content is taller.
+Sandboxed iframe. Raw HTML/CSS/JS. Auto-resizes; fallback `maxHeight` 720px scrollable.
+
+Props: `height={400}` (fixed) | `maxHeight={900}`.
 
 ```mdx
 <HtmlPreview>
-<div class="card">
-  <h3 style="margin:0 0 8px;">Backend health</h3>
-  <div id="out">loading…</div>
-</div>
+<div id="out">loading…</div>
 <script>
   anubis.fetch('/health').then(r => r.json()).then(j => {
     document.getElementById('out').textContent = JSON.stringify(j, null, 2);
@@ -122,105 +80,69 @@ The iframe **auto-resizes** to its content and falls back to `maxHeight`
 </HtmlPreview>
 ```
 
-Optional props: `height={400}` (fixed), `maxHeight={900}` (override the
-720px cap).
-
 ### `<ReactPreview>...</ReactPreview>`
 
-Render a React component inside a sandboxed iframe. React 18, ReactDOM, and
-Babel-standalone are auto-loaded; write JSX directly. The same auto-resize
-+ `maxHeight` behaviour applies.
+Sandboxed iframe. React 18 + ReactDOM + Babel-standalone auto-loaded. Same auto-resize.
 
 ```mdx
 <ReactPreview>
 function App() {
   const [n, setN] = useState(0);
-  return (
-    <div className="card">
-      <h3 style={{ margin: 0 }}>Counter: {n}</h3>
-      <button onClick={() => setN(n + 1)}>+1</button>
-    </div>
-  );
+  return <button onClick={() => setN(n + 1)}>Count: {n}</button>;
 }
 render(<App />);
 </ReactPreview>
 ```
 
-Inside the preview you get:
+Available inside:
+- `React`, `ReactDOM` globals
+- Hooks: `useState`, `useEffect`, `useMemo`, `useRef`, `useCallback`, `useReducer`
+- `render(<X />)` mounts to `#root`. Skip it if you define a top-level `App()` — auto-mounts.
+- `anubis.fetch(path, init)` — CORS-safe backend call. Returns Response-shaped `{ ok, status, headers, json(), text() }`.
+- `anubis.setHeight(px)` — explicit height override (rarely needed).
 
-- `React`, `ReactDOM` as globals
-- Hook aliases: `useState`, `useEffect`, `useMemo`, `useRef`, `useCallback`, `useReducer`
-- `render(<X />)` mounts X into `#root`. If you skip it but define a
-  top-level `App()` component, it auto-mounts.
-- `anubis.fetch(path, init)` — CORS-safe Anubis backend call (proxied
-  through the parent). Returns a Response-shaped object with `.json()`
-  and `.text()`.
-- `anubis.setHeight(px)` — explicit height override (auto-resize is on by
-  default; you rarely need this).
+**Plain JSX only.** No TypeScript (no `interface`, `as const`, generics, annotations). No `import`/`export`. No npm. No Tailwind. Style with `style={{...}}`.
 
-> **Plain JSX only** — the sandbox transpiles with Babel presets `react` +
-> `env`, **not** TypeScript. No type annotations, `interface`, `as const`, or
-> generics. No `import`/`export`, no npm packages, no shadcn/ui, no Tailwind —
-> only React + ReactDOM. Style with inline `style={{...}}` objects.
+For anything bigger than one component (multi-tab dashboards, reusable primitives, live data) → read `web-artifacts-builder` skill.
 
-**For anything more than a single component** — a stateful dashboard, tabs/views,
-reusable primitives, multiple components, or live-fetched data — read the
-**`web-artifacts-builder`** skill (`skills/web-artifacts-builder/SKILL.md`). It
-documents the full `<ReactPreview>` runtime contract, ready-to-reuse primitives
-(Card/Stat/Pill), a `useApi` fetch hook, and a worked multi-tab example, plus
-when to drop to `<HtmlPreview>` for CDN charting libraries (Chart.js, D3) or
-Tailwind utility classes.
-
-## How `anubis.fetch` works
-
-Both previews can hit the Anubis backend. Because the iframe is sandboxed
-without `allow-same-origin`, its origin is `null` — direct `fetch()` to
-the backend would fail CORS. `anubis.fetch(path, init)` posts the request
-to the parent window, which performs the real `fetch()` and posts the
-result back.
-
-- `path` may be relative (`/posts?limit=10`) or absolute (`http://...`).
-  Relative paths resolve against the running Anubis backend.
-- `init` is a plain `RequestInit` (method, headers, body — body should be
-  a string for JSON, since structured clone needs serialisable values).
-- Returned object exposes `ok`, `status`, `headers.get('content-type')`,
-  `.json()`, `.text()`.
-
-Routes are documented in the `anubis-core` skill folder
-(`anubis-core/competitors.md`, `crawler.md`, `conversations.md`, `admin.md`).
-
-## When to pick which
+## Picker
 
 | Situation | Use |
 | --- | --- |
-| 1–4 next-step actions the user should click | `<Button>` / `<Buttons>` |
-| 3+ rows of homogeneous tabular data | `<DataTable />` |
-| A single object's named fields (≤ ~8 entries) | `<KeyValueList />` |
-| A metric over an ordered axis, data already known | `<LineChart />` |
-| Multi-panel dashboard, KPIs + chart + table | `<HtmlPreview />` (see `templates/dashboard.md`) |
-| Workflow / pipeline / DAG diagram, possibly live | `<HtmlPreview />` (see `templates/workflow.md`) |
-| Interactive React component, hooks, state | `<ReactPreview />` |
-| Complex/multi-component React: tabs, views, reusable primitives, live fetch | `<ReactPreview />` → see `web-artifacts-builder` skill |
-| Needs a CDN lib (Chart.js, D3) or Tailwind classes | `<HtmlPreview />` → see `web-artifacts-builder` skill |
-| Free-form explanation, prose, code | plain markdown |
+| 1–4 actions to click | `<Button>` / `<Buttons>` |
+| 3+ rows tabular | `<DataTable />` |
+| ≤ ~8 named fields | `<KeyValueList />` |
+| Static metric over axis | `<LineChart />` |
+| Dashboard, KPIs + chart + table | `<HtmlPreview />` (see `templates/dashboard.md`) |
+| Workflow / pipeline / DAG | `<HtmlPreview />` (see `templates/workflow.md`) |
+| Interactive React, hooks, state | `<ReactPreview />` |
+| Multi-component React, tabs, live fetch | `<ReactPreview />` → `web-artifacts-builder` skill |
+| Needs CDN lib (Chart.js/D3) or Tailwind | `<HtmlPreview />` → `web-artifacts-builder` skill |
+| Prose, explanations, code | plain markdown |
 
-## Templates — call the script, don't copy
+## anubis.fetch
 
-For dashboards and workflow visualisations there is a generator script.
-Write a small JSON config, run it, paste the output. **Do not copy template
-content into your reply** — the script is deterministic and the templates
-will drift if hand-edited.
+The iframe origin is `null` so direct `fetch()` would CORS-fail. `anubis.fetch(path, init)` proxies through the parent.
+
+- `path` relative (`/posts?limit=10`) resolves to the running backend, or absolute URL.
+- `init` plain `RequestInit`. Body must be a serialisable string.
+- Returned: `{ ok, status, headers.get('content-type'), .json(), .text() }`.
+
+Routes documented in `anubis-core/*.md`.
+
+## Templates — run the script, don't copy
+
+For dashboards / workflows. Write JSON, run script, paste output.
 
 ### Dashboard
 
 ```bash
-# Write the config to a temp file
 cat > /tmp/dash.json <<'EOF'
 {
   "title": "Competitor overview",
   "kpis": [
-    { "label": "Competitors",    "route": "/competitors",                       "valuePath": "items.length", "format": "number" },
-    { "label": "Posts captured", "route": "/posts?limit=20&orderBy=recent",     "valuePath": "items.length", "format": "number" }
+    { "label": "Competitors",    "route": "/competitors",                   "valuePath": "items.length", "format": "number" },
+    { "label": "Posts captured", "route": "/posts?limit=20&orderBy=recent", "valuePath": "items.length", "format": "number" }
   ],
   "table": {
     "title": "Top competitors", "route": "/competitors", "sortBy": "followers", "limit": 6,
@@ -232,18 +154,13 @@ cat > /tmp/dash.json <<'EOF'
   }
 }
 EOF
-
-# Render (defaults to --variant html)
 python scripts/render_dashboard.py --variant react --config /tmp/dash.json
-# Windows where python isn't on PATH:
-py scripts/render_dashboard.py --variant react --config /tmp/dash.json
+# Windows: py scripts/render_dashboard.py ...
 ```
 
-The script's stdout is a complete `<ReactPreview>...</ReactPreview>`
-block. Paste it into your reply verbatim. Full schema reference:
-`skills/mdx-response/templates/dashboard.md`.
+Stdout is a complete `<ReactPreview>...</ReactPreview>` block. Paste verbatim. Schema: `templates/dashboard.md`.
 
-### Workflow / pipeline
+### Workflow
 
 ```bash
 cat > /tmp/wf.json <<'EOF'
@@ -251,52 +168,25 @@ cat > /tmp/wf.json <<'EOF'
   "title": "Capture pipeline",
   "nodes": [
     { "id": "discover", "label": "Discover", "status": "done" },
-    { "id": "capture",  "label": "Capture",  "status": "done" },
-    { "id": "parse",    "label": "Parse",    "status": "running" },
+    { "id": "capture",  "label": "Capture",  "status": "running" },
     { "id": "persist",  "label": "Persist",  "status": "pending" }
   ],
   "edges": [
     { "from": "discover", "to": "capture" },
-    { "from": "capture",  "to": "parse"   },
-    { "from": "parse",    "to": "persist" }
+    { "from": "capture",  "to": "persist" }
   ]
 }
 EOF
-
 python scripts/render_workflow.py --variant html --config /tmp/wf.json
 ```
 
-`x`/`y` are optional — auto-layout places nodes by topological depth.
-Full schema reference: `skills/mdx-response/templates/workflow.md`.
+`x`/`y` optional — auto-layout by topological depth. Schema: `templates/workflow.md`.
 
-### Both scripts
+### About the scripts
 
-Live under `skills/mdx-response/scripts/`. They:
+Live at `scripts/`. Read JSON from `--config FILE` or stdin. Bail with clear message + exit 2 on bad input. Print complete `<HtmlPreview>` / `<ReactPreview>` block to stdout (or `--out FILE`). Don't read `.tmpl` files yourself.
 
-- Read JSON from `--config FILE` or stdin
-- Validate the shape; bail with a clear message and exit code 2 on bad input
-- Substitute `__CONFIG_JSON__` into the matching `.tmpl` file
-- Print a complete `<HtmlPreview>` / `<ReactPreview>` block to stdout
-  (or `--out FILE`)
+## Cron + i18n
 
-You never need to read the `.tmpl` files yourself — the script handles
-them. If the script reports a validation error, read the schema doc
-(`templates/dashboard.md` / `templates/workflow.md`) and fix the config.
-
-## Quick rules of thumb
-
-- Lead with a sentence of prose, then the component, then optional
-  follow-up text. Don't wrap the whole reply in a single component.
-- Don't emit empty components — `rows: []`, `items: {}`, `data: []`,
-  empty `<HtmlPreview>` all render to nothing.
-- Don't put markdown inside a component's props. Props are JSON / strings.
-- For `<HtmlPreview>` and `<ReactPreview>`, the **children are captured
-  raw** — no markdown processing inside. Whatever you write between the
-  tags goes into the iframe verbatim.
-- Don't include `</HtmlPreview>` or `</ReactPreview>` literally inside the
-  content (they end the block early). This is essentially never a real
-  problem.
-- The `[CRON_*]` protocol blocks (see the `cron-helper` skill) are stripped
-  before MDX parsing.
-- For Indonesian replies, Bahasa Indonesia inside markdown and string props
-  renders fine — the renderer is unicode-clean.
+- `[CRON_*]` protocol blocks (see `cron-helper` skill) are stripped before MDX parsing.
+- Bahasa Indonesia in markdown + string props renders fine — unicode-clean.

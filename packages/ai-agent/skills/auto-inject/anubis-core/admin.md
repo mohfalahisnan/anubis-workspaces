@@ -1,164 +1,133 @@
 # Admin — profiles, skills, config, workspaces, system
 
-This file covers the **plumbing**: agent profiles (which CLI + credentials), the skill registry, app config, remembered workspace paths, and the OS Chrome profile listing. If you're orchestrating workflows or chats, you're in `workflows.md` / `conversations.md`. This file is for the setup the user does *once* (or now and then).
+Plumbing. Setup the user does once.
 
-## When to use this file
+## Auth model per agent
 
-- "List my profiles" / "Make a Codex profile."
-- "Open a login terminal for this profile" / "Reset this profile's home."
-- "Copy this profile" — duplicate with its agent home.
-- "Resolve what config the agent would actually use."
-- "Import this skill folder / zip."
-- "Reload skills — I just dropped a new one in."
-- "Show me my app config" / "Set chromePath."
-- "What workspaces have I opened?" / "Forget this workspace."
-- "Which Chrome profiles do I have on this machine? I need to pick one for login."
+| Agent | Env var | Credential | Isolated per profile? |
+| --- | --- | --- | --- |
+| `claude` | `CLAUDE_CONFIG_DIR` | `<home>/.credentials.json` | Yes |
+| `codex` | `CODEX_HOME` | `<home>/auth.json` | Yes |
+| `antigravity` | `GEMINI_DIR` | OS keyring | Config yes, **login shared** |
+| `gpt-web`, `qwen-web` | — | Chrome `login` profile cookies (port 9222) | No |
 
-## Mental model — agent profiles
+`hasCredentials` returns `true` unconditionally for `antigravity` / `gpt-web` / `qwen-web` — no on-disk marker.
 
-A **profile** is an agent identity. It bundles:
-
-- `name`, `description` (free text the user owns),
-- `config.agent` — one of `claude | codex | antigravity | gpt-web` (required),
-- arbitrary additional `config.*` keys passed straight through to the agent runner,
-- a `home` (`{ path, exists, hasCredentials }`) — the isolated directory where the agent's credentials/state live.
-
-The `home` is included on every list/get response so the UI can show "logged in? ✅/❌" without an extra call. If `hasCredentials` is false, sending a message in a conversation that uses this profile will return `409 no_credentials` (see `conversations.md`) — fix it by spawning a login terminal.
-
-Profile config flows through three layers, low to high precedence: **profile.config → conversation.override → message.override**. `POST /profiles/:id/resolve` shows you the actual merged result, useful when the user asks "what would this profile actually do?".
-
-## Mental model — skills
-
-A **skill** is a folder with a SKILL.md that documents capabilities for the agent. Three categories control how they get injected:
-
-- `auto` — auto-injected into every conversation.
-- `opt-in` — available, but injected only when explicitly chosen.
-- `user` — user-imported, treated like opt-in.
-
-Importing or moving files in the filesystem doesn't auto-pick-up — call `POST /skills/reload` to rescan all sources.
-
-## Endpoints
+## Routes — profiles
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/profiles` | List (each enriched with `home`) |
-| GET | `/profiles/:id` | Get one (404) |
+| GET | `/profiles` | List, each enriched with `home` |
+| GET | `/profiles/:id` | Get |
 | POST | `/profiles` | Create |
-| POST | `/profiles/:id/copy` | Duplicate, including agent home |
-| PATCH | `/profiles/:id` | Edit name/description/configPatch/sortOrder |
+| POST | `/profiles/:id/copy` | Duplicate (incl. home dir) |
+| PATCH | `/profiles/:id` | Edit |
 | DELETE | `/profiles/:id` | Delete |
-| POST | `/profiles/:id/resolve` | Resolve the merged config the agent would use |
+| POST | `/profiles/:id/resolve` | Resolve merged config |
 | POST | `/profiles/:id/login/terminal` | Open native terminal running `<agent> login` |
-| POST | `/profiles/:id/reset-home` | Wipe the profile's agent home |
-| GET | `/skills` | List discovered skills (auto + opt-in + user) |
-| GET | `/skills/:name` | Get one (404) |
-| POST | `/skills/import` | Import from folder or zip |
-| POST | `/skills/reload` | Re-scan all sources |
-| GET | `/config` | Get app config |
-| PATCH | `/config` | Patch app config (empty strings unset) |
-| GET | `/workspaces` | List remembered workspace paths |
-| DELETE | `/workspaces` | Forget a workspace by path (body) |
-| GET | `/system/chrome-profiles` | Walk the OS Chrome user-data dir |
+| POST | `/profiles/:id/reset-home` | Wipe home dir |
 
-All bodies `.strict()` unless noted otherwise.
+## Routes — skills
 
-## Profiles
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/skills` | List |
+| GET | `/skills/:name` | Get |
+| POST | `/skills/import` | Import folder/zip |
+| POST | `/skills/reload` | Re-scan |
 
-### POST `/profiles`
+## Routes — config
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/config` | Get |
+| PATCH | `/config` | Patch |
+
+## Routes — workspaces
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/workspaces` | List remembered workdirs |
+| DELETE | `/workspaces` | Forget (path in body) |
+
+## Routes — system
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/system/chrome-profiles` | Walk OS Chrome user-data dir |
+
+## POST /profiles
 
 ```ts
 {
-  name: string                                    // required
+  name: string
   description?: string
   config: {
-    agent: 'claude' | 'codex' | 'antigravity' | 'gpt-web'   // required
-    // additional keys allowed (passthrough)
+    agent: 'claude'|'codex'|'antigravity'|'gpt-web'|'qwen-web'
+    // additional keys passthrough
   }
 }
 ```
 
-### PATCH `/profiles/:id`
+## PATCH /profiles/:id
+
+```ts
+{ name?, description?, configPatch?: Record<string, unknown>, sortOrder?: number }
+```
+
+`configPatch` is shallow-merged.
+
+## POST /profiles/:id/copy
+
+```ts
+{ name: string, description? }
+```
+
+Copies the home dir (file-based agents only — keyring/cookies stay global).
+
+## POST /profiles/:id/resolve
+
+```ts
+{ override?: Record<string, unknown> }   // empty body OK
+```
+
+Returns `{ ok: true, resolved }` — actual config the agent would receive.
+
+## POST /profiles/:id/login/terminal
+
+No body. Spawns terminal in isolated home running `<agent> login`.
+
+- Deduped within 3s — repeat → `{ ok: true, deduped: true }`.
+- `409 { code: 'agent_not_installed' }` — CLI not on PATH.
+- `400` for `gpt-web` / `qwen-web` — log in via browser instead.
+- 404 if profile unknown.
+
+After firing, tell user "I opened a terminal — finish login and tell me when done." You can't detect completion.
+
+## POST /profiles/:id/reset-home
+
+⚠️ Destructive. Confirm before firing. Wipes credentials + state. For `antigravity` only wipes config, NOT keyring login.
+
+## POST /skills/import
 
 ```ts
 {
-  name?: string
-  description?: string
-  configPatch?: Record<string, unknown>           // shallow merged into config
-  sortOrder?: number                              // int
-}
-```
-
-`configPatch` is shallow-merged — to delete a key you need to overwrite it with the desired final shape (the route does not honour `null` as a delete sentinel).
-
-### POST `/profiles/:id/copy`
-
-```ts
-{ name: string, description?: string }
-```
-
-Creates a new profile *and copies its agent home directory*. Useful when the user wants a sandboxed clone (e.g. "give me a copy of my main Codex setup so I can experiment").
-
-### POST `/profiles/:id/resolve`
-
-```ts
-{ override?: Record<string, unknown> }            // empty body OK
-```
-
-Returns `{ ok: true, resolved }` — the actual config the agent would receive. Use this for "what would this profile run with?" diagnostic questions.
-
-### POST `/profiles/:id/login/terminal`
-
-No body. Spawns a platform-native terminal inside the profile's isolated agent home and runs `<agent> login`:
-
-- Windows: `cmd /k`
-- macOS: `Terminal.app`
-- Linux: `x-terminal-emulator`
-
-Notes:
-
-- **Deduped** within ~3 seconds per profile id — repeat calls return `{ ok: true, deduped: true }`. Tell the user "I already opened one a moment ago".
-- `409 { code: 'agent_not_installed' }` — the agent CLI isn't on PATH. Surface this verbatim; user has to install the CLI themselves.
-- 404 if the profile id is unknown.
-
-After firing this, your conversation has *no way* to know when the user has finished logging in. Tell them: "I opened a terminal — finish the login and let me know when you're done."
-
-### POST `/profiles/:id/reset-home`
-
-No body. Wipes the agent home dir for this profile (credentials, cached state, everything). Response includes `existed: boolean`. **Confirm with the user before firing.** This is destructive and undoes any login.
-
-## Skills
-
-### POST `/skills/import`
-
-```ts
-{
-  sourcePath: string                              // absolute path on user's machine
+  sourcePath: string                   // absolute
   kind: 'folder' | 'zip'
   category: 'auto' | 'opt-in' | 'user'
 }
 ```
 
-Response on success: `{ ok: true, name, source, count }`. Bad source: `400 { ok: false, error: <message> }`.
+After import or reload, also `POST /conversations/:id/reset-skills` so the current chat sees them.
 
-### POST `/skills/reload`
-
-No body. Returns `{ ok: true, count }`. Use after the user has edited skill files on disk and wants the agent to pick them up without restarting the app.
-
-After importing or reloading, also call `POST /conversations/:id/reset-skills` (see `conversations.md`) on the current conversation so it picks up the new skill index.
-
-## Config
+## PATCH /config
 
 ```ts
-// PATCH /config body — all optional
 {
-  chromePath?: string                             // empty string = unset
-  crawlerProfileRoot?: string                     // empty string = unset
-
+  chromePath?: string                  // "" = unset
+  crawlerProfileRoot?: string          // "" = unset
   competitorLevels?: {
-    minActive: number                             // int > 0
-    greenMax: number                              // int > 0
-    yellowMax: number                             // int > 0
-    maxActive: number                             // int > 0
+    minActive: number, greenMax: number, yellowMax: number, maxActive: number
   }
   levelMultipliers?: {
     green:  { min: number, good: number }
@@ -168,115 +137,32 @@ After importing or reloading, also call `POST /conversations/:id/reset-skills` (
 }
 ```
 
-`GET /config` returns the persisted config. The capture + discover handlers read it before each crawler call, so changes take effect immediately — no restart needed.
+Crawler reads on every call — no restart needed.
 
-- `chromePath` — absolute path to a Chrome binary the crawler should use (otherwise it uses the bundled detection logic).
-- `crawlerProfileRoot` — override the user-data-dir root for the three CDP profiles (`login`/`public`/`flow`).
-- `competitorLevels` / `levelMultipliers` — thresholds for the colour-coded `level` system the UI uses to grade competitors (`black`/`green`/`yellow`/`red`). The user usually edits these in Settings; only touch them on explicit request.
-
-```bash
-# Set Chrome path
-curl -s -X PATCH "$BASE/config" \
-  -H 'Content-Type: application/json' \
-  -d '{"chromePath":"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}'
-
-# Clear it
-curl -s -X PATCH "$BASE/config" \
-  -H 'Content-Type: application/json' \
-  -d '{"chromePath":""}'
-```
-
-## Workspaces
-
-A **workspace** is a remembered cwd path the user has used for a conversation. The list lets the UI offer recent workdirs in the picker.
-
-### GET `/workspaces`
-
-No params. Returns `{ ok: true, items: [{ path, lastUsedAt }] }`.
-
-### DELETE `/workspaces`
-
-Takes a JSON body — not the more usual id-in-path:
+## DELETE /workspaces
 
 ```ts
-{ path: string }                                  // min length 1, required
+{ path: string }                       // body, not URL
 ```
 
-```bash
-curl -s -X DELETE "$BASE/workspaces" \
-  -H 'Content-Type: application/json' \
-  -d '{"path":"/old/path/to/forget"}'
-```
+Removes from picker history. Does not touch filesystem.
 
-Forgetting a workspace doesn't touch the filesystem — it only removes the entry from the picker history.
-
-## System
-
-### GET `/system/chrome-profiles`
-
-Walks the OS-standard Chrome user-data directory and lists the profiles it finds:
+## GET /system/chrome-profiles
 
 ```ts
 {
-  ok: boolean                                     // false if the dir doesn't exist
-  userDataDir: string | null
-  profiles: Array<{
-    directory: string                             // 'Default' or 'Profile N'
-    name: string                                  // friendly name from Local State
-    path: string                                  // absolute path to this profile
-    email?: string                                // Google account email if signed-in
-  }>
+  ok: boolean                          // false if user-data dir missing
+  userDataDir: string|null
+  profiles: Array<{ directory, name, path, email? }>
 }
 ```
 
-Use this when the user wants to choose which Chrome profile to use for `crawler.md` → `chrome/open` on `profile: 'login'`. The `email` field is what the user actually recognises ("the one with my @work.com email"), so prefer it when summarising the list.
+Use `email` to disambiguate when offering choices to the user.
 
-## Workflows the user actually asks for
-
-### "Make me a Codex profile and log it in"
+## Example
 
 ```bash
-PROFILE_ID=$(curl -s -X POST "$BASE/profiles" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Codex - main","config":{"agent":"codex"}}' \
-  | jq -r .profile.id)
-
+PROFILE_ID=$(curl -s -X POST "$BASE/profiles" -H 'Content-Type: application/json' \
+  -d '{"name":"Codex - main","config":{"agent":"codex"}}' | jq -r .profile.id)
 curl -s -X POST "$BASE/profiles/$PROFILE_ID/login/terminal"
-# → "I opened a terminal running `codex login`. Tell me when you're done."
 ```
-
-### "What chats can this profile actually drive?"
-
-1. `GET /profiles/$ID` — check `home.hasCredentials`. If false, the answer is "none until you log in".
-2. `POST /profiles/$ID/resolve` with no override — see what config the agent will receive.
-3. If they want to reroute an existing chat, see `conversations.md` → PATCH `profileId`.
-
-### "Reload skills after I dropped a new one in"
-
-```bash
-curl -s -X POST "$BASE/skills/reload"
-# Then, for the current chat:
-curl -s -X POST "$BASE/conversations/$CONV_ID/reset-skills"
-```
-
-### "Set Chrome to my system install"
-
-```bash
-# Find candidates the user has
-curl -s "$BASE/system/chrome-profiles"
-
-# Set the binary (path, not profile dir)
-curl -s -X PATCH "$BASE/config" \
-  -H 'Content-Type: application/json' \
-  -d '{"chromePath":"<absolute path to Chrome binary>"}'
-```
-
-### "Clean slate this profile"
-
-⚠️ Destructive — always confirm first.
-
-```bash
-curl -s -X POST "$BASE/profiles/$PROFILE_ID/reset-home"
-```
-
-After this the profile has no credentials. The next conversation send on it will return `409 no_credentials` and you'll re-run the login flow.

@@ -9,3 +9,8 @@ export async function artifactUrl(absolutePath: string): Promise<string> {
   const base = await getApiBaseUrl()
   return `${base}/workflows/artifacts?path=${encodeURIComponent(absolutePath)}`
 }
+
+export async function conversationFileUrl(conversationId: string, path: string): Promise<string> {
+  const base = await getApiBaseUrl()
+  return `${base}/conversations/${encodeURIComponent(conversationId)}/files?path=${encodeURIComponent(path)}`
+}

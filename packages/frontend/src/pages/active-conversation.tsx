@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { extractImageReferencesFromUnknown } from '@anubis/shared'
 import {
   GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
   FolderIcon, FolderOpenIcon,
@@ -20,6 +21,8 @@ import { cn } from '@/lib/utils'
 import { AnubisMark } from '@/components/brand/anubis-mark'
 import { useNavigation } from '@/lib/navigation'
 import { MdxContent } from '@/components/mdx'
+import { MessageImageList } from '@/components/mdx/message-image'
+import { normalizeMessageImageReferences } from '@/lib/message-image-detection'
 import {
   useConversationMessages,
   type Fragment as LiveFragment,
@@ -581,6 +584,7 @@ function RenderedMessage({
       </div>
     )
   }
+  const imageReferences = normalizeMessageImageReferences(message.metadata?.imageReferences)
   return (
     <div className='flex flex-col gap-3'>
       <div className='flex items-center gap-2'>
@@ -589,7 +593,11 @@ function RenderedMessage({
           Anubis
         </span>
       </div>
-      <MdxContent source={message.content} conversationId={conversationId} />
+      <MdxContent
+        source={message.content}
+        conversationId={conversationId}
+        imageReferences={imageReferences}
+      />
     </div>
   )
 }
@@ -694,7 +702,7 @@ function StreamingMessage({
             }
             const ev = live.toolEvents[frag.callId]
             if (!ev) return null
-            return <ToolCard key={i} ev={ev} />
+            return <ToolCard key={i} ev={ev} conversationId={conversationId} />
           })}
         </div>
       )}
@@ -731,12 +739,16 @@ function formatJson(value: unknown): string {
   }
 }
 
-function ToolCard({ ev }: { ev: ToolEvent }) {
+function ToolCard({ ev, conversationId }: { ev: ToolEvent; conversationId: string }) {
   const [expanded, setExpanded] = useState(false)
   const running = ev.kind === 'call'
   const isError = ev.kind === 'result' && ev.isError
   const args = ev.kind === 'call' ? ev.args : ev.args
   const result = ev.kind === 'result' ? ev.result : undefined
+  const imageReferences = useMemo(
+    () => (result == null || isError ? [] : extractImageReferencesFromUnknown(result)),
+    [result, isError],
+  )
   const summary = summarizeToolArgs(ev.name, args)
   const statusLabel = running ? 'running…' : isError ? 'failed' : 'completed'
   const dotClass = running
@@ -813,6 +825,11 @@ function ToolCard({ ev }: { ev: ToolEvent }) {
               </pre>
             </div>
           )}
+        </div>
+      )}
+      {imageReferences.length > 0 && (
+        <div className='border-t border-border bg-muted/20 px-3 py-3'>
+          <MessageImageList refs={imageReferences} conversationId={conversationId} />
         </div>
       )}
       {running && (

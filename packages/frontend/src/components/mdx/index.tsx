@@ -1,8 +1,11 @@
 import { Fragment, useMemo } from 'react'
+import type { MessageImageReference } from '@anubis/shared'
 import { splitMdxSource, type Segment, type ComponentName } from './parser'
 import { parseProps } from './props-parser'
 import { MdxConversationProvider } from './conversation-context'
 import { MdxMarkdown } from './markdown'
+import { MessageImageList } from './message-image'
+import { extractImageReferencesFromMarkdown } from '@/lib/message-image-detection'
 import { Buttons } from './components/Buttons'
 import { Button } from './components/Button'
 import { DataTable } from './components/DataTable'
@@ -14,6 +17,7 @@ import { ReactPreview } from './components/ReactPreview'
 export interface MdxContentProps {
   source: string
   conversationId: string
+  imageReferences?: MessageImageReference[]
 }
 
 /**
@@ -36,8 +40,14 @@ function stripCronProtocol(source: string): string {
     .trim()
 }
 
-export function MdxContent({ source, conversationId }: MdxContentProps) {
-  const segments = useMemo(() => splitMdxSource(stripCronProtocol(source)), [source])
+export function MdxContent({ source, conversationId, imageReferences = [] }: MdxContentProps) {
+  const strippedSource = useMemo(() => stripCronProtocol(source), [source])
+  const segments = useMemo(() => splitMdxSource(strippedSource), [strippedSource])
+  const extraImageReferences = useMemo(() => {
+    if (imageReferences.length === 0) return []
+    const inline = new Set(extractImageReferencesFromMarkdown(strippedSource).map((ref) => ref.src))
+    return imageReferences.filter((ref) => !inline.has(ref.src))
+  }, [imageReferences, strippedSource])
 
   return (
     <MdxConversationProvider value={{ conversationId }}>
@@ -45,6 +55,7 @@ export function MdxContent({ source, conversationId }: MdxContentProps) {
         {segments.map((seg, i) => (
           <Fragment key={i}>{renderSegment(seg)}</Fragment>
         ))}
+        <MessageImageList refs={extraImageReferences} conversationId={conversationId} />
       </div>
     </MdxConversationProvider>
   )

@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
+import { createReadStream, existsSync, statSync } from 'node:fs'
+import { extname, isAbsolute, relative, resolve } from 'node:path'
 import { NoCredentialsError } from '@anubis/conversation'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import { getStack } from './services.js'
@@ -27,6 +29,14 @@ const SendBody = z.object({
   override: z.record(z.string(), z.unknown()).optional(),
   fileReferences: z.array(z.string().min(1)).optional(),
 }).strict()
+
+const IMAGE_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+}
 
 export const conversationRoutes = new Hono()
 
@@ -88,6 +98,36 @@ conversationRoutes.get('/:id/messages', (c) => {
   return c.json({ ok: true, items: getStack().conversation.listMessages(c.req.param('id')) })
 })
 
+conversationRoutes.get('/:id/files', (c) => {
+  const conv = getStack().conversation.get(c.req.param('id'))
+  if (!conv) return c.json({ error: 'not_found' }, 404)
+
+  const requested = c.req.query('path')
+  if (!requested) return c.json({ error: 'missing_path' }, 400)
+
+  const workspaceRoot = resolve(conv.workspacePath)
+  const target = resolve(workspaceRoot, requested)
+  if (!isPathInside(workspaceRoot, target)) {
+    return c.json({ error: 'forbidden' }, 403)
+  }
+
+  const contentType = IMAGE_MIME[extname(target).toLowerCase()]
+  if (!contentType) return c.json({ error: 'unsupported_media_type' }, 415)
+
+  if (!existsSync(target)) return c.json({ error: 'not_found' }, 404)
+  try {
+    if (!statSync(target).isFile()) return c.json({ error: 'not_found' }, 404)
+  } catch {
+    return c.json({ error: 'not_found' }, 404)
+  }
+
+  const stream = createReadStream(target)
+  return c.body(stream as unknown as ReadableStream, 200, {
+    'Content-Type': contentType,
+    'Cache-Control': 'private, max-age=300',
+  })
+})
+
 conversationRoutes.post('/:id/cancel', async (c) => {
   await getStack().conversation.cancel(c.req.param('id'))
   return c.json({ ok: true })
@@ -110,3 +150,8 @@ conversationRoutes.get('/:id/stream', (c) => {
     })
   })
 })
+
+function isPathInside(root: string, target: string): boolean {
+  const rel = relative(root, target)
+  return rel === '' || (rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel))
+}

@@ -16,6 +16,7 @@ import { originalCopyExecutor }         from './original-copy.js'
 import { scheduleTriggerExecutor }      from './schedule-trigger.js'
 import { fileWatchTriggerExecutor }     from './file-watch-trigger.js'
 import { savePlannerExecutor }          from './save-planner.js'
+import { outputCapturerExecutor }       from './output-capturer.js'
 
 export const executorRegistry: Record<string, Executor<unknown>> = {
   table:                tableExecutor as Executor<unknown>,
@@ -35,6 +36,7 @@ export const executorRegistry: Record<string, Executor<unknown>> = {
   scheduleTrigger:      scheduleTriggerExecutor as Executor<unknown>,
   fileWatchTrigger:     fileWatchTriggerExecutor as Executor<unknown>,
   savePlanner:          savePlannerExecutor as Executor<unknown>,
+  outputCapturer:       outputCapturerExecutor as Executor<unknown>,
 }
 
 export type ExecutorKey = keyof typeof executorRegistry
@@ -46,4 +48,5 @@ export {
   humanApprovalExecutor, lessonWriterExecutor,
   markdownDisplayExecutor, mediaDisplayExecutor, instagramDraftPreviewExecutor, originalCopyExecutor,
   scheduleTriggerExecutor, fileWatchTriggerExecutor, savePlannerExecutor,
+  outputCapturerExecutor,
 }

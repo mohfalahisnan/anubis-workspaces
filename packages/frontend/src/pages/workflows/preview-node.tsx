@@ -16,6 +16,7 @@ const TYPE_LABELS: Record<string, string> = {
   lessonWriter: 'Lesson',
   originalCopy: 'Original Copy',
   savePlanner: 'Save to Content Planner',
+  outputCapturer: 'Output Capturer',
 }
 
 const TYPE_DOTS: Record<string, string> = {
@@ -33,6 +34,7 @@ const TYPE_DOTS: Record<string, string> = {
   lessonWriter: 'bg-[#d9a441]',
   originalCopy: 'bg-[#22c55e]',
   savePlanner: 'bg-[#22c55e]',
+  outputCapturer: 'bg-[#22c55e]',
 }
 
 interface PreviewNodeData {

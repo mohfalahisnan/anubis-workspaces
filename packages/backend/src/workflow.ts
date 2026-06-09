@@ -133,7 +133,10 @@ workflowRoutes.get('/artifacts', (c) => {
   const root = resolve(join(getDataDir(), 'workflow-runs'))
   const target = resolve(requested)
   // Allow only paths under {dataDir}/workflow-runs/ with no `..` escape.
-  if (!target.startsWith(root + sep) && target !== root) {
+  // On Windows, handle case-insensitivity of drive letters and directories.
+  const rootStr = process.platform === 'win32' ? root.toLowerCase() : root
+  const targetStr = process.platform === 'win32' ? target.toLowerCase() : target
+  if (!targetStr.startsWith(rootStr + sep) && targetStr !== rootStr) {
     return c.json({ error: 'forbidden' }, 403)
   }
   if (!existsSync(target)) return c.json({ error: 'not_found' }, 404)

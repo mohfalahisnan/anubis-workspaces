@@ -85,3 +85,15 @@ An existing Workflow linked to a Task as context. A Task Workflow Reference is i
 ### Task Status
 
 The lifecycle state of a Task. The canonical flow is backlog -> todo -> in progress -> in review -> done.
+
+### Knowledge Base
+
+The user's per-Project searchable corpus of indexed documents and chunks, backed by the external `anubis-engine` CLI binary that Anubis-desktop operates but does not implement. A Knowledge Base is scoped to exactly one Project; each Project has at most one Knowledge Base. Knowledge Base replaces the earlier "content-memory" and "similarity index" concepts; those terms are retired.
+
+### Knowledge Base Workdir
+
+The Project's `workspacePath` itself — Anubis passes it to the engine as `-w <workspacePath>` so the engine treats the whole project folder as the corpus to index. No subfolder is reserved; ignore patterns live in a `.anubisignore` file at the workspace root.
+
+### Extractor
+
+The external `anubis-extractor` CLI binary that Anubis-desktop operates to perform OCR on images and transcription on audio/video files. Anubis-desktop does not implement extraction itself; it spawns the binary and consumes its JSON output.

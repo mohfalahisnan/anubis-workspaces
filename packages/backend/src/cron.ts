@@ -19,6 +19,16 @@ const actionConfigSchema = z.union([
   }).strict(),
 ])
 
+const CreateBody = z.object({
+  name: z.string().min(1),
+  schedule: z.string().min(1),
+  scheduleDescription: z.string().optional(),
+  actionType: actionTypeSchema,
+  actionConfig: actionConfigSchema.optional(),
+  prompt: z.string().optional(),
+  projectId: z.string().optional(),
+}).strict()
+
 const UpdateBody = z.object({
   name: z.string().min(1).optional(),
   schedule: z.string().min(1).optional(),
@@ -35,6 +45,44 @@ cronRoutes.get('/', (c) => {
   const conv = c.req.query('conversationId') || undefined
   const projectId = c.req.query('projectId') || undefined
   return c.json({ ok: true, items: getStack().cron.list(conv, projectId) })
+})
+
+cronRoutes.post('/', async (c) => {
+  const body = CreateBody.parse(await c.req.json())
+  const stack = getStack()
+  const projectId = body.projectId || 'default'
+
+  // Ensure a conversation exists for the project
+  const convs = stack.conversation.list({ projectId, limit: 1 })
+  let conversationId: string
+  if (convs.length > 0) {
+    conversationId = convs[0].id
+  } else {
+    const newConv = stack.conversation.create({
+      title: 'Cron Workspace',
+      projectId,
+    })
+    conversationId = newConv.id
+  }
+
+  // Use cron.handle to create and schedule the job
+  stack.cron.handle({
+    kind: 'create',
+    params: {
+      name: body.name,
+      schedule: body.schedule,
+      scheduleDescription: body.scheduleDescription,
+      actionType: body.actionType,
+      actionConfig: body.actionConfig,
+      message: body.prompt,
+    }
+  }, conversationId)
+
+  // Retrieve the newly created job
+  const items = stack.cron.list(conversationId)
+  const job = items[0]
+
+  return c.json({ ok: true, job }, 201)
 })
 
 cronRoutes.patch('/:id', async (c) => {

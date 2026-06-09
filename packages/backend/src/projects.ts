@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
 import { newId } from '@anubis/conversation'
+import { deleteKnowledgeBaseForWorkdir } from './knowledge-base.js'
 
 const CreateBody = z.object({
   name: z.string().min(1),
@@ -58,7 +59,13 @@ projectRoutes.delete('/:id', (c) => {
     return c.json({ ok: false, error: 'Cannot delete default project' }, 403)
   }
   try {
+    const project = getStack().projects.findById(id)
     getStack().projects.softDelete(id)
+    try {
+      deleteKnowledgeBaseForWorkdir(project?.workdir)
+    } catch (cleanupErr) {
+      console.warn('[projects] knowledge-base cleanup failed:', cleanupErr)
+    }
     return c.json({ ok: true })
   } catch (e) {
     return c.json({ ok: false, error: (e as Error).message }, 400)

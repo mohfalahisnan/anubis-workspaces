@@ -60,6 +60,10 @@ describe('instagramPostExecutor', () => {
         caption: 'hi',
         mediaPaths: ['/tmp/r1/n1-media-0', '/tmp/r1/n1-media-1'],
         metrics: { likes: 5 },
+        assetPaths: {
+          absolute: ['/tmp/r1/n1-media-0', '/tmp/r1/n1-media-1'],
+          relative: ['/tmp/r1/n1-media-0', '/tmp/r1/n1-media-1'],
+        },
       },
     })
     // The output must NOT carry raw media URLs — those are what bust the

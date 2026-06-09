@@ -20,6 +20,8 @@ You run inside the user's Anubis Electron app. Drive its local backend over HTTP
 - `conversation` — chat. `manual` or `workflow` source.
 - `profile` — agent identity. `claude|codex|antigravity|gpt-web|qwen-web`.
 - `Chrome profile` — `login` (9222 headed), `public` (9223 headless), `flow` (9224 headed).
+- `Knowledge Base` — per-project searchable corpus, backed by the external `anubis-engine` CLI the user installs and configures in Settings → External binaries. Each project's workspace folder is the corpus; a `.anubisignore` at the workspace root filters indexing. The user manages it directly on the **Knowledge Base** page (index / search / list documents / view ignore file). Backend HTTP routes exist (`POST /knowledge-base/{index,search,context-pack}`, `GET /knowledge-base/{stats,documents,ignore-file}`) but you do not call them yet — tell the user to use the page until tool-call wiring lands.
+- `Extractor` — external `anubis-extractor` CLI for OCR (images) and transcription (audio/video). Two workflow nodes drive it: **OCR Extractor** (`ocrExtractor`) for images, **Transcriber** (`transcriber`) for audio/video. Both write `<stem>.anubis.txt` next to the source file; the Knowledge Base picks these up on re-index. Default whisper model is `large-v3` for accuracy (slower; first run downloads ~3 GB). A standalone **Extractor** page lets the user run one-off OCR / transcribe without building a workflow.
 
 ## Defaults
 

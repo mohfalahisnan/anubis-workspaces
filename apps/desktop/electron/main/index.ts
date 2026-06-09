@@ -77,6 +77,26 @@ ipcMain.handle('anubis:pick-workspace', async () => {
   return result.filePaths[0]
 })
 
+// Native picker for a single executable / file path, used by Settings to
+// browse for the chrome / engine / extractor binaries and by the Extractor
+// page to pick an image or media file. Returns the selected absolute path,
+// or null on cancel.
+ipcMain.handle('anubis:pick-file', async (_event, opts?: {
+  title?: string
+  filters?: Array<{ name: string; extensions: string[] }>
+}) => {
+  const options: Electron.OpenDialogOptions = {
+    title: opts?.title ?? 'Select a file',
+    properties: ['openFile'],
+    filters: opts?.filters,
+  }
+  const result = win
+    ? await dialog.showOpenDialog(win, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) return null
+  return result.filePaths[0]
+})
+
 // Native picker for task file references. Returns selected absolute paths,
 // or an empty array on cancel.
 ipcMain.handle('anubis:pick-files', async () => {

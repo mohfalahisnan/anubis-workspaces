@@ -2,13 +2,22 @@ import { Fragment, useEffect, useState } from 'react'
 import {
   CalendarClockIcon,
   ChevronDownIcon,
+  PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
 } from 'lucide-react'
 
 import type { CronJobSummary } from '@anubis/shared'
 
-import { deleteCronJob, listCronJobs, updateCronJob } from '@/api'
+import { deleteCronJob, listCronJobs, updateCronJob, createCronJob } from '@/api'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +39,7 @@ export function ScheduledPage() {
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
   async function refresh() {
     try {
@@ -97,15 +107,26 @@ export function ScheduledPage() {
               so a job only fires while Anubis is running.
             </p>
           </div>
-          <button
-            type='button'
-            onClick={() => void refresh()}
-            disabled={busy}
-            className='inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
-          >
-            <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
-            Refresh
-          </button>
+          <div className='flex shrink-0 flex-wrap items-center gap-2.5'>
+            <button
+              type='button'
+              onClick={() => void refresh()}
+              disabled={busy}
+              className='inline-flex h-9 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+            >
+              <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
+              Refresh
+            </button>
+            <button
+              type='button'
+              onClick={() => setAddOpen(true)}
+              disabled={busy}
+              className='inline-flex h-9 items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-3.5 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              <PlusIcon className='size-[15px]' strokeWidth={2.4} />
+              New scheduled job
+            </button>
+          </div>
         </div>
 
         {banner && (
@@ -239,6 +260,14 @@ export function ScheduledPage() {
           </div>
         )}
       </div>
+      <CreateCronDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={async () => {
+          setAddOpen(false)
+          await refresh()
+        }}
+      />
     </div>
   )
 }
@@ -360,3 +389,328 @@ function EmptyState() {
     </div>
   )
 }
+
+/* ---------- Create Scheduled Job Dialog ---------- */
+
+function CreateCronDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const { activeProject } = useProject()
+  const [name, setName] = useState('')
+  const [schedule, setSchedule] = useState('*/30 * * * *')
+  const [scheduleDescription, setScheduleDescription] = useState('Every 30 minutes')
+  const [actionType, setActionType] = useState<'message' | 'competitor-discovery' | 'capture-posts'>('message')
+  const [prompt, setPrompt] = useState('')
+
+  const [discoveryQuery, setDiscoveryQuery] = useState('')
+  const [discoveryProfile, setDiscoveryProfile] = useState<'public' | 'login'>('public')
+  const [discoveryLevel, setDiscoveryLevel] = useState<'black' | 'green' | 'yellow' | 'red'>('green')
+
+  const [captureHandles, setCaptureHandles] = useState('all')
+  const [captureProfile, setCaptureProfile] = useState<'public' | 'login'>('public')
+  const [captureLimit, setCaptureLimit] = useState<number | ''>(30)
+
+  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      setName('')
+      setSchedule('*/30 * * * *')
+      setScheduleDescription('Every 30 minutes')
+      setActionType('message')
+      setPrompt('')
+      setDiscoveryQuery('')
+      setDiscoveryProfile('public')
+      setDiscoveryLevel('green')
+      setCaptureHandles('all')
+      setCaptureProfile('public')
+      setCaptureLimit(30)
+      setErr(null)
+      setSubmitting(false)
+    }
+  }, [open])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) {
+      setErr('Name is required.')
+      return
+    }
+    if (!schedule.trim()) {
+      setErr('Schedule expression is required.')
+      return
+    }
+
+    setSubmitting(true)
+    setErr(null)
+
+    try {
+      let actionConfig: any = undefined
+      if (actionType === 'competitor-discovery') {
+        if (!discoveryQuery.trim()) {
+          setErr('Discovery query is required.')
+          setSubmitting(false)
+          return
+        }
+        actionConfig = {
+          projectId: activeProject?.id || 'default',
+          query: discoveryQuery.trim(),
+          captureProfile: discoveryProfile,
+          defaultLevel: discoveryLevel,
+        }
+      } else if (actionType === 'capture-posts') {
+        let handles: string | string[] = captureHandles.trim()
+        if (handles !== 'all') {
+          handles = handles.split(',').map((h) => h.trim()).filter(Boolean)
+          if (handles.length === 0) {
+            setErr('At least one handle or "all" is required.')
+            setSubmitting(false)
+            return
+          }
+        }
+        actionConfig = {
+          projectId: activeProject?.id || 'default',
+          handles,
+          captureProfile,
+          postLimit: captureLimit || 30,
+        }
+      }
+
+      await createCronJob({
+        name: name.trim(),
+        schedule: schedule.trim(),
+        scheduleDescription: scheduleDescription.trim() || undefined,
+        actionType,
+        actionConfig,
+        prompt: actionType === 'message' ? prompt.trim() : undefined,
+        projectId: activeProject?.id,
+      })
+
+      onCreated()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not create scheduled job.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className='max-w-md bg-card p-0'>
+        <form onSubmit={submit}>
+          <DialogHeader className='border-b border-border px-6 py-4'>
+            <DialogTitle>New scheduled job</DialogTitle>
+            <DialogDescription>
+              Create a new in-process cron job to automate your workflows.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='flex max-h-[60vh] flex-col gap-4 overflow-y-auto px-6 py-5'>
+            <Field label='Job Name' htmlFor='cron-name' hint='Choose a unique name for this scheduled task.'>
+              <input
+                id='cron-name'
+                type='text'
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder='Capture Trend Posts daily'
+                autoFocus
+                className={textInput}
+              />
+            </Field>
+
+            <div className='grid grid-cols-2 gap-3'>
+              <Field label='Cron Schedule' htmlFor='cron-expr' hint='Standard 5-field cron expression.'>
+                <input
+                  id='cron-expr'
+                  type='text'
+                  value={schedule}
+                  onChange={(e) => setSchedule(e.target.value)}
+                  placeholder='0 9 * * 1-5'
+                  className={textInput}
+                />
+              </Field>
+
+              <Field label='Description' htmlFor='cron-desc' hint='Human-readable cadence.'>
+                <input
+                  id='cron-desc'
+                  type='text'
+                  value={scheduleDescription}
+                  onChange={(e) => setScheduleDescription(e.target.value)}
+                  placeholder='Every weekday at 9am'
+                  className={textInput}
+                />
+              </Field>
+            </div>
+
+            <Field label='Action Type' htmlFor='cron-type'>
+              <select
+                id='cron-type'
+                value={actionType}
+                onChange={(e) => setActionType(e.target.value as any)}
+                className={textInput}
+              >
+                <option value='message'>Agent Prompt</option>
+                <option value='competitor-discovery'>Competitor Discovery</option>
+                <option value='capture-posts'>Capture Posts</option>
+              </select>
+            </Field>
+
+            {actionType === 'message' && (
+              <Field label='Agent Prompt' htmlFor='cron-prompt' hint='The message sent to the agent when the job runs.'>
+                <textarea
+                  id='cron-prompt'
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder='Generate today trend analysis report and publish to Slack.'
+                  rows={3}
+                  className={`${textInput} h-auto resize-none py-2 leading-relaxed`}
+                />
+              </Field>
+            )}
+
+            {actionType === 'competitor-discovery' && (
+              <>
+                <Field label='Search Query' htmlFor='cron-disc-query' hint='Keyword, hashtag (e.g. #productivity), or "explore".'>
+                  <input
+                    id='cron-disc-query'
+                    type='text'
+                    value={discoveryQuery}
+                    onChange={(e) => setDiscoveryQuery(e.target.value)}
+                    placeholder='#tech'
+                    className={textInput}
+                  />
+                </Field>
+                <div className='grid grid-cols-2 gap-3'>
+                  <Field label='Capture Profile' htmlFor='cron-disc-profile'>
+                    <select
+                      id='cron-disc-profile'
+                      value={discoveryProfile}
+                      onChange={(e) => setDiscoveryProfile(e.target.value as any)}
+                      className={textInput}
+                    >
+                      <option value='public'>Public profile</option>
+                      <option value='login'>Login profile</option>
+                    </select>
+                  </Field>
+                  <Field label='Default Level' htmlFor='cron-disc-level'>
+                    <select
+                      id='cron-disc-level'
+                      value={discoveryLevel}
+                      onChange={(e) => setDiscoveryLevel(e.target.value as any)}
+                      className={textInput}
+                    >
+                      <option value='green'>Green</option>
+                      <option value='yellow'>Yellow</option>
+                      <option value='red'>Red</option>
+                      <option value='black'>Black</option>
+                    </select>
+                  </Field>
+                </div>
+              </>
+            )}
+
+            {actionType === 'capture-posts' && (
+              <>
+                <Field label='Handles' htmlFor='cron-capt-handles' hint='Comma-separated handles or "all".'>
+                  <input
+                    id='cron-capt-handles'
+                    type='text'
+                    value={captureHandles}
+                    onChange={(e) => setCaptureHandles(e.target.value)}
+                    placeholder='all'
+                    className={textInput}
+                  />
+                </Field>
+                <div className='grid grid-cols-2 gap-3'>
+                  <Field label='Capture Profile' htmlFor='cron-capt-profile'>
+                    <select
+                      id='cron-capt-profile'
+                      value={captureProfile}
+                      onChange={(e) => setCaptureProfile(e.target.value as any)}
+                      className={textInput}
+                    >
+                      <option value='public'>Public profile</option>
+                      <option value='login'>Login profile</option>
+                    </select>
+                  </Field>
+                  <Field label='Post Limit' htmlFor='cron-capt-limit'>
+                    <input
+                      id='cron-capt-limit'
+                      type='number'
+                      min={1}
+                      max={100}
+                      value={captureLimit}
+                      onChange={(e) => setCaptureLimit(Number(e.target.value) || '')}
+                      className={textInput}
+                    />
+                  </Field>
+                </div>
+              </>
+            )}
+
+            {err && (
+              <p className='rounded-md border border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] px-3 py-2 text-[12.5px] text-destructive'>
+                {err}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className='border-t border-border px-6 py-3'>
+            <button
+              type='button'
+              onClick={onClose}
+              disabled={submitting}
+              className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50'
+            >
+              Cancel
+            </button>
+            <button
+              type='submit'
+              disabled={submitting || !name.trim() || !schedule.trim()}
+              className={cn(
+                'inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13.5px] font-semibold transition-colors',
+                submitting || !name.trim() || !schedule.trim()
+                  ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-50'
+                  : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+              )}
+            >
+              {submitting ? 'Creating…' : 'Create job'}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function Field({
+  label,
+  htmlFor,
+  hint,
+  children,
+}: {
+  label: string
+  htmlFor: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className='flex flex-col gap-1.5'>
+      <label htmlFor={htmlFor} className='text-[12.5px] font-medium text-foreground'>
+        {label}
+      </label>
+      {children}
+      {hint && <p className='text-[11px] text-muted-foreground'>{hint}</p>}
+    </div>
+  )
+}
+
+const textInput =
+  'h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))] focus:ring-1 focus:ring-[var(--anubis-gold-hi)]'

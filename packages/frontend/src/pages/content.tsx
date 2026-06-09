@@ -15,7 +15,6 @@ import {
   RefreshCwIcon,
   SearchIcon,
   Square as SquareIcon,
-  StarIcon,
   Trash2Icon,
   XIcon,
 } from 'lucide-react'
@@ -83,19 +82,9 @@ function FormatGlyph({ format }: { format: Format }) {
 }
 
 /* The post media block: lazy-loaded image when we have one, brand-
-   tinted fallback (with the format glyph) when we don't, and the
-   chip + star overlays in both cases. */
-function MediaPane({
-  card,
-  starred,
-  onStar,
-  disableActions,
-}: {
-  card: CardModel
-  starred: boolean
-  onStar: () => void
-  disableActions?: boolean
-}) {
+   tinted fallback (with the format glyph) when we don't, with a
+   format chip overlay in both cases. */
+function MediaPane({ card }: { card: CardModel }) {
   const [failed, setFailed] = useState(false)
   const showImage = !!card.mediaUrl && !failed
   return (
@@ -136,22 +125,6 @@ function MediaPane({
       <span className='absolute left-[9px] top-[9px] inline-flex h-5 items-center rounded-md bg-[rgba(11,12,15,0.55)] px-2 font-mono text-[10px] tracking-wide text-[rgba(245,242,234,0.95)] backdrop-blur'>
         {card.chip}
       </span>
-      <button
-        type='button'
-        onClick={(e) => { e.stopPropagation(); onStar() }}
-        disabled={disableActions}
-        aria-label='Toggle similarity index'
-        className={cn(
-          'absolute right-2 top-2 flex size-7 items-center justify-center rounded-md bg-[rgba(11,12,15,0.42)] backdrop-blur transition-colors hover:bg-[rgba(11,12,15,0.62)] disabled:cursor-not-allowed disabled:opacity-50',
-          starred ? 'text-[var(--anubis-gold)]' : 'text-white/90',
-        )}
-      >
-        <StarIcon
-          className='size-4'
-          strokeWidth={2}
-          fill={starred ? 'currentColor' : 'none'}
-        />
-      </button>
     </div>
   )
 }
@@ -193,7 +166,6 @@ export function ContentPage() {
   const [importingPosts, setImportingPosts] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [view, setView] = useState<'grid' | 'table'>('grid')
-  const [stars, setStars] = useState<Record<string, boolean>>({})
   const [editingPost, setEditingPost] = useState<CapturedPostSummary | null>(null)
   const [selectedDetailPost, setSelectedDetailPost] = useState<CapturedPostSummary | null>(null)
   const [selectMode, setSelectMode] = useState(false)
@@ -220,10 +192,6 @@ export function ContentPage() {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?.id])
-
-  function toggleStar(key: string) {
-    setStars((s) => ({ ...s, [key]: !s[key] }))
-  }
 
   async function handleDeletePost(post: CapturedPostSummary) {
     const ok = window.confirm('Delete this captured post?')
@@ -426,7 +394,7 @@ export function ContentPage() {
                 ? 'Loading captured posts…'
                 : posts.length === 0
                   ? 'No posts captured yet. Add competitors, then hit Capture posts to populate this feed.'
-                  : `${headerCount} posts captured. Star the winners to add them to the similarity index.`}
+                  : `${headerCount} posts captured.`}
             </p>
           </div>
           <div className='flex shrink-0 items-center gap-2.5'>
@@ -545,8 +513,6 @@ export function ContentPage() {
                 card={card}
                 levelsCfg={levelsCfg}
                 multipliersCfg={multipliersCfg}
-                starred={!!stars[card.key]}
-                onStar={() => toggleStar(card.key)}
                 onEdit={card.post ? () => setEditingPost(card.post!) : undefined}
                 onDelete={card.post ? () => void handleDeletePost(card.post!) : undefined}
                 selectMode={selectMode}
@@ -561,8 +527,6 @@ export function ContentPage() {
             cards={cards}
             levelsCfg={levelsCfg}
             multipliersCfg={multipliersCfg}
-            stars={stars}
-            onStar={toggleStar}
             onEdit={(post) => setEditingPost(post)}
             onDelete={(post) => void handleDeletePost(post)}
             selectMode={selectMode}
@@ -614,8 +578,6 @@ export function ContentPage() {
         onClose={() => setSelectedDetailPost(null)}
         levelsCfg={levelsCfg}
         multipliersCfg={multipliersCfg}
-        starred={selectedDetailPost ? !!stars[selectedDetailPost.id] : false}
-        onStar={() => selectedDetailPost && toggleStar(selectedDetailPost.id)}
         onEdit={selectedDetailPost ? () => {
           const p = selectedDetailPost;
           setSelectedDetailPost(null);
@@ -736,8 +698,6 @@ function BulkDeleteDialog({
 
 function PostCard({
   card,
-  starred,
-  onStar,
   onEdit,
   onDelete,
   selectMode,
@@ -748,8 +708,6 @@ function PostCard({
   onClickDetail,
 }: {
   card: CardModel
-  starred: boolean
-  onStar: () => void
   onEdit?: () => void
   onDelete?: () => void
   selectMode: boolean
@@ -799,12 +757,7 @@ function PostCard({
           <CheckIcon className='size-3.5' strokeWidth={3} />
         </span>
       )}
-      <MediaPane
-        card={card}
-        starred={starred}
-        onStar={onStar}
-        disableActions={selectMode}
-      />
+      <MediaPane card={card} />
 
       <div className='p-3'>
         <div className='flex min-w-0 items-center gap-1.5 font-mono text-[12px] text-foreground'>
@@ -882,8 +835,6 @@ function PostTable({
   cards,
   levelsCfg,
   multipliersCfg,
-  stars,
-  onStar,
   onEdit,
   onDelete,
   selectMode,
@@ -894,8 +845,6 @@ function PostTable({
   cards: CardModel[]
   levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
   multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
-  stars: Record<string, boolean>
-  onStar: (key: string) => void
   onEdit: (post: CapturedPostSummary) => void
   onDelete: (post: CapturedPostSummary) => void
   selectMode: boolean
@@ -974,13 +923,6 @@ function PostTable({
                   <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{card.comments}</td>
                   <td className='px-3 py-3' onClick={(e) => e.stopPropagation()}>
                     <div className='flex justify-end gap-1'>
-                      <IconButton label='Toggle similarity index' onClick={() => onStar(card.key)} disabled={selectMode}>
-                        <StarIcon
-                          className='size-3.5'
-                          strokeWidth={2}
-                          fill={stars[card.key] ? 'currentColor' : 'none'}
-                        />
-                      </IconButton>
                       {card.post && !selectMode && (
                         <>
                           <IconButton label='Edit post' onClick={() => onEdit(card.post!)}>
@@ -1782,8 +1724,6 @@ interface DetailPostSheetProps {
   onClose: () => void
   levelsCfg: import('@anubis/shared').CompetitorLevelsConfig
   multipliersCfg: import('@anubis/shared').LevelMultipliersConfig
-  starred: boolean
-  onStar: () => void
   onEdit?: () => void
   onDelete?: () => void
 }
@@ -1793,8 +1733,6 @@ function DetailPostSheet({
   onClose,
   levelsCfg,
   multipliersCfg,
-  starred,
-  onStar,
   onEdit,
   onDelete,
 }: DetailPostSheetProps) {
@@ -1926,22 +1864,7 @@ function DetailPostSheet({
         </div>
 
         {/* Footer actions */}
-        <div className="mt-auto flex items-center justify-between border-t border-border/60 pt-4">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onStar}
-              className={cn(
-                "inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-[13px] font-medium transition-colors hover:bg-muted",
-                starred
-                  ? "text-[var(--anubis-gold)] border-[var(--anubis-gold)] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)]"
-                  : "text-foreground"
-              )}
-            >
-              <StarIcon className="size-4" fill={starred ? "currentColor" : "none"} />
-              {starred ? "Starred" : "Star Post"}
-            </button>
-          </div>
+        <div className="mt-auto flex items-center justify-end border-t border-border/60 pt-4">
           <div className="flex items-center gap-2">
             {onEdit && (
               <button

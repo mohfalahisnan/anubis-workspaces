@@ -51,6 +51,13 @@ import {
   type CreateProjectInput,
   type UpdateProjectInput,
   type ProjectListResponse,
+  type KnowledgeBaseDocument,
+  type KnowledgeBaseGraph,
+  type KnowledgeBaseSearchHit,
+  type KnowledgeBaseStats,
+  type OcrResult,
+  type TranscribeResult,
+  type WhisperModel,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -417,6 +424,26 @@ export async function deleteCronJob(id: string): Promise<void> {
   await api<{ ok: true }>(`/cron-jobs/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+export interface CreateCronJobInput {
+  name: string
+  schedule: string
+  scheduleDescription?: string
+  actionType: 'message' | 'competitor-discovery' | 'capture-posts'
+  actionConfig?: any
+  prompt?: string
+  projectId?: string
+}
+
+export async function createCronJob(
+  input: CreateCronJobInput,
+): Promise<CronJobSummary> {
+  const r = await api<{ ok: true; job: CronJobSummary }>('/cron-jobs', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.job
 }
 
 export async function listCompetitors(projectId?: string): Promise<CompetitorSummary[]> {
@@ -1046,5 +1073,112 @@ export async function deleteProject(id: string): Promise<void> {
   await api<{ ok: true }>(`/projects/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
+}
+
+/* ---------- Knowledge Base ---------- */
+
+export interface IndexKnowledgeBaseInput {
+  projectId: string
+  paths?: string[]
+}
+
+export interface IndexKnowledgeBaseResult {
+  workdirId: string
+  createdIgnoreFile: boolean
+  indexed: string[]
+}
+
+export async function indexKnowledgeBase(input: IndexKnowledgeBaseInput): Promise<IndexKnowledgeBaseResult> {
+  const r = await api<{ ok: true } & IndexKnowledgeBaseResult>('/knowledge-base/index', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return { workdirId: r.workdirId, createdIgnoreFile: r.createdIgnoreFile, indexed: r.indexed }
+}
+
+export async function searchKnowledgeBase(input: {
+  projectId: string
+  query: string
+  limit?: number
+  depth?: number
+}): Promise<{ query: string; hits: KnowledgeBaseSearchHit[] }> {
+  const r = await api<{ ok: true; query: string; hits: KnowledgeBaseSearchHit[] }>(
+    '/knowledge-base/search',
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+  return { query: r.query, hits: r.hits }
+}
+
+export async function getKnowledgeBaseStats(projectId: string): Promise<KnowledgeBaseStats> {
+  const params = new URLSearchParams({ projectId })
+  const r = await api<{ ok: true } & KnowledgeBaseStats>(`/knowledge-base/stats?${params}`)
+  return {
+    documentCount: r.documentCount,
+    chunkCount: r.chunkCount,
+    entityCount: r.entityCount,
+    edgeCount: r.edgeCount,
+    lastIndexedAt: r.lastIndexedAt,
+  }
+}
+
+export async function listKnowledgeBaseDocuments(projectId: string): Promise<KnowledgeBaseDocument[]> {
+  const params = new URLSearchParams({ projectId })
+  const r = await api<{ ok: true; items: KnowledgeBaseDocument[] }>(`/knowledge-base/documents?${params}`)
+  return r.items
+}
+
+export async function getKnowledgeBaseGraph(projectId: string, limit?: number): Promise<KnowledgeBaseGraph> {
+  const params = new URLSearchParams({ projectId })
+  if (limit !== undefined) params.set('limit', String(limit))
+  const r = await api<{ ok: true } & KnowledgeBaseGraph>(`/knowledge-base/graph?${params}`)
+  return { nodes: r.nodes, edges: r.edges }
+}
+
+export async function getKnowledgeBaseNeighborhood(input: {
+  projectId: string
+  chunkId: string
+  depth?: number
+  limit?: number
+}): Promise<KnowledgeBaseGraph> {
+  const params = new URLSearchParams({ projectId: input.projectId, chunkId: input.chunkId })
+  if (input.depth !== undefined) params.set('depth', String(input.depth))
+  if (input.limit !== undefined) params.set('limit', String(input.limit))
+  const r = await api<{ ok: true } & KnowledgeBaseGraph>(`/knowledge-base/graph/neighborhood?${params}`)
+  return { nodes: r.nodes, edges: r.edges }
+}
+
+export async function getKnowledgeBaseIgnoreFile(projectId: string): Promise<{
+  exists: boolean
+  path: string
+  content: string
+}> {
+  const params = new URLSearchParams({ projectId })
+  const r = await api<{ ok: true; exists: boolean; path: string; content: string }>(
+    `/knowledge-base/ignore-file?${params}`,
+  )
+  return { exists: r.exists, path: r.path, content: r.content }
+}
+
+/* ---------- Extractor ---------- */
+
+export async function runOcr(input: { path: string; force?: boolean }): Promise<OcrResult> {
+  const r = await api<{ ok: true; result: OcrResult }>('/extractor/ocr', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.result
+}
+
+export async function runTranscribe(input: {
+  path: string
+  language?: string
+  whisperModel?: WhisperModel
+  force?: boolean
+}): Promise<TranscribeResult> {
+  const r = await api<{ ok: true; result: TranscribeResult }>('/extractor/transcribe', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return r.result
 }
 

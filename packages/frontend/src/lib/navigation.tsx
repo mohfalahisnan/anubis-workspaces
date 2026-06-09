@@ -23,8 +23,9 @@ export type Route =
   | { page: 'workflow-demo' }
   | { page: 'workflows' }
   | { page: 'workflow-editor'; workflowId: string }
-  | { page: 'crawler-playground' }
-  | { page: 'qwen-playground' }
+  | { page: 'knowledge-base' }
+  | { page: 'knowledge-graph' }
+  | { page: 'extractor' }
 
 export type PageKey = Route['page']
 

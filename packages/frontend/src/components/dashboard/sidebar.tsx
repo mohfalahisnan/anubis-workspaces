@@ -88,10 +88,12 @@ function itemRoute(item: NavItem): Route {
       return { page: 'workflow-demo' }
     case 'workflows':
       return { page: 'workflows' }
-    case 'crawler-playground':
-      return { page: 'crawler-playground' }
-    case 'qwen-playground':
-      return { page: 'qwen-playground' }
+    case 'knowledge-base':
+      return { page: 'knowledge-base' }
+    case 'knowledge-graph':
+      return { page: 'knowledge-graph' }
+    case 'extractor':
+      return { page: 'extractor' }
     case 'settings':
       return { page: 'settings' }
     default:

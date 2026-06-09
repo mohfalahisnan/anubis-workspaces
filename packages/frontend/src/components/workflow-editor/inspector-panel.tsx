@@ -5,6 +5,7 @@ import { TransformerMediaConfigForm } from './inspector/config/transformer-media
 import { TransformerBriefConfigForm } from './inspector/config/transformer-brief-config'
 import { JsonTransformerConfigForm } from './inspector/config/json-transformer-config'
 import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-config'
+import { TranscriberConfigForm }      from './inspector/config/transcriber-config'
 import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
 import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conversation-config'
@@ -27,6 +28,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   transformerBrief:    TransformerBriefConfigForm,
   jsonTransformer:     JsonTransformerConfigForm,
   ocrExtractor:        OcrExtractorConfigForm,
+  transcriber:         TranscriberConfigForm,
   table:               TableConfigForm,
   imageVideo:          ImageVideoConfigForm,
   aiAgentConversation: AiAgentConversationConfigForm,

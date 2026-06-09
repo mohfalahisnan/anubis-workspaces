@@ -1,0 +1,7 @@
+# Knowledge Base Workdir is the Project workspacePath itself
+
+A Project's Knowledge Base is built by invoking the engine with `-w <Project.workspacePath>` directly — no `.anubis/` subdirectory, no separate corpus root. The whole workspace folder is the corpus; what to exclude lives in a `.anubisignore` file at the workspace root (gitignore-style syntax, auto-created with sensible defaults on first index because the engine does not honour `.gitignore`).
+
+We chose this over a dedicated subdir (e.g. `<workspacePath>/.anubis/knowledge-base/`) or an app-managed location keyed by projectId, because the engine writes no state into `-w` itself — `-w` is just the registry key and the source-corpus root — so there is no pollution to hide. Treating the workspace as the corpus also matches user mental model: "the project IS the knowledge base."
+
+Consequences: (1) Anubis ships a default `.anubisignore` template on first index to prevent the engine from walking `node_modules`/`dist`/`.git` etc., since the engine has `git_ignore(false)` hard-coded. (2) Sidecar `<stem>.anubis.txt` files from the extractor land next to source media inside the workspace — that's intentional, the KB picks them up on re-index. (3) Changing a Project's workspacePath changes the `WorkdirId` (sha256 of canonical path) — Anubis caches the id on the Project record at first index so deletion still works even if the folder is gone.

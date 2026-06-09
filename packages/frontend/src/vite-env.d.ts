@@ -29,6 +29,9 @@ interface Window {
     files: {
       /** Resolves to selected absolute paths, or [] if cancelled. */
       pick(): Promise<string[]>
+      /** Single-file pick with optional title and extension filters.
+       *  Resolves to absolute path, or null if cancelled. */
+      pickOne(opts?: { title?: string; filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>
     }
     updater: {
       check(): Promise<unknown>

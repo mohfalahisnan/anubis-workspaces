@@ -14,6 +14,7 @@ import {
 import { captureInstagramData, silentReporter, type StandardCrawlerOutput } from '@anubis/research-crawler'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 import { LessonStore } from './lesson-store.js'
+import { runOcr, runTranscribe, type TranscribeOptions } from './extractor.js'
 
 type Listener = (event: RunEvent) => void
 
@@ -221,8 +222,12 @@ export class WorkflowRunManager {
           const result: StandardCrawlerOutput = await captureInstagramData(input)
           return mapCrawlerOutputToCapturedPost(result, url)
         }},
-        ocr: { extractFromImage: async (_path: string) => {
-          throw new Error('ocr.extractFromImage not yet wired (anubis-extractor integration is follow-up)')
+        ocr: { extractFromImage: async (path: string) => {
+          const result = await runOcr(path)
+          return result.text
+        }},
+        transcribe: { fromMedia: async (path: string, opts?: TranscribeOptions) => {
+          return runTranscribe(path, opts)
         }},
         db: { getCapturedPost: async (id: string): Promise<CapturedPost> => {
           const post = this.stack.capturedPosts.findById(id)

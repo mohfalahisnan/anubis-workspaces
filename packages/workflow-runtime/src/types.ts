@@ -58,9 +58,24 @@ export interface CapturedPost {
   [key: string]: unknown
 }
 
+export interface TranscribeNodeOptions {
+  language?: string
+  whisperModel?: 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
+  force?: boolean
+}
+
+export interface TranscribeNodeResult {
+  text: string
+  segments: Array<{ startMs: number; endMs: number; text: string }>
+  language?: string
+  sidecarPath?: string
+  cacheHit?: boolean
+}
+
 export interface ExecutorContext {
   crawler: { captureProfile: (url: string) => Promise<CapturedPost> }
   ocr:     { extractFromImage: (path: string) => Promise<string> }
+  transcribe: { fromMedia: (path: string, opts?: TranscribeNodeOptions) => Promise<TranscribeNodeResult> }
   db:      { getCapturedPost: (id: string) => Promise<CapturedPost> }
   fs:      { writeRunArtifact: (runId: string, nodeId: string, ext: string, data: Buffer) => Promise<string> }
   conversations: {

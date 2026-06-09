@@ -26,8 +26,9 @@ import { SkillsPage } from '@/pages/skills'
 import { WorkflowDemoPage } from '@/components/workflow'
 import { WorkflowsPage } from '@/pages/workflows'
 import { WorkflowEditorPage } from '@/pages/workflow-editor'
-import { CrawlerPlaygroundPage } from '@/pages/crawler-playground'
-import { QwenPlaygroundPage } from '@/pages/qwen-playground'
+import { KnowledgeBasePage } from '@/pages/knowledge-base'
+import { KnowledgeGraphPage } from '@/pages/knowledge-graph'
+import { ExtractorPage } from '@/pages/extractor'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -49,8 +50,9 @@ const BREADCRUMBS: Record<PageKey, string> = {
   'workflow-demo': 'Workflow demo',
   workflows: 'Workflows',
   'workflow-editor': 'Workflows · Editor',
-  'crawler-playground': 'Crawler Playground',
-  'qwen-playground': 'Qwen Playground',
+  'knowledge-base': 'Knowledge Base',
+  'knowledge-graph': 'Knowledge Graph',
+  extractor: 'Extractor',
 }
 
 type BackendState = 'checking' | 'online' | 'offline'
@@ -229,10 +231,12 @@ function CurrentPage() {
       return <WorkflowsPage />
     case 'workflow-editor':
       return <WorkflowEditorPage workflowId={route.workflowId} />
-    case 'crawler-playground':
-      return <CrawlerPlaygroundPage />
-    case 'qwen-playground':
-      return <QwenPlaygroundPage />
+    case 'knowledge-base':
+      return <KnowledgeBasePage />
+    case 'knowledge-graph':
+      return <KnowledgeGraphPage />
+    case 'extractor':
+      return <ExtractorPage />
     default:
       return <HomePage />
   }

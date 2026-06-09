@@ -4,6 +4,7 @@ import { TransformerMediaExecutableNode }       from './transformer-media'
 import { TransformerBriefExecutableNode }       from './transformer-brief'
 import { JsonTransformerExecutableNode }        from './json-transformer'
 import { OcrExtractorExecutableNode }           from './ocr-extractor'
+import { TranscriberExecutableNode }            from './transcriber'
 import { TableExecutableNode }                  from './table'
 import { ImageVideoExecutableNode }             from './image-video'
 import { AiAgentConversationExecutableNode }    from './ai-agent-conversation'
@@ -24,6 +25,7 @@ export const executableNodeTypes: NodeTypes = {
   transformerBrief:    TransformerBriefExecutableNode as never,
   jsonTransformer:     JsonTransformerExecutableNode as never,
   ocrExtractor:        OcrExtractorExecutableNode as never,
+  transcriber:         TranscriberExecutableNode as never,
   table:               TableExecutableNode as never,
   imageVideo:          ImageVideoExecutableNode as never,
   aiAgentConversation: AiAgentConversationExecutableNode as never,
@@ -73,6 +75,7 @@ export const NODE_PALETTE = [
   { type: 'transformerBrief',    label: 'Transformer · Brief',    category: 'tools'     },
   { type: 'jsonTransformer',     label: 'JSON Transformer',       category: 'tools'     },
   { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
+  { type: 'transcriber',         label: 'Transcriber',            category: 'tools'     },
   { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
   { type: 'humanApproval',       label: 'Human Review',           category: 'agent'    },
   { type: 'lessonWriter',        label: 'Lesson Writer',          category: 'agent'    },

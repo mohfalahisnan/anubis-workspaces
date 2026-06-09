@@ -354,6 +354,116 @@ export interface AppConfig {
   competitorLevels?: CompetitorLevelsConfig
   /** Viral-multiplier thresholds (post likes ÷ avgLikes) per competitor level. */
   levelMultipliers?: LevelMultipliersConfig
+  /** Path to the `anubis-engine` binary that backs Knowledge Base. */
+  engineBinaryPath?: string
+  /** Path to the `anubis-extractor` binary used for OCR and audio/video transcription. */
+  extractorBinaryPath?: string
+}
+
+/* ============================================================
+   Knowledge Base
+   ============================================================ */
+
+export interface KnowledgeBaseStats {
+  documentCount: number
+  chunkCount: number
+  entityCount: number
+  edgeCount: number
+  lastIndexedAt?: number
+}
+
+export interface KnowledgeBaseDocument {
+  id: string
+  path: string
+  chunkCount?: number
+  indexedAt?: number
+}
+
+export interface KnowledgeBaseSearchHit {
+  chunkId: string
+  docId: string
+  path: string
+  score?: number
+  snippet: string
+}
+
+export interface KnowledgeBaseSearchResponse {
+  ok: true
+  query: string
+  hits: KnowledgeBaseSearchHit[]
+  raw?: unknown
+}
+
+export interface KnowledgeBaseIndexResult {
+  ok: true
+  indexed: string[]
+  workdirId: string
+  createdIgnoreFile: boolean
+}
+
+export interface KnowledgeBaseContextPackResponse {
+  ok: true
+  query: string
+  text: string
+  raw?: unknown
+}
+
+export interface KnowledgeBaseGraphNode {
+  id: string
+  docId: string
+  filename: string
+  content: string
+  page?: number
+  degree: number
+  docClass?: string
+  chunkSignal?: string
+}
+
+export interface KnowledgeBaseGraphEdge {
+  src: string
+  dst: string
+  weight: number
+  edgeType: string
+  reason?: string
+}
+
+export interface KnowledgeBaseGraph {
+  nodes: KnowledgeBaseGraphNode[]
+  edges: KnowledgeBaseGraphEdge[]
+}
+
+/* ============================================================
+   Extractor
+   ============================================================ */
+
+export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
+
+export const DEFAULT_WHISPER_MODEL: WhisperModel = 'large-v3'
+
+export interface OcrLine {
+  bbox?: [number, number, number, number]
+  text: string
+}
+
+export interface OcrResult {
+  text: string
+  lines: OcrLine[]
+  sidecarPath?: string
+  cacheHit?: boolean
+}
+
+export interface TranscriptSegment {
+  startMs: number
+  endMs: number
+  text: string
+}
+
+export interface TranscribeResult {
+  text: string
+  segments: TranscriptSegment[]
+  language?: string
+  sidecarPath?: string
+  cacheHit?: boolean
 }
 
 /* ============================================================

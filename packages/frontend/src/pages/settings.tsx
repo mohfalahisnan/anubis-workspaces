@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   CodeIcon,
+  FolderSearchIcon,
   SaveIcon,
 } from 'lucide-react'
 import type { AppConfig, CompetitorLevelsConfig, LevelMultipliersConfig, MultiplierBand } from '@anubis/shared'
@@ -12,6 +13,7 @@ import {
 import { setCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { setLevelMultipliers } from '@/hooks/use-level-multipliers'
 import { cn } from '@/lib/utils'
+import { EXECUTABLE_FILTERS, isElectron, pickFile } from '@/lib/pick-file'
 
 type Banner = { kind: 'success' | 'error'; message: string }
 
@@ -42,6 +44,10 @@ export function SettingsPage() {
     form.levelMultipliers ?? config?.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS
 
   const chromePathDirty = config !== null && (form.chromePath ?? '') !== (config.chromePath ?? '')
+  const engineBinaryPathDirty =
+    config !== null && (form.engineBinaryPath ?? '') !== (config.engineBinaryPath ?? '')
+  const extractorBinaryPathDirty =
+    config !== null && (form.extractorBinaryPath ?? '') !== (config.extractorBinaryPath ?? '')
   const levelsDirty =
     config !== null &&
     JSON.stringify(form.competitorLevels ?? config.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS) !==
@@ -54,7 +60,7 @@ export function SettingsPage() {
     JSON.stringify(config.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS)
   const multipliersValid = isValidLevelMultipliers(effectiveMultipliers)
 
-  const dirty = chromePathDirty || levelsDirty || multipliersDirty
+  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty
   const canSave = dirty && levelsValid && multipliersValid
 
   async function handleSave() {
@@ -62,6 +68,8 @@ export function SettingsPage() {
     try {
       const next = await updateAppConfig({
         chromePath: form.chromePath ?? '',
+        engineBinaryPath: form.engineBinaryPath ?? '',
+        extractorBinaryPath: form.extractorBinaryPath ?? '',
         competitorLevels: form.competitorLevels ?? config?.competitorLevels,
         levelMultipliers: form.levelMultipliers ?? config?.levelMultipliers,
       })
@@ -69,6 +77,8 @@ export function SettingsPage() {
       setForm((f) => ({
         ...f,
         chromePath: next.chromePath ?? '',
+        engineBinaryPath: next.engineBinaryPath ?? '',
+        extractorBinaryPath: next.extractorBinaryPath ?? '',
         competitorLevels: next.competitorLevels,
         levelMultipliers: next.levelMultipliers,
       }))
@@ -137,16 +147,44 @@ export function SettingsPage() {
           <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
             Optional. Used by the research-crawler when it launches Chrome for logged-in, anonymous, and Flow collection.
           </p>
-          <div className='relative mt-3'>
-            <CodeIcon className='pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-muted-foreground' strokeWidth={1.8} />
-            <input
-              type='text'
-              value={form.chromePath ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, chromePath: e.target.value }))}
-              placeholder='C:\Program Files\Google\Chrome\Application\chrome.exe'
-              spellCheck={false}
-              className='h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 font-mono text-[12.5px] text-foreground outline-none focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
+          <BinaryPathField
+            value={form.chromePath ?? ''}
+            onChange={(v) => setForm((f) => ({ ...f, chromePath: v }))}
+            placeholder='C:\Program Files\Google\Chrome\Application\chrome.exe'
+            pickerTitle='Select Chrome executable'
+          />
+        </section>
+
+        <section className='mt-8 border-t border-border pt-6'>
+          <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>External binaries</h2>
+          <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
+            Paths to user-installed CLI tools Anubis operates but does not bundle. Leave blank to disable that feature; errors surface at first use.
+          </p>
+
+          <div className='mt-4 flex flex-col gap-1.5'>
+            <label className='text-[12.5px] font-medium text-foreground'>Anubis Engine (Knowledge Base)</label>
+            <BinaryPathField
+              value={form.engineBinaryPath ?? ''}
+              onChange={(v) => setForm((f) => ({ ...f, engineBinaryPath: v }))}
+              placeholder='C:\Path\To\anubis-engine.exe'
+              pickerTitle='Select anubis-engine binary'
             />
+            <p className='text-[12px] text-muted-foreground'>
+              Required for indexing and searching each Project's Knowledge Base.
+            </p>
+          </div>
+
+          <div className='mt-4 flex flex-col gap-1.5'>
+            <label className='text-[12.5px] font-medium text-foreground'>Anubis Extractor (OCR &amp; Transcribe)</label>
+            <BinaryPathField
+              value={form.extractorBinaryPath ?? ''}
+              onChange={(v) => setForm((f) => ({ ...f, extractorBinaryPath: v }))}
+              placeholder='C:\Path\To\anubis-extractor.exe'
+              pickerTitle='Select anubis-extractor binary'
+            />
+            <p className='text-[12px] text-muted-foreground'>
+              Required for OCR and transcription. Output is cached as <code className='font-mono text-foreground/80'>*.anubis.txt</code> next to the source file; the Knowledge Base picks these up on re-index.
+            </p>
           </div>
         </section>
 
@@ -239,6 +277,54 @@ export function SettingsPage() {
           )}
         </section>
       </div>
+    </div>
+  )
+}
+
+function BinaryPathField({
+  value,
+  onChange,
+  placeholder,
+  pickerTitle,
+}: {
+  value: string
+  onChange: (next: string) => void
+  placeholder?: string
+  pickerTitle?: string
+}) {
+  const browseAvailable = isElectron()
+
+  async function handleBrowse() {
+    const picked = await pickFile({
+      title: pickerTitle,
+      filters: EXECUTABLE_FILTERS,
+    })
+    if (picked) onChange(picked)
+  }
+
+  return (
+    <div className='mt-3 flex gap-2'>
+      <div className='relative flex-1'>
+        <CodeIcon className='pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-muted-foreground' strokeWidth={1.8} />
+        <input
+          type='text'
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          spellCheck={false}
+          className='h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 font-mono text-[12.5px] text-foreground outline-none focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
+        />
+      </div>
+      <button
+        type='button'
+        onClick={() => void handleBrowse()}
+        disabled={!browseAvailable}
+        title={browseAvailable ? 'Pick a file' : 'Available in the desktop app only'}
+        className='inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12.5px] text-foreground transition-colors hover:bg-card/70 disabled:cursor-not-allowed disabled:opacity-50'
+      >
+        <FolderSearchIcon className='size-[15px]' strokeWidth={1.8} />
+        Browse…
+      </button>
     </div>
   )
 }

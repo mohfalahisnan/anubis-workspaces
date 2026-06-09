@@ -45,6 +45,8 @@ const DOWNSTREAM_CONTRACTS: Record<string, string> = {
     'Populate `data` with an array of row objects matching the table input schema.',
   ocrExtractor:
     'Populate `paths` with absolute image paths to OCR. Include `text` to describe what you produced.',
+  transcriber:
+    'Populate `paths` with absolute audio or video paths to transcribe. Include `text` to describe what you produced.',
   instagramPost:
     '(rare downstream) — emit the standard envelope; instagramPost is usually a source node.',
   imageVideo:

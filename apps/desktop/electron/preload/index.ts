@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('anubis', {
     /** Open a native file picker. Resolves to selected absolute paths,
      *  or an empty array if the user cancels. */
     pick: () => ipcRenderer.invoke('anubis:pick-files') as Promise<string[]>,
+    /** Open a native single-file picker. Resolves to the selected
+     *  absolute path, or null if the user cancels. */
+    pickOne: (opts?: { title?: string; filters?: Array<{ name: string; extensions: string[] }> }) =>
+      ipcRenderer.invoke('anubis:pick-file', opts) as Promise<string | null>,
   },
   updater: {
     check: () => ipcRenderer.invoke('check-update'),

@@ -15,6 +15,7 @@ import { OriginalCopyConfigForm } from './inspector/config/original-copy-config'
 import { ScheduleTriggerConfigForm } from './inspector/config/schedule-trigger-config'
 import { FileWatchTriggerConfigForm } from './inspector/config/file-watch-trigger-config'
 import { SavePlannerConfigForm } from './inspector/config/save-planner-config'
+import { OutputCapturerConfigForm } from './inspector/config/output-capturer-config'
 import { RunViewer } from './inspector/run-viewer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +36,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   scheduleTrigger:     ScheduleTriggerConfigForm,
   fileWatchTrigger:    FileWatchTriggerConfigForm,
   savePlanner:          SavePlannerConfigForm,
+  outputCapturer:       OutputCapturerConfigForm,
 }
 
 export function InspectorPanel() {

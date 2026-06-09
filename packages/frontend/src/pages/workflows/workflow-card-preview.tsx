@@ -22,6 +22,7 @@ const previewNodeTypes: NodeTypes = {
   lessonWriter: PreviewNode as never,
   originalCopy: PreviewNode as never,
   savePlanner: PreviewNode as never,
+  outputCapturer: PreviewNode as never,
 }
 
 function EmptyPreview({ label = 'No nodes yet' }: { label?: string }) {

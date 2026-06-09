@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, realpathSync, statSync } from 'node:fs'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
 import { NoCredentialsError } from '@anubis/conversation'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
@@ -114,14 +114,27 @@ conversationRoutes.get('/:id/files', (c) => {
   const contentType = IMAGE_MIME[extname(target).toLowerCase()]
   if (!contentType) return c.json({ error: 'unsupported_media_type' }, 415)
 
-  if (!existsSync(target)) return c.json({ error: 'not_found' }, 404)
+  // Resolve symlinks before re-checking containment, so a symlink inside the
+  // workspace can't escape it.
+  let realTarget: string
+  let realRoot: string
   try {
-    if (!statSync(target).isFile()) return c.json({ error: 'not_found' }, 404)
+    realRoot = realpathSync(workspaceRoot)
+    realTarget = realpathSync(target)
+  } catch {
+    return c.json({ error: 'not_found' }, 404)
+  }
+  if (!isPathInside(realRoot, realTarget)) {
+    return c.json({ error: 'forbidden' }, 403)
+  }
+
+  try {
+    if (!statSync(realTarget).isFile()) return c.json({ error: 'not_found' }, 404)
   } catch {
     return c.json({ error: 'not_found' }, 404)
   }
 
-  const stream = createReadStream(target)
+  const stream = createReadStream(realTarget)
   return c.body(stream as unknown as ReadableStream, 200, {
     'Content-Type': contentType,
     'Cache-Control': 'private, max-age=300',

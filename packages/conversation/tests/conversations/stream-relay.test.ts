@@ -67,6 +67,28 @@ describe('StreamRelay', () => {
     expect(arts[0]!.status).toBe('success')
   })
 
+  it('persists image references found in tool results on the assistant message', async () => {
+    const sse = new SseBroadcaster()
+    const relay = mkRelay(db, sse, async () => 'no-op')
+    const em = new TypedEmitter<AgentEventMap>()
+    const done = relay.attach(em)
+    em.emit('tool_call', { name: 'image_gen', args: { prompt: 'logo' } })
+    em.emit('tool_result', {
+      name: 'image_gen',
+      result: { image: { path: 'outputs/logo.png', alt: 'Logo concept' } },
+    })
+    em.emit('done', { finishReason: 'stop' })
+    await done
+
+    const msg = new MessagesRepo(db).findById('row1')!
+    expect(msg.metadata?.imageReferences).toEqual([
+      expect.objectContaining({
+        src: 'outputs/logo.png',
+        alt: 'Logo concept',
+      }),
+    ])
+  })
+
   it('runs cron handler at done when text contains [CRON_LIST]', async () => {
     const sse = new SseBroadcaster()
     const cron = vi.fn(async () => 'OK')

@@ -1,4 +1,8 @@
 import type { TypedEmitter, AgentEventMap } from '@anubis/ai-agent'
+import {
+  extractImageReferencesFromUnknown,
+  type MessageImageReference,
+} from '@anubis/shared'
 import { newId } from '../util/ids.js'
 import { nowMs } from '../util/time.js'
 import { detectCronCommands, type CronCommand } from './cron-detect.js'
@@ -28,6 +32,7 @@ export class StreamRelay {
   private chunkCount = 0
   private toolNameByCall = new Map<string, string>()
   private toolArtIdByCall = new Map<string, string>()
+  private imageReferences: MessageImageReference[] = []
 
   constructor(private opts: StreamRelayOpts) {}
 
@@ -62,18 +67,21 @@ export class StreamRelay {
       emitter.on('tool_result', (d) => {
         const dx = d as unknown as { id?: string; call_id?: string; name: string; result: unknown; isError?: boolean }
         const status = dx.isError ? 'error' : 'success'
-        const callId = dx.id ?? dx.call_id
+        let callId = dx.id ?? dx.call_id
         if (callId && this.toolArtIdByCall.has(callId)) {
           this.opts.artifacts.updateResult(callId, this.opts.conversationId, dx.result, status)
         } else {
           for (const [cid, name] of this.toolNameByCall) {
             if (name === dx.name) {
+              callId = cid
               this.opts.artifacts.updateResult(cid, this.opts.conversationId, dx.result, status)
               break
             }
           }
         }
-        this.publish({ name: 'tool_result', data: d })
+        this.mergeImageReferences(extractImageReferencesFromUnknown(dx.result))
+        this.flushAssistant()
+        this.publish({ name: 'tool_result', data: { ...d, callId } })
       })
 
       emitter.on('session', (d) => {
@@ -133,12 +141,12 @@ export class StreamRelay {
           this.opts.messages.upsertAssistant({
             id: this.opts.messageRowId, conversationId: this.opts.conversationId,
             msgId: this.opts.msgId, role: 'assistant', content,
-            metadata: {
+            metadata: this.withImageMetadata({
               error: {
                 message: errMessage,
                 ...(codexInfo ? { codexErrorInfo: codexInfo } : {}),
               },
-            },
+            }),
             createdAt: now,
           })
           this.opts.conversations.updateStatus(this.opts.conversationId, 'error')
@@ -157,12 +165,30 @@ export class StreamRelay {
       msgId: this.opts.msgId,
       role: 'assistant',
       content: this.buffer,
-      metadata: Object.keys(extraMeta).length ? extraMeta : undefined,
+      metadata: this.withImageMetadata(extraMeta),
       createdAt: nowMs(),
     })
   }
 
   private publish(event: SseEvent): void {
     this.opts.sse.publish(this.opts.conversationId, event)
+  }
+
+  private mergeImageReferences(refs: MessageImageReference[]): void {
+    if (refs.length === 0) return
+    const seen = new Set(this.imageReferences.map((ref) => ref.src))
+    for (const ref of refs) {
+      if (seen.has(ref.src)) continue
+      seen.add(ref.src)
+      this.imageReferences.push({ ...ref, source: ref.source ?? 'tool' })
+    }
+  }
+
+  private withImageMetadata(meta: Record<string, unknown>): Record<string, unknown> | undefined {
+    const next: Record<string, unknown> = { ...meta }
+    if (this.imageReferences.length > 0) {
+      next.imageReferences = this.imageReferences
+    }
+    return Object.keys(next).length ? next : undefined
   }
 }

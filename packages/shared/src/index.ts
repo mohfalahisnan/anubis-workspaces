@@ -92,6 +92,124 @@ export interface MessageSummary {
   createdAt: number
 }
 
+export interface MessageImageReference {
+  src: string
+  alt?: string
+  label?: string
+  mimeType?: string
+  source?: 'markdown' | 'path' | 'metadata' | 'tool'
+}
+
+const IMAGE_EXT_RE = /\.(?:png|jpe?g|gif|webp)(?:[?#].*)?$/i
+const EMBEDDED_IMAGE_RE = /^(?:data:image\/|blob:)/i
+const REMOTE_URL_RE = /^https?:/i
+
+export function isImageReferenceSource(value: string): boolean {
+  const trimmed = value.trim()
+  return EMBEDDED_IMAGE_RE.test(trimmed) || IMAGE_EXT_RE.test(trimmed)
+}
+
+export function imageFilenameFromSource(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('data:image/')) return 'generated image'
+  try {
+    const url = new URL(trimmed)
+    const name = url.pathname.split('/').filter(Boolean).pop()
+    return name ? decodeURIComponent(name) : trimmed
+  } catch {
+    const cleaned = trimmed.split(/[?#]/, 1)[0] ?? trimmed
+    return cleaned.split(/[/\\]/).filter(Boolean).pop() ?? cleaned
+  }
+}
+
+export function extractImageReferencesFromUnknown(value: unknown): MessageImageReference[] {
+  const out: MessageImageReference[] = []
+  const seen = new Set<string>()
+
+  const add = (ref: MessageImageReference) => {
+    const src = ref.src.trim()
+    if (!src || seen.has(src)) return
+    const trustedRemote =
+      ref.source === 'metadata' &&
+      REMOTE_URL_RE.test(src)
+    if (!isImageReferenceSource(src) && !trustedRemote) return
+    seen.add(src)
+    out.push({
+      ...ref,
+      src,
+      label: ref.label ?? imageFilenameFromSource(src),
+    })
+  }
+
+  const visit = (node: unknown, depth: number) => {
+    if (depth > 8 || node == null) return
+    if (typeof node === 'string') {
+      add({ src: node, source: 'tool' })
+      return
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1)
+      return
+    }
+    if (typeof node !== 'object') return
+
+    const obj = node as Record<string, unknown>
+    const alt = stringProp(obj, ['alt', 'altText', 'description', 'caption', 'title'])
+    const label = stringProp(obj, ['label', 'name', 'filename', 'fileName'])
+    const mimeType = stringProp(obj, ['mimeType', 'mediaType', 'contentType'])
+    const direct = stringPropWithKey(obj, [
+      'image',
+      'imageUrl',
+      'imageUri',
+      'imagePath',
+      'src',
+      'url',
+      'uri',
+      'href',
+      'path',
+      'filePath',
+      'filepath',
+      'localPath',
+      'absolutePath',
+      'source',
+    ])
+    if (direct && isStructuredImageSource(direct.key, direct.value, mimeType)) {
+      add({ src: direct.value, alt, label, mimeType, source: 'metadata' })
+    }
+
+    const base64 = stringProp(obj, ['base64', 'b64_json', 'data'])
+    if (base64 && mimeType?.startsWith('image/') && !base64.startsWith('data:')) {
+      add({ src: `data:${mimeType};base64,${base64}`, alt, label, mimeType, source: 'metadata' })
+    }
+
+    for (const child of Object.values(obj)) visit(child, depth + 1)
+  }
+
+  visit(value, 0)
+  return out
+}
+
+function stringProp(obj: Record<string, unknown>, keys: string[]): string | undefined {
+  return stringPropWithKey(obj, keys)?.value
+}
+
+function stringPropWithKey(
+  obj: Record<string, unknown>,
+  keys: string[],
+): { key: string; value: string } | undefined {
+  for (const key of keys) {
+    const value = obj[key]
+    if (typeof value === 'string' && value.trim()) return { key, value: value.trim() }
+  }
+  return undefined
+}
+
+function isStructuredImageSource(key: string, value: string, mimeType?: string): boolean {
+  if (isImageReferenceSource(value)) return true
+  if (mimeType?.startsWith('image/') && REMOTE_URL_RE.test(value)) return true
+  return key.toLowerCase().startsWith('image') && REMOTE_URL_RE.test(value)
+}
+
 export interface SkillSummary {
   name: string
   description: string

@@ -11,6 +11,7 @@ import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conve
 import { HumanApprovalConfigForm } from './inspector/config/human-approval-config'
 import { LessonWriterConfigForm } from './inspector/config/lesson-writer-config'
 import { MarkdownDisplayConfigForm } from './inspector/config/markdown-display-config'
+import { InstagramDraftPreviewConfigForm } from './inspector/config/instagram-draft-preview-config'
 import { OriginalCopyConfigForm } from './inspector/config/original-copy-config'
 import { ScheduleTriggerConfigForm } from './inspector/config/schedule-trigger-config'
 import { FileWatchTriggerConfigForm } from './inspector/config/file-watch-trigger-config'
@@ -31,6 +32,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   humanApproval:       HumanApprovalConfigForm,
   lessonWriter:        LessonWriterConfigForm,
   markdownDisplay:     MarkdownDisplayConfigForm,
+  instagramDraftPreview: InstagramDraftPreviewConfigForm,
   originalCopy:        OriginalCopyConfigForm,
   scheduleTrigger:     ScheduleTriggerConfigForm,
   fileWatchTrigger:    FileWatchTriggerConfigForm,

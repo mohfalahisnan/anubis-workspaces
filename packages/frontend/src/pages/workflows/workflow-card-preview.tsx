@@ -18,6 +18,7 @@ const previewNodeTypes: NodeTypes = {
   table: PreviewNode as never,
   aiAgentConversation: PreviewNode as never,
   markdownDisplay: PreviewNode as never,
+  instagramDraftPreview: PreviewNode as never,
   humanApproval: PreviewNode as never,
   lessonWriter: PreviewNode as never,
   originalCopy: PreviewNode as never,

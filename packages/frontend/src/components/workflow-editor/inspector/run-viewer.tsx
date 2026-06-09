@@ -1,4 +1,8 @@
 import { useEditorStore } from '../editor-store'
+import {
+  InstagramDraftPreview,
+  type InstagramDraftPreviewOutput,
+} from '@/components/workflow/instagram-draft-preview'
 
 export function RunViewer() {
   const selection = useEditorStore((s) => s.selection)
@@ -24,6 +28,9 @@ export function RunViewer() {
   const nodeId = selection[0]!
   const step = activeRun.steps[nodeId]
   if (!step) return <p className='text-xs text-muted-foreground'>This node has no run state yet.</p>
+  const instagramPreview = step.output && typeof step.output === 'object' && (step.output as { kind?: unknown }).kind === 'instagramDraftPreview'
+    ? step.output as InstagramDraftPreviewOutput
+    : null
 
   return (
     <div className='space-y-3'>
@@ -36,7 +43,11 @@ export function RunViewer() {
           {step.error || '(executor failed without a message)'}
         </pre>
       ) : null}
-      {step.output != null ? (
+      {instagramPreview ? (
+        <div className='overflow-hidden rounded-md border border-border'>
+          <InstagramDraftPreview preview={instagramPreview} className='p-2' />
+        </div>
+      ) : step.output != null ? (
         <pre className='whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-2 text-[11px] text-foreground/80'>{JSON.stringify(step.output, null, 2)}</pre>
       ) : null}
     </div>

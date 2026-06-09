@@ -358,6 +358,12 @@ export interface AppConfig {
   engineBinaryPath?: string
   /** Path to the `anubis-extractor` binary used for OCR and audio/video transcription. */
   extractorBinaryPath?: string
+  /** Whether local notifications are enabled. */
+  enableNotifications?: boolean
+  /** Whether the prompt improvement and context injection middleware hook is enabled. */
+  enableContextInjection?: boolean
+  /** The agent profile ID to use for context building and prompt improvement. */
+  contextInjectionProfileId?: string
 }
 
 /* ============================================================

@@ -144,15 +144,14 @@ export function ProjectSelector() {
                 {projects.map((p) => {
                   const isSelected = p.id === activeProject?.id
                   return (
-                    <button
+                    <div
                       key={p.id}
-                      type="button"
                       onClick={() => {
                         setActiveProjectId(p.id)
                         setOpen(false)
                       }}
                       className={cn(
-                        'group flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-all',
+                        'group flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-all cursor-pointer',
                         isSelected
                           ? 'bg-muted text-foreground font-medium'
                           : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -193,7 +192,7 @@ export function ProjectSelector() {
                           </button>
                         )}
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>

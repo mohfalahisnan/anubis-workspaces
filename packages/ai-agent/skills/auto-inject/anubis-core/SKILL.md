@@ -66,7 +66,8 @@ CORS allows localhost only. Hit `127.0.0.1` or `localhost`.
 | workflows, cron jobs | `workflows.md` |
 | raw Chrome, raw IG capture, discover handles | `crawler.md` |
 | chats, send/stream messages, ai-agent runs | `conversations.md` |
-| profiles, skills, config, OS Chrome list, workspace history | `admin.md` |
+| profiles, skills, config, OS Chrome list | `admin.md` |
+| workspaces, directory structure, knowledge base indexing and search | `workspace.md` |
 
 Open the sub-file before calling. Bodies are `.strict()` Zod — unknown keys → 400.
 

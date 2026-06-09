@@ -37,6 +37,7 @@ export interface CreateConversationServiceOpts {
   aiAgent?: AiAgentService
   idleMs?: number
   cronActionRunner?: (job: CronJob, stack: ConversationStack) => Promise<void>
+  contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
 }
 
 export interface ConversationStack {
@@ -138,6 +139,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     projects: projectsRepo,
     agentHomeRoot,
     workspacesRoot,
+    appConfig,
+    contextPacker: opts.contextPacker,
   })
 
   cron.loadFromDb()
@@ -210,3 +213,5 @@ export type { SseEvent } from './sse/broadcaster.js'
 export type { Project } from './db/repositories/projects-repo.js'
 export { ProjectsRepo } from './db/repositories/projects-repo.js'
 export { newId } from './util/ids.js'
+export { ensureWorkspaceStructure, DEFAULT_ANUBISIGNORE } from './util/workspace.js'
+

@@ -47,6 +47,9 @@ export interface AppConfig {
   levelMultipliers?: LevelMultipliersConfig
   engineBinaryPath?: string
   extractorBinaryPath?: string
+  enableNotifications?: boolean
+  enableContextInjection?: boolean
+  contextInjectionProfileId?: string
 }
 
 const CONFIG_FILE = 'config.json'
@@ -96,6 +99,24 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   if (levels) out.competitorLevels = levels
   const multipliers = sanitizeMultipliers(obj.levelMultipliers)
   if (multipliers) out.levelMultipliers = multipliers
+
+  if (typeof obj.enableNotifications === 'boolean') {
+    out.enableNotifications = obj.enableNotifications
+  } else if (obj.enableNotifications === undefined) {
+    out.enableNotifications = true
+  }
+
+  if (typeof obj.enableContextInjection === 'boolean') {
+    out.enableContextInjection = obj.enableContextInjection
+  } else if (obj.enableContextInjection === undefined) {
+    out.enableContextInjection = false
+  }
+
+  const contextInjectionProfileId = typeof obj.contextInjectionProfileId === 'string' ? obj.contextInjectionProfileId.trim() : ''
+  if (contextInjectionProfileId) {
+    out.contextInjectionProfileId = contextInjectionProfileId
+  }
+
   return out
 }
 

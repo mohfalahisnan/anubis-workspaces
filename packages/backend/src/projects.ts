@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
-import { newId } from '@anubis/conversation'
+import { newId, ensureWorkspaceStructure } from '@anubis/conversation'
 import { deleteKnowledgeBaseForWorkdir } from './knowledge-base.js'
 
 const CreateBody = z.object({
@@ -34,6 +34,9 @@ projectRoutes.get('/:id', (c) => {
 
 projectRoutes.post('/', async (c) => {
   const body = CreateBody.parse(await c.req.json())
+  if (body.workdir) {
+    ensureWorkspaceStructure(body.workdir)
+  }
   const id = newId()
   const now = Date.now()
   const project = {
@@ -48,6 +51,9 @@ projectRoutes.post('/', async (c) => {
 
 projectRoutes.patch('/:id', async (c) => {
   const body = UpdateBody.parse(await c.req.json())
+  if (body.workdir) {
+    ensureWorkspaceStructure(body.workdir)
+  }
   const project = getStack().projects.update(c.req.param('id'), body)
   if (!project) return c.json({ ok: false, error: 'not_found' }, 404)
   return c.json({ ok: true, project })

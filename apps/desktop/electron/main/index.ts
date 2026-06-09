@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell, Notification } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -34,6 +34,12 @@ const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 ipcMain.handle('anubis:get-backend-url', () => backendUrl)
+
+ipcMain.handle('anubis:show-notification', (_event, title: string, body: string) => {
+  if (Notification.isSupported()) {
+    new Notification({ title, body }).show()
+  }
+})
 
 // Open a folder or file in the OS file manager. shell.openPath returns
 // '' on success and a string error message otherwise — we forward both

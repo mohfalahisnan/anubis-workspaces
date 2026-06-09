@@ -21,6 +21,9 @@ import { TaskManager } from '../../src/conversations/task-manager.js'
 import { ConversationService, NoCredentialsError } from '../../src/conversations/conversation-service.js'
 import { CREDENTIAL_FILE } from '../../src/profiles/agent-home.js'
 
+import { AppConfigService } from '../../src/config/app-config.js'
+import { ProjectsRepo } from '../../src/db/repositories/projects-repo.js'
+
 function plantCreds(agentHomeRoot: string, profileId: string, agent: 'claude' | 'codex'): void {
   const home = join(agentHomeRoot, profileId, agent)
   mkdirSync(home, { recursive: true })
@@ -47,6 +50,9 @@ function setup() {
       }, 0)
       return { stream: e, workspaceId: 'w', sessionId: 's', agentSessionId: 'asid-1' }
     }),
+    runAgent: vi.fn(async () => {
+      return { ok: true, text: 'improved prompt' }
+    }),
   }
   const tm = new TaskManager(aiAgent as never, { idleMs: 60_000 })
   const sse = new SseBroadcaster()
@@ -57,6 +63,7 @@ function setup() {
   })
   const agentHomeRoot = mkdtempSync(join(tmpdir(), 'anubis-test-homes-'))
   const workspacesRoot = mkdtempSync(join(tmpdir(), 'anubis-test-workspaces-'))
+  const appConfig = new AppConfigService(agentHomeRoot)
   const svc = new ConversationService({
     db,
     profiles, skills: loader, sse, cron, tm, aiAgent: aiAgent as never,
@@ -65,8 +72,10 @@ function setup() {
     artifacts: new ArtifactsRepo(db),
     sessions: new AgentSessionsRepo(db),
     knownWorkspaces: new KnownWorkspacesRepo(db),
+    projects: new ProjectsRepo(db),
     agentHomeRoot,
     workspacesRoot,
+    appConfig,
   })
   return { svc, profiles, db, aiAgent, tm, sse, agentHomeRoot, workspacesRoot }
 }
@@ -307,6 +316,107 @@ describe('ConversationService', () => {
         expect(r2.existed).toBe(false)
         await ctx.tm.shutdown()
       })
+  })
+
+  it('runs prompt improver middleware when enabled', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
+    
+    // Enable context injection
+    ctx.svc['deps'].appConfig.update({
+      enableContextInjection: true,
+      contextInjectionProfileId: 'antigravity-context-builder'
+    })
+
+    // Setup mock project and contextPacker
+    const project = {
+      id: 'test-proj',
+      name: 'Test Project',
+      workdir: ctx.workspacesRoot,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    ctx.svc['deps'].projects.insert(project)
+    ctx.svc['deps'].contextPacker = vi.fn(async () => 'Test Context Pack Info')
+
+    const c = ctx.svc.create({ title: 'T', profileId: 'claude-coding', projectId: project.id, workspacePath: ctx.workspacesRoot })
+    await ctx.svc.sendMessage(c.id, { content: 'original user prompt' })
+    await new Promise((rs) => setTimeout(rs, 20))
+
+    // Check contextPacker was called
+    expect(ctx.svc['deps'].contextPacker).toHaveBeenCalledWith(project.id, 'original user prompt', undefined)
+
+    // Check aiAgent.runAgent was called
+    expect(ctx.aiAgent.runAgent).toHaveBeenCalled()
+
+    // Check message metadata has prompt improvement details
+    const msgs = ctx.svc.listMessages(c.id)
+    const userMsg = msgs.find(m => m.role === 'user')
+    expect(userMsg).toBeTruthy()
+    expect(userMsg?.metadata?.originalPrompt).toBe('original user prompt')
+    expect(userMsg?.metadata?.contextPack).toBe('Test Context Pack Info')
+    expect(userMsg?.metadata?.improvedPrompt).toBe('improved prompt')
+
+    // Check streamAgent was called with improved prompt
+    const call = ctx.aiAgent.streamAgent.mock.calls[ctx.aiAgent.streamAgent.mock.calls.length - 1]?.[0] as { prompt?: string }
+    expect(call?.prompt).toBe('improved prompt')
+
+    await ctx.tm.shutdown()
+  })
+
+  it('respects per-conversation overrides and custom builder system prompt', async () => {
+    plantCreds(ctx.agentHomeRoot, 'claude-coding', 'claude')
+
+    // Globally disable context injection, so it is only enabled by the override
+    ctx.svc['deps'].appConfig.update({
+      enableContextInjection: false,
+      contextInjectionProfileId: 'antigravity-context-builder'
+    })
+
+    // Modify the builder profile's appendSystemPrompt to a custom engineering instruction
+    const builderProfile = ctx.svc['deps'].profiles.get('antigravity-context-builder')
+    if (builderProfile) {
+      ctx.svc['deps'].profiles.update('antigravity-context-builder', {
+        configPatch: {
+          appendSystemPrompt: 'CUSTOM_SYSTEM_PROMPT_INSTRUCTION'
+        }
+      })
+    }
+
+    // Setup mock project and contextPacker
+    const project = {
+      id: 'test-proj-2',
+      name: 'Test Project 2',
+      workdir: ctx.workspacesRoot,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    ctx.svc['deps'].projects.insert(project)
+    ctx.svc['deps'].contextPacker = vi.fn(async () => 'Test Context Pack Info')
+
+    // Create a conversation with prompt injection enabled and budget 5000 in overrides
+    const c = ctx.svc.create({
+      title: 'T2',
+      profileId: 'claude-coding',
+      projectId: project.id,
+      workspacePath: ctx.workspacesRoot,
+      override: {
+        enableContextInjection: true,
+        contextPackBudget: 5000
+      }
+    })
+
+    await ctx.svc.sendMessage(c.id, { content: 'original user prompt' })
+    await new Promise((rs) => setTimeout(rs, 20))
+
+    // Check contextPacker was called with budget = 5000
+    expect(ctx.svc['deps'].contextPacker).toHaveBeenCalledWith(project.id, 'original user prompt', 5000)
+
+    // Check aiAgent.runAgent was called with builder's appendSystemPrompt set to the custom instructions
+    expect(ctx.aiAgent.runAgent).toHaveBeenCalledWith(expect.objectContaining({
+      appendSystemPrompt: 'CUSTOM_SYSTEM_PROMPT_INSTRUCTION'
+    }))
+
+    await ctx.tm.shutdown()
   })
 
   it('cleanup test home dirs', () => {

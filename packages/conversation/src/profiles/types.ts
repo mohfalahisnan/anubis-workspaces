@@ -23,6 +23,8 @@ export const ProfileConfigSchema = z.object({
   claudeCliProfile: z.string().min(1).optional(),
   enabledSkills: z.array(z.string().min(1)).optional(),
   disabledBuiltinSkills: z.array(z.string().min(1)).optional(),
+  enableContextInjection: z.boolean().optional(),
+  contextPackBudget: z.number().int().positive().optional(),
 }).strict()
 
 export type ProfileConfig = z.infer<typeof ProfileConfigSchema>

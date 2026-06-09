@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
+import { Notification, BrowserWindow } from 'electron'
 
 interface BackendReadyMessage {
   type: 'backend-ready'
@@ -82,6 +83,12 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, 
           continue
         }
 
+        const notification = parseNotificationMessage(line)
+        if (notification) {
+          showNativeNotification(notification.title, notification.body)
+          continue
+        }
+
         // Forward everything else (request logs, console.log) to the console
         // so backend activity is visible alongside stderr.
         console.log(`[backend] ${line}`)
@@ -128,4 +135,34 @@ function parseReadyMessage(line: string): BackendReadyMessage | undefined {
   }
 
   return undefined
+}
+
+function parseNotificationMessage(line: string): { title: string; body: string } | undefined {
+  if (line.startsWith('__ANUBIS_NOTIFICATION__:')) {
+    try {
+      const data = JSON.parse(line.substring('__ANUBIS_NOTIFICATION__:'.length))
+      if (typeof data.title === 'string' && typeof data.body === 'string') {
+        return data as { title: string; body: string }
+      }
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+function showNativeNotification(title: string, body: string) {
+  if (Notification.isSupported()) {
+    const n = new Notification({ title, body })
+    n.on('click', () => {
+      const allWindows = BrowserWindow.getAllWindows()
+      if (allWindows.length > 0) {
+        const win = allWindows[0]
+        if (win.isMinimized()) win.restore()
+        win.show()
+        win.focus()
+      }
+    })
+    n.show()
+  }
 }

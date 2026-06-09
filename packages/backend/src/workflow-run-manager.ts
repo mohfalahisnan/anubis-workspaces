@@ -15,6 +15,7 @@ import { captureInstagramData, silentReporter, type StandardCrawlerOutput } from
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 import { LessonStore } from './lesson-store.js'
 import { runOcr, runTranscribe, type TranscribeOptions } from './extractor.js'
+import { notify } from './utils/notifications.js'
 
 type Listener = (event: RunEvent) => void
 
@@ -168,6 +169,8 @@ export class WorkflowRunManager {
     startedAt: number,
     seed?: Record<string, unknown>,
   ): Promise<void> {
+    const workflow = this.stack.workflows.get(active.workflowId)
+    const workflowName = workflow?.name ?? 'Unknown'
     emit({ kind: 'run-started', runId: active.runId, at: startedAt })
 
     const wrappedEmit = async (event: NodeRunEvent) => {
@@ -287,6 +290,7 @@ export class WorkflowRunManager {
             new Promise<Decision>((resolve, reject) => {
               active.pendingApprovals.set(nodeId, { resolve, reject })
               void wrappedEmit({ kind: 'node-awaiting', nodeId, at: Date.now(), title: opts.title, instructions: opts.instructions })
+              notify('Workflow Approval Required', `Workflow "${workflowName}" is waiting for approval in node "${opts.title || nodeId}".`)
               const onAbort = () => { active.pendingApprovals.delete(nodeId); reject(new Error('run cancelled')) }
               if (active.controller.signal.aborted) onAbort()
               else active.controller.signal.addEventListener('abort', onAbort, { once: true })
@@ -336,6 +340,12 @@ export class WorkflowRunManager {
     this.stack.workflowRuns.setRunStatus(active.runId, status, finishedAt, runError ?? null)
     emit({ kind: 'run-finished', runId: active.runId, at: finishedAt, status, error: runError })
     active.finished = true
+
+    if (status === 'succeeded') {
+      notify('Workflow Completed', `Workflow "${workflowName}" finished successfully.`)
+    } else if (status === 'failed') {
+      notify('Workflow Failed', `Workflow "${workflowName}" failed: ${runError}`)
+    }
   }
 
   private async maybeMaterializeOutput(

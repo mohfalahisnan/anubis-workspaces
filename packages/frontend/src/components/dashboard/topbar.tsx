@@ -1,8 +1,23 @@
-import { PlusIcon, SearchIcon } from 'lucide-react'
+import { PlusIcon, SearchIcon, Loader2Icon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
 import { useNavigation } from '@/lib/navigation'
+import { useKbLoader } from '@/lib/use-kb-loader'
+
+function KbBackgroundLoaderIndicator() {
+  const loading = useKbLoader((s) => s.loading)
+  const progressText = useKbLoader((s) => s.progressText)
+
+  if (!loading) return null
+
+  return (
+    <div className='hidden items-center gap-2 rounded-full border border-[color-mix(in_oklab,var(--anubis-gold)_30%,var(--border))] bg-card/60 px-3 py-1.5 text-xs text-muted-foreground animate-pulse shadow-sm sm:flex mr-2'>
+      <Loader2Icon className='size-3.5 animate-spin text-[var(--anubis-gold)]' />
+      <span className='font-mono text-[11px] font-medium tracking-tight text-foreground/80'>{progressText}</span>
+    </div>
+  )
+}
 
 export function TopBar({ breadcrumb }: { breadcrumb?: string }) {
   const { navigate } = useNavigation()
@@ -27,6 +42,7 @@ export function TopBar({ breadcrumb }: { breadcrumb?: string }) {
       </div>
 
       <div className='flex flex-1 items-center justify-end gap-1.5 sm:flex-none'>
+        <KbBackgroundLoaderIndicator />
         <Button
           size='sm'
           className='gap-1.5'

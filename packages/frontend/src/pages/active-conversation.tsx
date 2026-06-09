@@ -5,7 +5,7 @@ import {
   FolderIcon, FolderOpenIcon,
 } from 'lucide-react'
 
-import type { AgentAvailability, AgentKind, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary } from '@anubis/shared'
+import type { AgentAvailability, AgentKind, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary, AppConfig } from '@anubis/shared'
 
 import {
   NoCredentialsError,
@@ -14,6 +14,7 @@ import {
   listProfiles,
   sendMessage as apiSendMessage,
   updateConversation,
+  getAppConfig,
   type ReasoningEffort,
 } from '@/api'
 import { LoginModal } from '@/components/login-modal'
@@ -37,6 +38,7 @@ import { useProject } from '@/lib/use-project'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
+import { BudgetPicker } from '@/components/composer/budget-picker'
 
 /** Friendly install target per agent, used in the composer's "not on PATH" hint. */
 const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
@@ -225,6 +227,81 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const effectiveEffort: ReasoningEffort =
     pickedEffort ?? convOverrideEffort ?? profileDefaultEffort
   const effortIsOverride = effectiveEffort !== profileDefaultEffort
+
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
+  useEffect(() => {
+    getAppConfig().then(setAppConfig).catch(() => {})
+  }, [])
+
+  // --- Prompt-optimizer local state (mirrors the pickedEffort pattern) ---
+  const [pickedEnableContext, setPickedEnableContext] = useState<boolean | null>(null)
+  const [pickedBudget, setPickedBudget] = useState<number | undefined | null>(null)
+
+  const overrides = conv?.extra?.overrides || {}
+  const convOverrideEnableContext =
+    overrides.enableContextInjection !== undefined
+      ? (overrides.enableContextInjection as boolean)
+      : undefined
+  const profileDefaultEnableContext =
+    selectedProfile?.config.enableContextInjection !== undefined
+      ? (selectedProfile.config.enableContextInjection as boolean)
+      : (appConfig?.enableContextInjection ?? false)
+
+  const effectiveEnableContext: boolean =
+    pickedEnableContext ?? convOverrideEnableContext ?? profileDefaultEnableContext
+
+  const convOverrideBudget =
+    overrides.contextPackBudget !== undefined
+      ? (overrides.contextPackBudget as number)
+      : undefined
+  const profileDefaultBudget =
+    selectedProfile?.config.contextPackBudget !== undefined
+      ? (selectedProfile.config.contextPackBudget as number)
+      : undefined
+
+  const effectiveBudget: number | undefined =
+    pickedBudget !== null ? pickedBudget : (convOverrideBudget ?? profileDefaultBudget)
+
+  const onEnableContextChange = useCallback(async (next: boolean) => {
+    setPickedEnableContext(next)
+    setSendError(null)
+    if (!conversationId) return
+    const currentOverrides = conv?.extra?.overrides || {}
+    try {
+      const updated = await updateConversation(conversationId, {
+        override: {
+          ...currentOverrides,
+          enableContextInjection: next
+        }
+      })
+      setConv(updated)
+    } catch (e) {
+      setPickedEnableContext(null)
+      setSendError(e instanceof Error ? e.message : String(e))
+    }
+  }, [conversationId, conv])
+
+  const onBudgetChange = useCallback(async (next: number | undefined) => {
+    setPickedBudget(next === undefined ? undefined : next)
+    setSendError(null)
+    if (!conversationId) return
+    const currentOverrides = conv?.extra?.overrides || {}
+    const nextOverrides = { ...currentOverrides }
+    if (next === undefined) {
+      delete nextOverrides.contextPackBudget
+    } else {
+      nextOverrides.contextPackBudget = next
+    }
+    try {
+      const updated = await updateConversation(conversationId, {
+        override: nextOverrides
+      })
+      setConv(updated)
+    } catch (e) {
+      setPickedBudget(null)
+      setSendError(e instanceof Error ? e.message : String(e))
+    }
+  }, [conversationId, conv])
 
   useEffect(() => {
     if (!streaming) { setElapsed(0); return }
@@ -483,6 +560,10 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
         pendingQuote={pendingQuote}
         onConsumeQuote={() => setPendingQuote(null)}
         conversationId={conversationId ?? ''}
+        enableContextInjection={effectiveEnableContext}
+        onEnableContextInjectionChange={onEnableContextChange}
+        contextPackBudget={effectiveBudget}
+        onContextPackBudgetChange={onBudgetChange}
       />
 
       {selectionPopup && (
@@ -543,6 +624,60 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   )
 }
 
+function CollapsibleHookCard({
+  contextPack,
+  improvedPrompt,
+}: {
+  contextPack: string
+  improvedPrompt: string
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className='flex flex-col items-end w-full max-w-[75%]'>
+      <button
+        type='button'
+        onClick={() => setExpanded(!expanded)}
+        className='flex items-center gap-1.5 rounded-full border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3 py-1 text-[11.5px] font-medium text-foreground hover:bg-[color-mix(in_oklab,var(--anubis-gold)_18%,transparent)] transition-all cursor-pointer'
+      >
+        <span className='size-[5px] rounded-full bg-[var(--anubis-gold-hi)]' />
+        ✨ Prompt Optimized
+        <ChevronDownIcon
+          className={cn(
+            'size-3 text-muted-foreground transition-transform duration-200',
+            expanded && 'rotate-180',
+          )}
+        />
+      </button>
+
+      {expanded && (
+        <div className='mt-2 w-full rounded-lg border border-border bg-card p-3 shadow-md text-left flex flex-col gap-3 animate-in fade-in duration-200'>
+          {contextPack && (
+            <div>
+              <div className='mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground'>
+                Retrieved Context Pack
+              </div>
+              <div className='max-h-40 overflow-y-auto rounded border border-border bg-muted/30 p-2 font-mono text-[11px] text-muted-foreground/90 whitespace-pre-wrap break-all scrollbar-thin'>
+                {contextPack}
+              </div>
+            </div>
+          )}
+          {improvedPrompt && (
+            <div>
+              <div className='mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground'>
+                Improved Prompt Sent to Agent
+              </div>
+              <div className='max-h-40 overflow-y-auto rounded border border-border bg-muted/30 p-2 font-mono text-[11.5px] text-foreground whitespace-pre-wrap scrollbar-thin'>
+                {improvedPrompt}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RenderedMessage({
   message,
   conversationId,
@@ -552,11 +687,25 @@ function RenderedMessage({
 }) {
   if (message.role === 'user') {
     const files = message.metadata?.fileReferences as string[] | undefined
+    const originalPrompt = message.metadata?.originalPrompt as string | undefined
+    const contextPack = message.metadata?.contextPack as string | undefined
+    const improvedPrompt = message.metadata?.improvedPrompt as string | undefined
+
+    const showHookInfo = !!(originalPrompt || contextPack || improvedPrompt)
+
     return (
-      <div className='flex flex-col items-end gap-1.5'>
+      <div className='flex flex-col items-end gap-1.5 w-full'>
         <div className='max-w-[75%] rounded-[13px] rounded-br-[4px] border border-border bg-card px-[15px] py-3 text-[15px] leading-[1.5] tracking-[-0.005em] text-foreground'>
-          {message.content}
+          {originalPrompt ?? message.content}
         </div>
+
+        {showHookInfo && (
+          <CollapsibleHookCard
+            contextPack={contextPack ?? ''}
+            improvedPrompt={improvedPrompt ?? ''}
+          />
+        )}
+
         {files && files.length > 0 && (
           <div className='flex flex-col items-end gap-1 max-w-[75%]'>
             {files.map((file, idx) => {
@@ -862,6 +1011,10 @@ function Composer({
   pendingQuote,
   onConsumeQuote,
   conversationId,
+  enableContextInjection,
+  onEnableContextInjectionChange,
+  contextPackBudget,
+  onContextPackBudgetChange,
 }: {
   onSend: (content: string, files?: string[]) => void
   onStop: () => void
@@ -883,6 +1036,10 @@ function Composer({
   pendingQuote?: string | null
   onConsumeQuote?: () => void
   conversationId: string
+  enableContextInjection: boolean
+  onEnableContextInjectionChange: (next: boolean) => void
+  contextPackBudget: number | undefined
+  onContextPackBudgetChange: (next: number | undefined) => void
 }) {
   const [value, setValue] = useState('')
   const [quotes, setQuotes] = useState<string[]>([])
@@ -1033,7 +1190,7 @@ function Composer({
           className='block max-h-[160px] min-h-[28px] w-full resize-none bg-transparent px-1 py-1.5 text-[14.5px] leading-[1.5] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60'
         />
 
-        <div className='mt-1 flex items-center gap-2 pr-[110px]'>
+        <div className={cn('mt-1 flex items-center gap-2', enableContextInjection ? 'pr-[240px]' : 'pr-[135px]')}>
           <button
             type='button'
             aria-label='Attach'
@@ -1068,35 +1225,61 @@ function Composer({
           />
         </div>
 
-        {streaming ? (
+        <div className='absolute bottom-2 right-2 flex items-center gap-2'>
           <button
-            type='submit'
-            disabled={stopping}
-            className='absolute bottom-2 right-2 inline-flex h-[34px] items-center gap-1.5 rounded-md bg-destructive/15 px-4 text-[14px] font-semibold tracking-[-0.01em] text-destructive transition-colors hover:bg-destructive/25 disabled:opacity-50'
-          >
-            {stopping ? (
-              <Loader2Icon className='size-[14px] animate-spin' strokeWidth={2} />
-            ) : (
-              <SquareIcon className='size-[14px]' strokeWidth={2.4} fill='currentColor' />
-            )}
-            Stop
-          </button>
-        ) : (
-          <button
-            type='submit'
-            disabled={sendDisabled}
-            title={agentUnavailable && agent ? `${agent} not found on PATH` : undefined}
+            type='button'
+            disabled={streaming}
+            onClick={() => onEnableContextInjectionChange(!enableContextInjection)}
+            title={enableContextInjection ? 'Prompt Optimizer: Enabled' : 'Prompt Optimizer: Disabled'}
             className={cn(
-              'absolute bottom-2 right-2 inline-flex h-[34px] items-center gap-1.5 rounded-md px-4 text-[14px] font-semibold tracking-[-0.01em] transition-colors',
-              sendDisabled
-                ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-[0.42]'
-                : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+              'inline-flex size-[34px] items-center justify-center rounded-md border transition-all',
+              streaming && 'cursor-not-allowed opacity-50',
+              enableContextInjection
+                ? 'border-[var(--anubis-gold)] bg-[color-mix(in_oklab,var(--anubis-gold)_15%,transparent)] text-[var(--anubis-gold)]'
+                : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
           >
-            <SendIcon className='size-[14px]' strokeWidth={2} />
-            Send
+            <BrainIcon className='size-[16px]' strokeWidth={2} />
           </button>
-        )}
+
+          {enableContextInjection && (
+            <BudgetPicker
+              value={contextPackBudget}
+              onChange={onContextPackBudgetChange}
+              disabled={streaming}
+            />
+          )}
+
+          {streaming ? (
+            <button
+              type='submit'
+              disabled={stopping}
+              className='inline-flex h-[34px] items-center gap-1.5 rounded-md bg-destructive/15 px-4 text-[14px] font-semibold tracking-[-0.01em] text-destructive transition-colors hover:bg-destructive/25 disabled:opacity-50'
+            >
+              {stopping ? (
+                <Loader2Icon className='size-[14px] animate-spin' strokeWidth={2} />
+              ) : (
+                <SquareIcon className='size-[14px]' strokeWidth={2.4} fill='currentColor' />
+              )}
+              Stop
+            </button>
+          ) : (
+            <button
+              type='submit'
+              disabled={sendDisabled}
+              title={agentUnavailable && agent ? `${agent} not found on PATH` : undefined}
+              className={cn(
+                'inline-flex h-[34px] items-center gap-1.5 rounded-md px-4 text-[14px] font-semibold tracking-[-0.01em] transition-colors',
+                sendDisabled
+                  ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-[0.42]'
+                  : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+              )}
+            >
+              <SendIcon className='size-[14px]' strokeWidth={2} />
+              Send
+            </button>
+          )}
+        </div>
       </div>
     </form>
     </>

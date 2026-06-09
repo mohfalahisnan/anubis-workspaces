@@ -17,6 +17,7 @@ import type {
 } from '@anubis/shared'
 import type { ConversationStack, CronJob, CapturedPost } from '@anubis/conversation'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
+import { notify } from './utils/notifications.js'
 
 interface CronRunSummary {
   newCompetitors: number
@@ -70,6 +71,21 @@ export async function runCronActionJob(
     }
   } catch (err) {
     output.summary.errors.push(err instanceof Error ? err.message : String(err))
+  }
+
+  if (output.summary.errors.length > 0) {
+    const errorMsg = output.summary.errors[0]
+    notify('Cron Job Failed', `Cron job "${job.name}" failed: ${errorMsg}`)
+  } else {
+    let summaryText = ''
+    if (job.actionType === 'competitor-discovery') {
+      summaryText = `Found ${output.summary.newCompetitors} new competitor candidates.`
+    } else if (job.actionType === 'capture-posts') {
+      summaryText = `Captured ${output.summary.postsCaptured} posts.`
+    } else {
+      summaryText = `Finished job ${job.name}.`
+    }
+    notify('Cron Job Completed', summaryText)
   }
 
   await writeCronRunOutput(job, stack, output).catch((err) => {

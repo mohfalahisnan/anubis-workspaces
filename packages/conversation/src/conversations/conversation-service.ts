@@ -1,10 +1,12 @@
 import { join, relative, isAbsolute, resolve } from 'node:path'
-import { mkdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import type { Db } from '../db/client.js'
 import { newId } from '../util/ids.js'
 import { hasCredentials } from '../profiles/agent-home.js'
+import { ensureWorkspaceStructure } from '../util/workspace.js'
+import type { AppConfigService } from '../config/app-config.js'
 
 export class NoCredentialsError extends Error {
   readonly code = NO_CREDENTIALS_ERROR_CODE
@@ -89,13 +91,15 @@ export interface ConversationServiceDeps {
   sse: SseBroadcaster
   cron: CronService
   tm: TaskManager
-  aiAgent: Pick<AiAgentService, 'streamAgent'>
+  aiAgent: Pick<AiAgentService, 'streamAgent' | 'runAgent'>
   conversations: ConversationsRepo
   messages: MessagesRepo
   artifacts: ArtifactsRepo
   sessions: AgentSessionsRepo
   knownWorkspaces: KnownWorkspacesRepo
   projects: ProjectsRepo
+  appConfig: AppConfigService
+  contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
   /**
    * Root directory under which each profile gets its own isolated
    * agent home folder ({agentHomeRoot}/{profileId}/{agent}/).
@@ -120,9 +124,7 @@ export class ConversationService {
     const now = nowMs()
     const id = newId()
     const workspacePath = input.workspacePath ?? join(this.deps.workspacesRoot, id)
-    if (!input.workspacePath) {
-      mkdirSync(workspacePath, { recursive: true })
-    }
+    ensureWorkspaceStructure(workspacePath)
     const conv: Conversation = {
       id,
       title: input.title,
@@ -193,7 +195,7 @@ export class ConversationService {
       if (!trimmed) throw new Error('workspacePath cannot be empty')
       // Auto-create so the spawned CLI doesn't immediately ENOENT into cwd.
       // If the user passed a junk path the underlying mkdir will surface.
-      mkdirSync(trimmed, { recursive: true })
+      ensureWorkspaceStructure(trimmed)
       workspacePath = trimmed
     }
     this.deps.conversations.updateFields(id, {
@@ -243,10 +245,87 @@ export class ConversationService {
     const now = nowMs()
     const msgId = newId()
     const userRowId = newId()
+
+    let finalPrompt = input.content
+    let contextPackText = ''
+    let hookUsed = false
+
+    const appConfig = this.deps.appConfig.get()
+    const proj = cur.projectId ? this.deps.projects.findById(cur.projectId) : null
+
+    // Per-conversation or profile-level override, falling back to global appConfig
+    const enableContext = resolved.enableContextInjection !== undefined
+      ? resolved.enableContextInjection
+      : (appConfig.enableContextInjection ?? false)
+
+    if (enableContext && this.deps.contextPacker && proj && proj.workdir && existsSync(proj.workdir)) {
+      try {
+        const improverProfileId = appConfig.contextInjectionProfileId || 'antigravity-context-builder'
+        const improverProfile = this.deps.profiles.get(improverProfileId)
+        if (improverProfile) {
+          const budget = resolved.contextPackBudget
+          contextPackText = await this.deps.contextPacker(cur.projectId!, input.content, budget)
+          if (contextPackText && contextPackText.trim()) {
+            const improverResolved = this.deps.profiles.resolve(improverProfileId)
+            const builderPrompt = `Here is the user's original prompt:
+---
+${input.content}
+---
+
+Here is the context pack from the project knowledge base:
+---
+${contextPackText}
+---
+
+Please generate the improved prompt.`
+
+            // Fetch custom system prompt instructions from builder profile's config
+            const customInstruction = improverProfile.config.appendSystemPrompt?.trim()
+            const improverSystemPrompt = customInstruction || `You are an expert prompt engineer and context builder.
+Your task is to take the user's original query/prompt and a set of context-pack text from the project's knowledge base, and output an improved, enriched, and more specific prompt.
+This improved prompt will be sent to another AI agent to solve.
+The improved prompt should:
+1. Clearly specify the goal of the original query.
+2. Incorporate relevant details, file structures, schemas, API contracts, or documentation from the context pack.
+3. Be direct, clear, and structured.
+4. DO NOT add any greeting, preamble, or explanation. Only output the final improved prompt.`
+
+            const runRes = await this.deps.aiAgent.runAgent({
+              agent: improverResolved.agent,
+              model: improverResolved.model,
+              cwd: cur.workspacePath,
+              prompt: builderPrompt,
+              appendSystemPrompt: improverSystemPrompt,
+              sandboxMode: 'read-only',
+              approvalPolicy: 'never',
+              reasoningEffort: improverResolved.reasoningEffort,
+            })
+
+            if (runRes.ok && runRes.text) {
+              finalPrompt = runRes.text.trim()
+              hookUsed = true
+            }
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[context-injection-hook] Error running prompt improver:', err)
+      }
+    }
+
+    const metadata = {
+      ...(input.fileReferences?.length ? { fileReferences: input.fileReferences } : {}),
+      ...(hookUsed ? {
+        originalPrompt: input.content,
+        contextPack: contextPackText,
+        improvedPrompt: finalPrompt,
+      } : {}),
+    }
+
     this.deps.messages.insert({
       id: userRowId, conversationId: cur.id, msgId, role: 'user',
       content: input.content, createdAt: now,
-      metadata: input.fileReferences?.length ? { fileReferences: input.fileReferences } : undefined,
+      metadata: Object.keys(metadata).length ? metadata : undefined,
     })
     this.deps.conversations.updateStatus(cur.id, 'running')
 
@@ -273,6 +352,7 @@ export class ConversationService {
     // cwd) so the relative `.agents/skills/<name>/SKILL.md` pointer resolves for every
     // agent — Claude and Codex alike — regardless of which config dir each one
     // auto-scans.
+    ensureWorkspaceStructure(cur.workspacePath)
     writeProfileSkills(cur.workspacePath, skillDefs)
     const { appendSystemPrompt: _, ...resolvedWithoutAppend } = resolved
     const resolvedForTurn: ResolvedProfile = { ...resolvedWithoutAppend, env: envWithHome }
@@ -304,7 +384,7 @@ export class ConversationService {
       { id: cur.id, agent: cur.agent, workspacePath: cur.workspacePath },
       resolvedForTurn,
       {
-        prompt: input.content,
+        prompt: finalPrompt,
         msgId,
         prevAgentSessionId: prevSession,
         ...(webSystemPrompt !== undefined

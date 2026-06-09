@@ -129,4 +129,32 @@ export const BUILTIN_PROFILES: Profile[] = [
     createdAt: NOW,
     updatedAt: NOW,
   },
+  {
+    id: 'antigravity-context-builder',
+    name: 'Antigravity Context Builder',
+    description: 'Gemini 3.5 Flash via Antigravity with medium reasoning effort, used to build context and refine prompts.',
+    source: 'builtin',
+    config: {
+      agent: 'antigravity',
+      model: 'gemini-3.5-flash',
+      reasoningEffort: 'medium',
+    },
+    sortOrder: 100,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
+  {
+    id: 'claude-context-builder',
+    name: 'Claude Context Builder',
+    description: 'Claude Sonnet with medium reasoning effort, used to build context and refine prompts.',
+    source: 'builtin',
+    config: {
+      agent: 'claude',
+      model: 'claude-sonnet-4-6',
+      reasoningEffort: 'medium',
+    },
+    sortOrder: 110,
+    createdAt: NOW,
+    updatedAt: NOW,
+  },
 ]

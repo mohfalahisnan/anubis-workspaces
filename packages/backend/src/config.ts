@@ -43,6 +43,9 @@ const PatchBody = z.object({
   levelMultipliers: LevelMultipliersSchema.optional(),
   engineBinaryPath: z.string().optional(),
   extractorBinaryPath: z.string().optional(),
+  enableNotifications: z.boolean().optional(),
+  enableContextInjection: z.boolean().optional(),
+  contextInjectionProfileId: z.string().optional(),
 }).strict()
 
 export const configRoutes = new Hono()

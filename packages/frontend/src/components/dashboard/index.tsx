@@ -11,6 +11,7 @@ import {
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import { useNavigation, type PageKey } from '@/lib/navigation'
+import { useKbLoader } from '@/lib/use-kb-loader'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { PlannerPage } from '@/pages/planner'
@@ -244,6 +245,14 @@ function CurrentPage() {
 
 export function Dashboard() {
   const { route } = useNavigation()
+  const { activeProject } = useProject()
+  const loadProjectData = useKbLoader((s) => s.loadProjectData)
+
+  useEffect(() => {
+    if (activeProject?.id) {
+      void loadProjectData(activeProject.id)
+    }
+  }, [activeProject?.id, loadProjectData])
 
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>

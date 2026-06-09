@@ -1,0 +1,71 @@
+# Auto-created by Anubis.
+# The engine does NOT honour .gitignore — only this file.
+# Add patterns to skip files/folders during indexing.
+
+# Root AI/system folders
+.agents/
+.codex/
+.claude/
+
+# Runtime/generated files
+runtime/
+outputs/
+datasets/exports/
+datasets/snapshots/
+
+# Inbox should not be indexed directly
+inbox/
+
+# Temp/cache/logs
+tmp/
+temp/
+.cache/
+*.tmp
+*.log
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Heavy binaries unless explicitly ingested
+*.mp4
+*.mov
+*.avi
+*.zip
+*.7z
+*.rar
+*.json
+
+# Version control
+.git/
+
+# Dependencies
+node_modules/
+vendor/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+target/
+out/
+.next/
+.turbo/
+
+# Lockfiles (large, low information)
+*.lock
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Anubis-generated sidecars (text already covered via the source file)
+*.anubis.txt
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

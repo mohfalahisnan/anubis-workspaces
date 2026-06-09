@@ -13,14 +13,12 @@ import type {
   KnowledgeBaseStats,
 } from '@anubis/shared'
 import {
-  getKnowledgeBaseIgnoreFile,
-  getKnowledgeBaseStats,
   indexKnowledgeBase,
-  listKnowledgeBaseDocuments,
   searchKnowledgeBase,
 } from '@/api'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
+import { useKbLoader } from '@/lib/use-kb-loader'
 
 type Banner = { kind: 'success' | 'error'; message: string }
 
@@ -31,9 +29,13 @@ export function KnowledgeBasePage() {
   const projectId = activeProject?.id
   const projectWorkdir = activeProject?.workdir
 
-  const [stats, setStats] = useState<KnowledgeBaseStats | null>(null)
-  const [docs, setDocs] = useState<KnowledgeBaseDocument[] | null>(null)
-  const [ignoreFile, setIgnoreFile] = useState<{ exists: boolean; path: string; content: string } | null>(null)
+  // Read state reactively from the global background loader store
+  const backgroundLoading = useKbLoader((s) => s.loading)
+  const stats = useKbLoader((s) => projectId ? s.kbStats[projectId] : null) || null
+  const docs = useKbLoader((s) => projectId ? s.kbDocs[projectId] : null) || null
+  const ignoreFile = useKbLoader((s) => projectId ? s.kbIgnoreFiles[projectId] : null) || null
+  const loadProjectData = useKbLoader((s) => s.loadProjectData)
+
   const [busy, setBusy] = useState(false)
   const [indexing, setIndexing] = useState<IndexMode | null>(null)
   const [banner, setBanner] = useState<Banner | null>(null)
@@ -42,40 +44,17 @@ export function KnowledgeBasePage() {
   const [searching, setSearching] = useState(false)
   const [hits, setHits] = useState<KnowledgeBaseSearchHit[] | null>(null)
 
-  // Opening the page is free: only the .anubisignore file (cheap, disk-only) is
-  // read on mount. Stats + documents call the engine binary, which may not yet
-  // be configured — load those only when the user explicitly clicks Refresh.
-  useEffect(() => {
-    if (!projectId || !projectWorkdir) {
-      setIgnoreFile(null); setStats(null); setDocs(null); setHits(null)
-      return
-    }
-    let alive = true
-    void getKnowledgeBaseIgnoreFile(projectId).then((ig) => {
-      if (alive) setIgnoreFile(ig)
-    }).catch(() => {
-      if (alive) setIgnoreFile(null)
-    })
-    return () => { alive = false }
-  }, [projectId, projectWorkdir])
-
   const refresh = useCallback(async () => {
     if (!projectId || !projectWorkdir) return
     setBusy(true); setBanner(null)
     try {
-      const [s, d, ig] = await Promise.allSettled([
-        getKnowledgeBaseStats(projectId),
-        listKnowledgeBaseDocuments(projectId),
-        getKnowledgeBaseIgnoreFile(projectId),
-      ])
-      if (s.status === 'fulfilled') setStats(s.value)
-      else setBanner({ kind: 'error', message: s.reason instanceof Error ? s.reason.message : 'Could not load stats.' })
-      if (d.status === 'fulfilled') setDocs(d.value)
-      if (ig.status === 'fulfilled') setIgnoreFile(ig.value)
+      await loadProjectData(projectId, true)
+    } catch (e) {
+      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Refresh failed.' })
     } finally {
       setBusy(false)
     }
-  }, [projectId, projectWorkdir])
+  }, [projectId, projectWorkdir, loadProjectData])
 
   const loaded = stats !== null
   const hasIndex = (stats?.documentCount ?? 0) > 0
@@ -156,10 +135,10 @@ export function KnowledgeBasePage() {
             <button
               type='button'
               onClick={() => void refresh()}
-              disabled={busy}
+              disabled={busy || backgroundLoading}
               className='inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[13px] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50'
             >
-              <RefreshCwIcon className={cn('size-[14px]', busy && 'animate-spin')} strokeWidth={1.8} />
+              <RefreshCwIcon className={cn('size-[14px]', (busy || backgroundLoading) && 'animate-spin')} strokeWidth={1.8} />
               Refresh
             </button>
           </div>
@@ -190,20 +169,24 @@ export function KnowledgeBasePage() {
         {!loaded && (
           <section className='mt-8 rounded-lg border border-dashed border-border bg-card/60 p-8'>
             <div className='flex flex-col items-center gap-3 text-center'>
-              <DatabaseIcon className='size-8 text-muted-foreground' strokeWidth={1.5} />
-              <h2 className='text-[16px] font-semibold'>Status not loaded</h2>
+              <DatabaseIcon className={cn('size-8 text-muted-foreground', backgroundLoading && 'animate-pulse text-[var(--anubis-gold)]')} strokeWidth={1.5} />
+              <h2 className='text-[16px] font-semibold'>
+                {backgroundLoading ? 'Connecting to engine in background...' : 'Status not loaded'}
+              </h2>
               <p className='max-w-md text-[13px] text-muted-foreground'>
-                Opening this page is free — Anubis does not auto-query the engine. Click <strong>Refresh</strong> to load index stats and documents, or jump straight to indexing below.
+                {backgroundLoading
+                  ? 'Anubis is loading the project index statistics and ignore rules in the background. Please wait.'
+                  : 'Opening this page is free — Anubis does not auto-query the engine. Click Refresh to load index stats and documents, or jump straight to indexing below.'}
               </p>
               <div className='mt-2 flex flex-wrap items-center justify-center gap-2'>
                 <button
                   type='button'
                   onClick={() => void refresh()}
-                  disabled={busy}
+                  disabled={busy || backgroundLoading}
                   className='inline-flex h-10 items-center gap-2 rounded-md border border-border bg-card px-4 text-[13.5px] font-medium text-foreground transition-colors hover:bg-card/70 disabled:opacity-50'
                 >
-                  <RefreshCwIcon className={cn('size-[15px]', busy && 'animate-spin')} strokeWidth={1.8} />
-                  {busy ? 'Loading…' : 'Refresh'}
+                  <RefreshCwIcon className={cn('size-[15px]', (busy || backgroundLoading) && 'animate-spin')} strokeWidth={1.8} />
+                  {busy || backgroundLoading ? 'Loading…' : 'Refresh'}
                 </button>
                 <button
                   type='button'

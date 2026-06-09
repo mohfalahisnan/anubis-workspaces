@@ -21,6 +21,9 @@ import { TaskManager } from '../../src/conversations/task-manager.js'
 import { ConversationService } from '../../src/conversations/conversation-service.js'
 import { CREDENTIAL_FILE } from '../../src/profiles/agent-home.js'
 
+import { AppConfigService } from '../../src/config/app-config.js'
+import { ProjectsRepo } from '../../src/db/repositories/projects-repo.js'
+
 function plantCreds(agentHomeRoot: string, profileId: string, agent: 'claude' | 'codex'): void {
   const home = join(agentHomeRoot, profileId, agent)
   mkdirSync(home, { recursive: true })
@@ -44,6 +47,9 @@ function setupWith(drive: (em: TypedEmitter<AgentEventMap>) => void) {
       setTimeout(() => drive(e), 0)
       return { stream: e, workspaceId: 'w', sessionId: 's', agentSessionId: 'asid-1' }
     }),
+    runAgent: vi.fn(async () => {
+      return { ok: true, text: 'improved prompt' }
+    }),
   }
   const tm = new TaskManager(aiAgent as never, { idleMs: 60_000 })
   const sse = new SseBroadcaster()
@@ -55,6 +61,7 @@ function setupWith(drive: (em: TypedEmitter<AgentEventMap>) => void) {
   const agentHomeRoot = mkdtempSync(join(tmpdir(), 'anubis-test-homes-'))
   const workspacesRoot = mkdtempSync(join(tmpdir(), 'anubis-test-workspaces-'))
   plantCreds(agentHomeRoot, 'claude-coding', 'claude')
+  const appConfig = new AppConfigService(agentHomeRoot)
   const svc = new ConversationService({
     db,
     profiles, skills: loader, sse, cron, tm, aiAgent: aiAgent as never,
@@ -63,8 +70,10 @@ function setupWith(drive: (em: TypedEmitter<AgentEventMap>) => void) {
     artifacts: new ArtifactsRepo(db),
     sessions: new AgentSessionsRepo(db),
     knownWorkspaces: new KnownWorkspacesRepo(db),
+    projects: new ProjectsRepo(db),
     agentHomeRoot,
     workspacesRoot,
+    appConfig,
   })
   return { svc, agentHomeRoot, workspacesRoot }
 }

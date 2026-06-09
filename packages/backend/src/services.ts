@@ -31,6 +31,11 @@ export function getStack(): ConversationStack {
       userOptIn: join(userSkillsRoot, 'opt-in'),
     },
     cronActionRunner: (job, services) => runCronActionJob(job, services, dataDir),
+    contextPacker: async (projectId, query, budget) => {
+      const { contextPack } = await import('./knowledge-base.js')
+      const res = await contextPack({ projectId, query, budget })
+      return res.text
+    },
   })
   return stack
 }

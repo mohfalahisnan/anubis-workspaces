@@ -3,6 +3,7 @@ import { join, normalize } from 'node:path'
 import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { DEFAULT_ANUBISIGNORE } from '@anubis/conversation'
 import { getDataDir, getStack } from './services.js'
 import { spawnCliJson } from './spawn-cli.js'
 
@@ -23,47 +24,6 @@ import { spawnCliJson } from './spawn-cli.js'
 
 const ANUBISIGNORE_FILENAME = '.anubisignore'
 
-const DEFAULT_ANUBISIGNORE = `# Auto-created by Anubis on first index.
-# The engine does NOT honour .gitignore — only this file.
-# Add patterns to skip files/folders during indexing.
-
-# Version control
-.git/
-
-# Dependencies
-node_modules/
-vendor/
-.pnpm-store/
-
-# Build outputs
-dist/
-build/
-target/
-out/
-.next/
-.turbo/
-.cache/
-
-# Lockfiles (large, low information)
-*.lock
-pnpm-lock.yaml
-package-lock.json
-yarn.lock
-
-# Anubis-generated sidecars (text already covered via the source file)
-*.anubis.txt
-
-# Logs and temp
-*.log
-.tmp/
-tmp/
-
-# IDE / OS
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-`
 
 function engineDataDir(): string {
   return join(getDataDir(), 'engine')

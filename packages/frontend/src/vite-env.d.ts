@@ -14,6 +14,9 @@ interface Window {
     backend: {
       getBaseUrl(): Promise<string>
     }
+    notifications: {
+      show(title: string, body: string): Promise<void>
+    }
     shell: {
       /** Resolves to '' on success or an error message string. */
       openPath(target: string): Promise<string>

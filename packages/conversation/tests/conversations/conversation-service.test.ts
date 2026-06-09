@@ -250,6 +250,23 @@ describe('ConversationService', () => {
     await ctx.tm.shutdown()
   })
 
+  it('sendMessage passes appendSystemPrompt inline for codex and antigravity profiles', async () => {
+    plantCreds(ctx.agentHomeRoot, 'codex-coding', 'codex')
+    const c = ctx.svc.create({
+      title: 'T',
+      profileId: 'codex-coding',
+      workspacePath: '/tmp',
+      override: { appendSystemPrompt: 'Custom Codex instructions' }
+    })
+    await ctx.svc.sendMessage(c.id, { content: 'hi' })
+    await new Promise((rs) => setTimeout(rs, 20))
+
+    const call = ctx.aiAgent.streamAgent.mock.calls[ctx.aiAgent.streamAgent.mock.calls.length - 1]?.[0] as { appendSystemPrompt?: string }
+    expect(call?.appendSystemPrompt).toContain('Custom Codex instructions')
+
+    await ctx.tm.shutdown()
+  })
+
   it('sendMessage injects CODEX_HOME for codex profiles', async () => {
     plantCreds(ctx.agentHomeRoot, 'codex-coding', 'codex')
     const c = ctx.svc.create({ title: 'T', profileId: 'codex-coding', workspacePath: '/tmp' })

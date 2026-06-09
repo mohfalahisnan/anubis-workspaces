@@ -288,7 +288,12 @@ export class ConversationService {
     // For non-web agents without a profileId there is no filesystem-backed agent
     // home (writeProfileInstructions is skipped above), so the assembled context
     // — skills pointer and active project id — must travel inline as appendSystemPrompt.
-    const inlineSystemPrompt = !isWebAgent && !cur.profileId ? profileInstructions : undefined
+    // We also pass the system prompt inline for Codex and Antigravity profiles, as
+    // they do not auto-read instruction markdown files from their home directory.
+    const inlineSystemPrompt =
+      !isWebAgent && (!cur.profileId || cur.agent === 'codex' || cur.agent === 'antigravity')
+        ? profileInstructions
+        : undefined
 
     // Resolve fileReferences to absolute paths (relative refs are anchored to the workspace).
     const resolvedFiles: string[] | undefined = input.fileReferences?.length

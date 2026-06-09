@@ -1,11 +1,6 @@
-import { connectCdpSession, type CdpSession } from "../chrome/cdp-session.js";
-import {
-  closeChromeTab,
-  normalizeChromeOrigin,
-  openChromeTab,
-  resolveInstagramTarget,
-  type ChromeTarget
-} from "../chrome/chrome-connector.js";
+import { type CdpSession } from "../chrome/cdp-session.js";
+import { resolveInstagramTarget } from "../chrome/chrome-connector.js";
+import { withCdpCaptureSession } from "../chrome/cdp-capture-session.js";
 import {
   collectInstagramRecordsFromResponses,
   extractInstagramShortcode,
@@ -78,14 +73,9 @@ export function createInstagramCdpCaptureService(
   return {
     async capture(input) {
       const startedAt = new Date().toISOString();
-      let chromeOrigin: string;
       let navigateUrl: string | undefined;
-      let target: ChromeTarget;
-      let session: CdpSession | null = null;
-      let openedTabId: string | undefined;
 
       try {
-        chromeOrigin = normalizeChromeOrigin(input.chromeOrigin);
         navigateUrl = getInstagramNavigateUrl(input);
       } catch (error) {
         return {
@@ -93,37 +83,6 @@ export function createInstagramCdpCaptureService(
           error: {
             code: "INSTAGRAM_CDP_CAPTURE_FAILED",
             message: error instanceof Error ? error.message : "Instagram CDP capture input is invalid."
-          }
-        };
-      }
-
-      try {
-        if (input.openNewTab && navigateUrl) {
-          target = await openChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, url: navigateUrl });
-          openedTabId = target.id;
-        } else {
-          target = await resolveInstagramTarget({ chromeOrigin, fetchImpl: options.fetchImpl, allowAnyPage: Boolean(navigateUrl) });
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          error: {
-            code: "INSTAGRAM_TAB_NOT_FOUND",
-            message: input.openNewTab
-              ? `Failed to open new Chrome tab at ${chromeOrigin}: ${detail}`
-              : `Browser data connection is not reachable at ${chromeOrigin}: ${detail}`
-          }
-        };
-      }
-
-      if (!target.webSocketDebuggerUrl) {
-        if (openedTabId) await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        return {
-          ok: false,
-          error: {
-            code: "INSTAGRAM_TAB_NOT_FOUND",
-            message: "Open Instagram in the browser started from Browser Intelligence."
           }
         };
       }
@@ -146,14 +105,27 @@ export function createInstagramCdpCaptureService(
 
       const reporter: ProgressReporter = input.reporter ?? silentReporter();
       const phase = input.phaseLabel ?? `capture${input.username ? `:${input.username}` : ''}`;
+      const allowAnyPage = Boolean(navigateUrl);
+      let sessionResult: Awaited<ReturnType<typeof withCdpCaptureSession<InstagramCdpCaptureSuccess>>>;
       try {
-        session = await (options.connectSession ?? connectCdpSession)(target.webSocketDebuggerUrl);
-        const activeSession = session;
-        const sourceUrl = navigateUrl ?? target.url;
-        const targetPosts = normalizePositiveInteger(input.maxResponses, 30);
-        reporter.start(phase, targetPosts);
+        sessionResult = await withCdpCaptureSession<InstagramCdpCaptureSuccess>(
+        {
+          chromeOrigin: input.chromeOrigin,
+          navigateUrl,
+          openNewTab: Boolean(input.openNewTab),
+          keepTabOpen: Boolean(input.keepTabOpen),
+          fetchImpl: options.fetchImpl,
+          connectSession: options.connectSession,
+          resolveTarget: ({ chromeOrigin, fetchImpl }) =>
+            resolveInstagramTarget({ chromeOrigin, fetchImpl, allowAnyPage }),
+          noSocketMessage: "Open Instagram in the browser started from Browser Intelligence."
+        },
+        async ({ chromeOrigin, session: activeSession, target, openedTabId }) => {
+          const sourceUrl = navigateUrl ?? target.url;
+          const targetPosts = normalizePositiveInteger(input.maxResponses, 30);
+          reporter.start(phase, targetPosts);
 
-        const captured = await captureInstagramNetworkResponses(session, {
+          const captured = await captureInstagramNetworkResponses(activeSession, {
           timeoutMs: normalizePositiveInteger(input.timeoutMs, 8000),
           maxResponses: Math.max(100, targetPosts * 2),
           ...(openedTabId ? {} : { navigateUrl }),
@@ -209,34 +181,37 @@ export function createInstagramCdpCaptureService(
             }
             return false;
           }
-        });
-        reporter.done(phase);
-        const parsedResponses = parseJsonResponses(captured);
-        const scannerInput = [...parsedResponses];
-        if (targetShortcode) {
-          scannerInput.push(...await extractEmbeddedPostResponses(activeSession, targetShortcode, sourceUrl));
-        }
-        const collected = collectInstagramRecordsFromResponses(scannerInput, startedAt);
-
-        return {
-          ok: true,
-          ...collected,
-          rawResponses: parsedResponses.map((response) => ({
-            responseUrl: response.responseUrl,
-            statusCode: response.statusCode,
-            contentType: response.contentType,
-            bodySize: response.bodySize,
-            body: response.body
-          })),
-          meta: {
-            chromeOrigin,
-            tabUrl: navigateUrl ?? target.url,
-            matchedResponses: captured.length,
-            parsedResponses: parsedResponses.length,
-            startedAt,
-            completedAt: new Date().toISOString()
+          });
+          reporter.done(phase);
+          const parsedResponses = parseJsonResponses(captured);
+          const scannerInput = [...parsedResponses];
+          if (targetShortcode) {
+            scannerInput.push(...await extractEmbeddedPostResponses(activeSession, targetShortcode, sourceUrl));
           }
-        };
+          const collected = collectInstagramRecordsFromResponses(scannerInput, startedAt);
+
+          const success: InstagramCdpCaptureSuccess = {
+            ok: true,
+            ...collected,
+            rawResponses: parsedResponses.map((response) => ({
+              responseUrl: response.responseUrl,
+              statusCode: response.statusCode,
+              contentType: response.contentType,
+              bodySize: response.bodySize,
+              body: response.body
+            })),
+            meta: {
+              chromeOrigin,
+              tabUrl: navigateUrl ?? target.url,
+              matchedResponses: captured.length,
+              parsedResponses: parsedResponses.length,
+              startedAt,
+              completedAt: new Date().toISOString()
+            }
+          };
+          return success;
+        }
+      );
       } catch (error) {
         return {
           ok: false,
@@ -245,12 +220,21 @@ export function createInstagramCdpCaptureService(
             message: error instanceof Error ? error.message : "Instagram CDP capture failed."
           }
         };
-      } finally {
-        session?.close();
-        if (openedTabId && !input.keepTabOpen) {
-          await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        }
       }
+
+      if (!sessionResult.ok) {
+        if (sessionResult.reason === "invalid-input") {
+          return {
+            ok: false,
+            error: { code: "INSTAGRAM_CDP_CAPTURE_FAILED", message: sessionResult.message }
+          };
+        }
+        return {
+          ok: false,
+          error: { code: "INSTAGRAM_TAB_NOT_FOUND", message: sessionResult.message }
+        };
+      }
+      return sessionResult.result;
     }
   };
 }

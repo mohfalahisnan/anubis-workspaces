@@ -4,8 +4,8 @@ import type { AiAgentService } from '@anubis/ai-agent'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import type { Db } from '../db/client.js'
 import { newId } from '../util/ids.js'
-import { hasCredentials } from '../profiles/agent-home.js'
 import { ensureWorkspaceStructure } from '../util/workspace.js'
+import type { ProfileHomeRegistry } from '../profiles/profile-home.js'
 import type { AppConfigService } from '../config/app-config.js'
 
 export class NoCredentialsError extends Error {
@@ -21,14 +21,6 @@ import { composeAppendSystemPrompt, buildWebAgentSystemPrompt, type ProjectConte
 import type { SkillLoader } from '../skills/loader.js'
 import type { ProfileService } from '../profiles/profile-service.js'
 import type { ProfileOverride, ResolvedProfile, AgentKind } from '../profiles/types.js'
-import {
-  ensureAgentHome,
-  envFor,
-  homePathFor,
-  resetProfileHome,
-  writeProfileInstructions,
-  writeProfileSkills,
-} from '../profiles/agent-home.js'
 import type { ConversationsRepo } from '../db/repositories/conversations-repo.js'
 import type { MessagesRepo } from '../db/repositories/messages-repo.js'
 import type { ArtifactsRepo } from '../db/repositories/artifacts-repo.js'
@@ -101,11 +93,12 @@ export interface ConversationServiceDeps {
   appConfig: AppConfigService
   contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
   /**
-   * Root directory under which each profile gets its own isolated
-   * agent home folder ({agentHomeRoot}/{profileId}/{agent}/).
-   * Composition root sets this to {ANUBIS_DATA_DIR}/agent-homes.
+   * Registry of per-profile agent homes (one isolated dir per profile+agent
+   * under {ANUBIS_DATA_DIR}/agent-homes). Replaces the loose `agentHomeRoot`
+   * string — the directory layout, credential check and instruction staging
+   * all live behind it.
    */
-  agentHomeRoot: string
+  profileHomes: ProfileHomeRegistry
   /**
    * Root directory under which auto-generated workspace folders live
    * ({workspacesRoot}/{conversationId}). Used when CreateConversationInput
@@ -234,7 +227,7 @@ export class ConversationService {
       throw new Error('Cannot change conversation agent via per-turn override')
     }
     if (cur.profileId) {
-      if (!hasCredentials(cur.profileId, cur.agent, this.deps.agentHomeRoot)) {
+      if (!this.deps.profileHomes.for(cur.profileId, cur.agent).hasCredentials()) {
         throw new NoCredentialsError(cur.profileId, cur.agent)
       }
     }
@@ -343,17 +336,18 @@ The improved prompt should:
     let prevSession = this.deps.sessions.findByConversation(cur.id)?.agentSessionId
     let envWithHome: Record<string, string> | undefined = resolved.env
     if (cur.profileId) {
-      const { path, isNew } = ensureAgentHome(this.deps.agentHomeRoot, cur.profileId, cur.agent)
-      envWithHome = { ...envFor(cur.agent, path), ...(resolved.env ?? {}) }
+      const { env, isNew } = this.deps.profileHomes
+        .for(cur.profileId, cur.agent)
+        .prepare(profileInstructions)
+      envWithHome = { ...env, ...(resolved.env ?? {}) }
       if (isNew) prevSession = undefined
-      writeProfileInstructions(path, profileInstructions)
     }
     // Materialise active skills into the conversation workspace (the agent's
     // cwd) so the relative `.agents/skills/<name>/SKILL.md` pointer resolves for every
     // agent — Claude and Codex alike — regardless of which config dir each one
     // auto-scans.
     ensureWorkspaceStructure(cur.workspacePath)
-    writeProfileSkills(cur.workspacePath, skillDefs)
+    this.deps.profileHomes.stageSkills(cur.workspacePath, skillDefs)
     const { appendSystemPrompt: _, ...resolvedWithoutAppend } = resolved
     const resolvedForTurn: ResolvedProfile = { ...resolvedWithoutAppend, env: envWithHome }
 
@@ -502,7 +496,7 @@ The improved prompt should:
    * regardless of whether it has been created yet.
    */
   agentHomePath(profileId: string, agent: AgentKind): string {
-    return homePathFor(this.deps.agentHomeRoot, profileId, agent)
+    return this.deps.profileHomes.for(profileId, agent).path()
   }
 
   /**
@@ -511,7 +505,7 @@ The improved prompt should:
    * config, and session history all reset.
    */
   resetProfileHome(profileId: string, agent: AgentKind): { existed: boolean } {
-    return resetProfileHome(this.deps.agentHomeRoot, profileId, agent)
+    return this.deps.profileHomes.for(profileId, agent).reset()
   }
 
   private resolveOrThrow(

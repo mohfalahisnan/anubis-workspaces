@@ -3,7 +3,7 @@ import { nowMs } from '../util/time.js'
 import type { ProfilesRepo } from '../db/repositories/profiles-repo.js'
 import { BUILTIN_PROFILES } from './builtin.js'
 import { resolveLayers } from './resolve.js'
-import { copyHomeFromSystem, copyProfileHome } from './agent-home.js'
+import type { ProfileHomeRegistry } from './profile-home.js'
 import {
   ProfileConfigSchema, ProfileOverrideSchema, ProfileSchema,
   type Profile, type ProfileConfig, type ProfileOverride, type ResolvedProfile,
@@ -23,7 +23,10 @@ export interface UpdateProfileInput {
 }
 
 export class ProfileService {
-  constructor(private repo: ProfilesRepo) {}
+  constructor(
+    private repo: ProfilesRepo,
+    private profileHomes: ProfileHomeRegistry,
+  ) {}
 
   seedBuiltins(): void {
     const existing = new Set(this.repo.list().filter(p => p.source === 'builtin').map(p => p.id))
@@ -42,23 +45,17 @@ export class ProfileService {
    */
   bootstrapDefaultClaudeProfile(opts: {
     systemSource: string
-    agentHomeRoot: string
     profileId?: string
   }): { copied: boolean } {
     const profileId = opts.profileId ?? 'claude-coding'
     const profile = this.repo.findById(profileId)
     if (!profile || profile.config.agent !== 'claude') return { copied: false }
-    return copyHomeFromSystem({
-      systemSource: opts.systemSource,
-      profileId,
-      agent: 'claude',
-      agentHomeRoot: opts.agentHomeRoot,
-    })
+    return this.profileHomes.for(profileId, 'claude').copyFromSystem(opts.systemSource)
   }
 
   copyProfile(
     sourceId: string,
-    input: { name: string; description?: string; agentHomeRoot: string },
+    input: { name: string; description?: string },
   ): Profile {
     const src = this.repo.findById(sourceId)
     if (!src) throw new Error(`profile ${sourceId} not found`)
@@ -70,12 +67,7 @@ export class ProfileService {
     })
 
     try {
-      copyProfileHome({
-        srcProfileId: sourceId,
-        destProfileId: created.id,
-        agent: src.config.agent,
-        agentHomeRoot: input.agentHomeRoot,
-      })
+      this.profileHomes.for(sourceId, src.config.agent).cloneTo(created.id)
     } catch (e) {
       // Roll back the profile so we don't leave a half-copied row.
       this.repo.delete(created.id)

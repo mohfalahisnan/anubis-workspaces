@@ -71,10 +71,7 @@ const CopyBody = z.object({
 profileRoutes.post('/:id/copy', async (c) => {
   const body = CopyBody.parse(await c.req.json())
   const stack = getStack()
-  const created = stack.profiles.copyProfile(c.req.param('id'), {
-    ...body,
-    agentHomeRoot: stack.agentHomeRoot,
-  })
+  const created = stack.profiles.copyProfile(c.req.param('id'), body)
   return c.json({ ok: true, profile: withHome(created) }, 201)
 })
 

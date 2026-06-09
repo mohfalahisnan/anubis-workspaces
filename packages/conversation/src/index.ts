@@ -23,6 +23,7 @@ import { WorkflowTriggersRepo } from './db/repositories/workflow-triggers-repo.j
 import { ProjectsRepo } from './db/repositories/projects-repo.js'
 import { AppConfigService } from './config/app-config.js'
 import { ProfileService } from './profiles/profile-service.js'
+import { ProfileHomeRegistry } from './profiles/profile-home.js'
 import { SkillLoader, type SkillRoots } from './skills/loader.js'
 import { SseBroadcaster } from './sse/broadcaster.js'
 import { CronService } from './cron/cron-service.js'
@@ -60,6 +61,8 @@ export interface ConversationStack {
   projects: ProjectsRepo
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
+  /** Registry that owns the (profileId, agent) → ProfileHome handle. */
+  profileHomes: ProfileHomeRegistry
   shutdown(): Promise<void>
 }
 
@@ -67,6 +70,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   mkdirSync(opts.dataDir, { recursive: true })
   const agentHomeRoot = join(opts.dataDir, 'agent-homes')
   mkdirSync(agentHomeRoot, { recursive: true })
+  const profileHomes = new ProfileHomeRegistry(agentHomeRoot)
   const workspacesRoot = join(opts.dataDir, 'workspaces')
   mkdirSync(workspacesRoot, { recursive: true })
   const db = openDatabase(join(opts.dataDir, 'anubis.db'))
@@ -81,12 +85,11 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
   const projectsRepo = new ProjectsRepo(db)
 
-  const profiles = new ProfileService(profilesRepo)
+  const profiles = new ProfileService(profilesRepo, profileHomes)
   profiles.seedBuiltins()
   try {
     profiles.bootstrapDefaultClaudeProfile({
       systemSource: join(homedir(), '.claude'),
-      agentHomeRoot,
     })
   } catch (e) {
     // Boot must not fail because of a bootstrap glitch — log + continue.
@@ -137,7 +140,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     sessions: sessionsRepo,
     knownWorkspaces: knownWorkspacesRepo,
     projects: projectsRepo,
-    agentHomeRoot,
+    profileHomes,
     workspacesRoot,
     appConfig,
     contextPacker: opts.contextPacker,
@@ -154,6 +157,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     knownWorkspaces: knownWorkspacesRepo,
     projects: projectsRepo,
     agentHomeRoot,
+    profileHomes,
     async shutdown() {
       cron.shutdown()
       await tm.shutdown()
@@ -192,6 +196,7 @@ export { WorkflowTriggersRepo } from './db/repositories/workflow-triggers-repo.j
 export type { AppConfig } from './config/app-config.js'
 export { AppConfigService } from './config/app-config.js'
 export { ConversationService, NoCredentialsError } from './conversations/conversation-service.js'
+export { ProfileHome, ProfileHomeRegistry } from './profiles/profile-home.js'
 export {
   ensureAgentHome,
   envFor,

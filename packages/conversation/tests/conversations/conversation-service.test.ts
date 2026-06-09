@@ -14,6 +14,7 @@ import { AgentSessionsRepo } from '../../src/db/repositories/agent-sessions-repo
 import { KnownWorkspacesRepo } from '../../src/db/repositories/known-workspaces-repo.js'
 import { CronJobsRepo } from '../../src/db/repositories/cron-jobs-repo.js'
 import { ProfileService } from '../../src/profiles/profile-service.js'
+import { ProfileHomeRegistry } from '../../src/profiles/profile-home.js'
 import { SkillLoader } from '../../src/skills/loader.js'
 import { SseBroadcaster } from '../../src/sse/broadcaster.js'
 import { CronService } from '../../src/cron/cron-service.js'
@@ -33,7 +34,9 @@ function plantCreds(agentHomeRoot: string, profileId: string, agent: 'claude' | 
 function setup() {
   const db = openDatabase(':memory:')
   runMigrations(db, MIGRATIONS)
-  const profiles = new ProfileService(new ProfilesRepo(db))
+  const agentHomeRoot = mkdtempSync(join(tmpdir(), 'anubis-test-homes-'))
+  const profileHomes = new ProfileHomeRegistry(agentHomeRoot)
+  const profiles = new ProfileService(new ProfilesRepo(db), profileHomes)
   profiles.seedBuiltins()
   const loader = {
     discoverAll: () => [],
@@ -61,7 +64,6 @@ function setup() {
     fire: async () => undefined,
     scheduler: { schedule: () => ({ stop: () => undefined, start: () => undefined }) },
   })
-  const agentHomeRoot = mkdtempSync(join(tmpdir(), 'anubis-test-homes-'))
   const workspacesRoot = mkdtempSync(join(tmpdir(), 'anubis-test-workspaces-'))
   const appConfig = new AppConfigService(agentHomeRoot)
   const svc = new ConversationService({
@@ -73,7 +75,7 @@ function setup() {
     sessions: new AgentSessionsRepo(db),
     knownWorkspaces: new KnownWorkspacesRepo(db),
     projects: new ProjectsRepo(db),
-    agentHomeRoot,
+    profileHomes,
     workspacesRoot,
     appConfig,
   })

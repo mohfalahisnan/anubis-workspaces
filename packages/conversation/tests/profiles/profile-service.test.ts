@@ -8,15 +8,24 @@ import { MIGRATIONS } from '../../src/db/migrations/index.js'
 import { ProfilesRepo } from '../../src/db/repositories/profiles-repo.js'
 import { ProfileService } from '../../src/profiles/profile-service.js'
 import { CREDENTIAL_FILE } from '../../src/profiles/agent-home.js'
+import { ProfileHomeRegistry } from '../../src/profiles/profile-home.js'
 
 describe('ProfileService', () => {
   let db: Db
   let svc: ProfileService
 
+  function mkSvc(agentHomeRoot: string): ProfileService {
+    const s = new ProfileService(new ProfilesRepo(db), new ProfileHomeRegistry(agentHomeRoot))
+    s.seedBuiltins()
+    return s
+  }
+
   beforeEach(() => {
     db = openDatabase(':memory:')
     runMigrations(db, MIGRATIONS)
-    svc = new ProfileService(new ProfilesRepo(db))
+    // Default svc for tests that don't touch profile homes — agentHomeRoot
+    // never read in those paths.
+    svc = new ProfileService(new ProfilesRepo(db), new ProfileHomeRegistry('/tmp/unused-anubis-test-root'))
     svc.seedBuiltins()
   })
 
@@ -75,19 +84,15 @@ describe('ProfileService', () => {
       const root = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-'))
       const sys = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-sys-'))
       writeFileSync(join(sys, CREDENTIAL_FILE.claude), '{"t":"yes"}')
-      const r = svc.bootstrapDefaultClaudeProfile({
-        systemSource: sys,
-        agentHomeRoot: root,
-      })
+      const r = mkSvc(root).bootstrapDefaultClaudeProfile({ systemSource: sys })
       expect(r.copied).toBe(true)
       expect(existsSync(join(root, 'claude-coding', 'claude', CREDENTIAL_FILE.claude))).toBe(true)
     })
 
     it('no-ops when system creds are missing', () => {
       const root = mkdtempSync(join(tmpdir(), 'anubis-bootstrap-'))
-      const r = svc.bootstrapDefaultClaudeProfile({
+      const r = mkSvc(root).bootstrapDefaultClaudeProfile({
         systemSource: join(root, 'no-such-dir'),
-        agentHomeRoot: root,
       })
       expect(r.copied).toBe(false)
     })
@@ -99,10 +104,7 @@ describe('ProfileService', () => {
       const dest = join(root, 'claude-coding', 'claude')
       mkdirSync(dest, { recursive: true })
       writeFileSync(join(dest, CREDENTIAL_FILE.claude), '{"t":"old"}')
-      const r = svc.bootstrapDefaultClaudeProfile({
-        systemSource: sys,
-        agentHomeRoot: root,
-      })
+      const r = mkSvc(root).bootstrapDefaultClaudeProfile({ systemSource: sys })
       expect(r.copied).toBe(false)
     })
   })
@@ -110,14 +112,12 @@ describe('ProfileService', () => {
   describe('copyProfile', () => {
     it('creates a new profile with the same config', () => {
       const root = mkdtempSync(join(tmpdir(), 'anubis-copy-'))
-      const src = svc.create({
+      const s = mkSvc(root)
+      const src = s.create({
         name: 'Source',
         config: { agent: 'claude', model: 'claude-sonnet-4-6' },
       })
-      const copied = svc.copyProfile(src.id, {
-        name: 'Source (copy)',
-        agentHomeRoot: root,
-      })
+      const copied = s.copyProfile(src.id, { name: 'Source (copy)' })
       expect(copied.id).not.toBe(src.id)
       expect(copied.name).toBe('Source (copy)')
       expect(copied.config.agent).toBe('claude')
@@ -126,7 +126,8 @@ describe('ProfileService', () => {
 
     it('copies the source profile home (auth files)', () => {
       const root = mkdtempSync(join(tmpdir(), 'anubis-copy-'))
-      const src = svc.create({
+      const s = mkSvc(root)
+      const src = s.create({
         name: 'Source',
         config: { agent: 'claude' },
       })
@@ -134,16 +135,13 @@ describe('ProfileService', () => {
       mkdirSync(srcHome, { recursive: true })
       writeFileSync(join(srcHome, CREDENTIAL_FILE.claude), '{"t":"yes"}')
 
-      const copied = svc.copyProfile(src.id, {
-        name: 'Source (copy)',
-        agentHomeRoot: root,
-      })
+      const copied = s.copyProfile(src.id, { name: 'Source (copy)' })
       expect(existsSync(join(root, copied.id, 'claude', CREDENTIAL_FILE.claude))).toBe(true)
     })
 
     it('throws when the source profile does not exist', () => {
       const root = mkdtempSync(join(tmpdir(), 'anubis-copy-'))
-      expect(() => svc.copyProfile('nonexistent', { name: 'X', agentHomeRoot: root }))
+      expect(() => mkSvc(root).copyProfile('nonexistent', { name: 'X' }))
         .toThrow(/not found/)
     })
   })

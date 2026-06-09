@@ -1,11 +1,6 @@
-import { connectCdpSession, type CdpSession } from "../chrome/cdp-session.js";
-import {
-  closeChromeTab,
-  normalizeChromeOrigin,
-  openChromeTab,
-  resolveChatGPTTarget,
-  type ChromeTarget
-} from "../chrome/chrome-connector.js";
+import { type CdpSession } from "../chrome/cdp-session.js";
+import { resolveChatGPTTarget } from "../chrome/chrome-connector.js";
+import { withCdpCaptureSession } from "../chrome/cdp-capture-session.js";
 import { captureChatGPTNetworkResponses, createCdpDebugCollector, type CdpDebugCollector } from "../network/network-listener.js";
 import { silentReporter, type ProgressReporter } from "../progress/progress-reporter.js";
 import type { ChatGPTMessage } from "../standard-output.js";
@@ -135,128 +130,93 @@ export function createChatGPTCdpCaptureService(
     async capture(input) {
       const startedAt = new Date().toISOString();
       const debug = createCdpDebugCollector();
-      let chromeOrigin: string;
-      let navigateUrl: string;
-      let target: ChromeTarget;
-      let session: CdpSession | null = null;
-      let openedTabId: string | undefined;
-
-      try {
-        chromeOrigin = normalizeChromeOrigin(input.chromeOrigin);
-        navigateUrl = input.url?.trim() || "https://chatgpt.com/";
-      } catch (error) {
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_CDP_CAPTURE_FAILED",
-            message: error instanceof Error ? error.message : "ChatGPT CDP capture input is invalid."
-          }
-        };
-      }
+      const navigateUrl = input.url?.trim() || "https://chatgpt.com/";
 
       debug.events.push(`${new Date().toISOString()} target: ${input.openNewTab ? "opening new tab" : "reusing tab"} at ${navigateUrl}`);
-      try {
-        if (input.openNewTab) {
-          target = await openChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, url: navigateUrl });
-          openedTabId = target.id;
-        } else {
-          target = await resolveChatGPTTarget({ chromeOrigin, fetchImpl: options.fetchImpl, allowAnyPage: true });
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_TAB_NOT_FOUND",
-            message: input.openNewTab
-              ? `Failed to open new Chrome tab at ${chromeOrigin}: ${detail}`
-              : `Browser data connection is not reachable at ${chromeOrigin}: ${detail}`
-          }
-        };
-      }
-
-      if (!target.webSocketDebuggerUrl) {
-        if (openedTabId) await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_TAB_NOT_FOUND",
-            message: "Open ChatGPT in the browser started from Browser Intelligence."
-          }
-        };
-      }
-
       const reporter: ProgressReporter = input.reporter ?? silentReporter();
       const phase = input.phaseLabel ?? "chatgpt:conversations";
+      let sessionResult: Awaited<ReturnType<typeof withCdpCaptureSession<ChatGPTCdpCaptureSuccess>>>;
       try {
-        session = await (options.connectSession ?? connectCdpSession)(target.webSocketDebuggerUrl);
-        debug.events.push(`${new Date().toISOString()} CDP session connected to ${target.id}`);
-        reporter.start(phase, 1);
+        sessionResult = await withCdpCaptureSession<ChatGPTCdpCaptureSuccess>(
+        {
+          chromeOrigin: input.chromeOrigin,
+          navigateUrl,
+          openNewTab: Boolean(input.openNewTab),
+          keepTabOpen: Boolean(input.keepTabOpen),
+          fetchImpl: options.fetchImpl,
+          connectSession: options.connectSession,
+          resolveTarget: ({ chromeOrigin, fetchImpl }) =>
+            resolveChatGPTTarget({ chromeOrigin, fetchImpl, allowAnyPage: true }),
+          noSocketMessage: "Open ChatGPT in the browser started from Browser Intelligence."
+        },
+        async ({ chromeOrigin, session, target, openedTabId }) => {
+          debug.events.push(`${new Date().toISOString()} CDP session connected to ${target.id}`);
+          reporter.start(phase, 1);
 
-        const captured = await captureChatGPTNetworkResponses(session, {
-          timeoutMs: input.timeoutMs ?? 15000,
-          maxResponses: 10,
-          debug,
-          ...(openedTabId ? {} : { navigateUrl }),
-          ...(input.scrollIntervalMs ? { scrollIntervalMs: input.scrollIntervalMs } : {}),
-          ...(input.initialDelayMs !== undefined ? { initialDelayMs: input.initialDelayMs } : {}),
-          onCaptured: (capturedList) => {
-            reporter.update(phase, capturedList.length, 'responses');
-          },
-          shouldStop: (capturedList) => {
-            const found = capturedList.some((item) => item.responseUrl.includes("/backend-api/conversations"));
-            if (found) {
-              reporter.update(phase, 1, 'conversations');
+            const captured = await captureChatGPTNetworkResponses(session, {
+            timeoutMs: input.timeoutMs ?? 15000,
+            maxResponses: 10,
+            debug,
+            ...(openedTabId ? {} : { navigateUrl }),
+            ...(input.scrollIntervalMs ? { scrollIntervalMs: input.scrollIntervalMs } : {}),
+            ...(input.initialDelayMs !== undefined ? { initialDelayMs: input.initialDelayMs } : {}),
+            onCaptured: (capturedList) => {
+              reporter.update(phase, capturedList.length, 'responses');
+            },
+            shouldStop: (capturedList) => {
+              const found = capturedList.some((item) => item.responseUrl.includes("/backend-api/conversations"));
+              if (found) {
+                reporter.update(phase, 1, 'conversations');
+              }
+              return found;
             }
-            return found;
-          }
-        });
+          });
 
-        reporter.done(phase);
+          reporter.done(phase);
 
-        const parsedResponses = parseJsonResponses(captured);
-        const conversations: ChatGPTConversationRecord[] = [];
+          const parsedResponses = parseJsonResponses(captured);
+          const conversations: ChatGPTConversationRecord[] = [];
 
-        for (const resp of parsedResponses) {
-          if (resp.responseUrl.includes("/backend-api/conversations")) {
-            const body = resp.body as { items?: Array<{ id: string; title: string; create_time?: any; update_time?: any }> };
-            if (body && Array.isArray(body.items)) {
-              for (const item of body.items) {
-                if (item.id && item.title) {
-                  conversations.push({
-                    id: item.id,
-                    title: item.title,
-                    createTime: item.create_time,
-                    updateTime: item.update_time
-                  });
+          for (const resp of parsedResponses) {
+            if (resp.responseUrl.includes("/backend-api/conversations")) {
+              const body = resp.body as { items?: Array<{ id: string; title: string; create_time?: any; update_time?: any }> };
+              if (body && Array.isArray(body.items)) {
+                for (const item of body.items) {
+                  if (item.id && item.title) {
+                    conversations.push({
+                      id: item.id,
+                      title: item.title,
+                      createTime: item.create_time,
+                      updateTime: item.update_time
+                    });
+                  }
                 }
               }
             }
           }
-        }
 
-        return {
-          ok: true,
-          conversations,
-          debug,
-          rawResponses: parsedResponses.map((response) => ({
-            responseUrl: response.responseUrl,
-            statusCode: response.statusCode,
-            contentType: response.contentType,
-            bodySize: response.bodySize,
-            body: response.body
-          })),
-          meta: {
-            chromeOrigin,
-            tabUrl: navigateUrl,
-            matchedResponses: captured.length,
-            startedAt,
-            completedAt: new Date().toISOString()
-          }
-        };
+          const success: ChatGPTCdpCaptureSuccess = {
+            ok: true,
+            conversations,
+            debug,
+            rawResponses: parsedResponses.map((response) => ({
+              responseUrl: response.responseUrl,
+              statusCode: response.statusCode,
+              contentType: response.contentType,
+              bodySize: response.bodySize,
+              body: response.body
+            })),
+            meta: {
+              chromeOrigin,
+              tabUrl: navigateUrl,
+              matchedResponses: captured.length,
+              startedAt,
+              completedAt: new Date().toISOString()
+            }
+          };
+          return success;
+        }
+      );
       } catch (error) {
         return {
           ok: false,
@@ -266,75 +226,44 @@ export function createChatGPTCdpCaptureService(
             message: error instanceof Error ? error.message : "ChatGPT CDP capture failed."
           }
         };
-      } finally {
-        session?.close();
-        if (openedTabId && !input.keepTabOpen) {
-          await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        }
       }
+      if (!sessionResult.ok) {
+        return {
+          ok: false,
+          debug,
+          error: {
+            code: sessionResult.reason === "invalid-input" ? "CHATGPT_CDP_CAPTURE_FAILED" : "CHATGPT_TAB_NOT_FOUND",
+            message: sessionResult.message
+          }
+        };
+      }
+      return sessionResult.result;
     },
 
     async captureDetails(input) {
       const startedAt = new Date().toISOString();
       const debug = createCdpDebugCollector();
-      let chromeOrigin: string;
-      let navigateUrl: string;
-      let target: ChromeTarget;
-      let session: CdpSession | null = null;
-      let openedTabId: string | undefined;
-
-      try {
-        chromeOrigin = normalizeChromeOrigin(input.chromeOrigin);
-        navigateUrl = `https://chatgpt.com/c/${input.conversationId}`;
-      } catch (error) {
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_CDP_CAPTURE_FAILED",
-            message: error instanceof Error ? error.message : "ChatGPT CDP capture input is invalid."
-          }
-        };
-      }
-
+      const navigateUrl = `https://chatgpt.com/c/${input.conversationId}`;
       debug.events.push(`${new Date().toISOString()} target: ${input.openNewTab ? "opening new tab" : "reusing tab"} at ${navigateUrl}`);
-      try {
-        if (input.openNewTab) {
-          target = await openChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, url: navigateUrl });
-          openedTabId = target.id;
-        } else {
-          target = await resolveChatGPTTarget({ chromeOrigin, fetchImpl: options.fetchImpl, allowAnyPage: true });
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_TAB_NOT_FOUND",
-            message: input.openNewTab
-              ? `Failed to open new Chrome tab at ${chromeOrigin}: ${detail}`
-              : `Browser data connection is not reachable at ${chromeOrigin}: ${detail}`
-          }
-        };
-      }
-
-      if (!target.webSocketDebuggerUrl) {
-        if (openedTabId) await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_TAB_NOT_FOUND",
-            message: "Open ChatGPT in the browser started from Browser Intelligence."
-          }
-        };
-      }
-
       const reporter: ProgressReporter = input.reporter ?? silentReporter();
       const phase = input.phaseLabel ?? "chatgpt:details";
+
+      type DetailsBodyResult = ChatGPTCdpCaptureDetailsResult;
+      let sessionResult: Awaited<ReturnType<typeof withCdpCaptureSession<DetailsBodyResult>>>;
       try {
-        session = await (options.connectSession ?? connectCdpSession)(target.webSocketDebuggerUrl);
+        sessionResult = await withCdpCaptureSession<DetailsBodyResult>(
+        {
+          chromeOrigin: input.chromeOrigin,
+          navigateUrl,
+          openNewTab: Boolean(input.openNewTab),
+          keepTabOpen: Boolean(input.keepTabOpen),
+          fetchImpl: options.fetchImpl,
+          connectSession: options.connectSession,
+          resolveTarget: ({ chromeOrigin, fetchImpl }) =>
+            resolveChatGPTTarget({ chromeOrigin, fetchImpl, allowAnyPage: true }),
+          noSocketMessage: "Open ChatGPT in the browser started from Browser Intelligence."
+        },
+        async ({ chromeOrigin, session, target }) => {
         debug.events.push(`${new Date().toISOString()} CDP session connected to ${target.id}`);
         reporter.start(phase, 1);
 
@@ -386,7 +315,7 @@ export function createChatGPTCdpCaptureService(
         const messages = parseChatGPTMessageTree(body);
         debug.events.push(`${new Date().toISOString()} parsed ${messages.length} messages`);
 
-        return {
+        const detailsSuccess: ChatGPTCdpCaptureDetailsSuccess = {
           ok: true,
           messages,
           debug,
@@ -405,6 +334,9 @@ export function createChatGPTCdpCaptureService(
             completedAt: new Date().toISOString()
           }
         };
+        return detailsSuccess;
+        }
+      );
       } catch (error) {
         return {
           ok: false,
@@ -414,77 +346,46 @@ export function createChatGPTCdpCaptureService(
             message: error instanceof Error ? error.message : "ChatGPT CDP capture details failed."
           }
         };
-      } finally {
-        session?.close();
-        if (openedTabId && !input.keepTabOpen) {
-          await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        }
       }
+      if (!sessionResult.ok) {
+        return {
+          ok: false,
+          debug,
+          error: {
+            code: sessionResult.reason === "invalid-input" ? "CHATGPT_CDP_CAPTURE_FAILED" : "CHATGPT_TAB_NOT_FOUND",
+            message: sessionResult.message
+          }
+        };
+      }
+      return sessionResult.result;
     },
 
     async sendPrompt(input) {
       const startedAt = new Date().toISOString();
       const debug = createCdpDebugCollector();
-      let chromeOrigin: string;
-      let navigateUrl: string;
-      let target: ChromeTarget;
-      let session: CdpSession | null = null;
-      let openedTabId: string | undefined;
-
-      try {
-        chromeOrigin = normalizeChromeOrigin(input.chromeOrigin);
-        navigateUrl = input.conversationId
-          ? `https://chatgpt.com/c/${input.conversationId}`
-          : "https://chatgpt.com/";
-      } catch (error) {
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_CDP_CAPTURE_FAILED",
-            message: error instanceof Error ? error.message : "ChatGPT CDP prompt input is invalid."
-          }
-        };
-      }
-
+      const navigateUrl = input.conversationId
+        ? `https://chatgpt.com/c/${input.conversationId}`
+        : "https://chatgpt.com/";
       debug.events.push(`${new Date().toISOString()} target: ${input.openNewTab ? "opening new tab" : "reusing tab"} at ${navigateUrl}`);
-      try {
-        if (input.openNewTab) {
-          target = await openChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, url: navigateUrl });
-          openedTabId = target.id;
-        } else {
-          target = await resolveChatGPTTarget({ chromeOrigin, fetchImpl: options.fetchImpl, allowAnyPage: true });
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_TAB_NOT_FOUND",
-            message: input.openNewTab
-              ? `Failed to open new Chrome tab at ${chromeOrigin}: ${detail}`
-              : `Browser data connection is not reachable at ${chromeOrigin}: ${detail}`
-          }
-        };
-      }
-
-      if (!target.webSocketDebuggerUrl) {
-        if (openedTabId) await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        return {
-          ok: false,
-          debug,
-          error: {
-            code: "CHATGPT_TAB_NOT_FOUND",
-            message: "Open ChatGPT in the browser started from Browser Intelligence."
-          }
-        };
-      }
-
       const reporter: ProgressReporter = input.reporter ?? silentReporter();
       const phase = input.phaseLabel ?? "chatgpt:send_prompt";
+
+      type PromptBodyResult = ChatGPTCdpPromptResult;
+      let sessionResult: Awaited<ReturnType<typeof withCdpCaptureSession<PromptBodyResult>>>;
       try {
-        session = await (options.connectSession ?? connectCdpSession)(target.webSocketDebuggerUrl);
+        sessionResult = await withCdpCaptureSession<PromptBodyResult>(
+        {
+          chromeOrigin: input.chromeOrigin,
+          navigateUrl,
+          openNewTab: Boolean(input.openNewTab),
+          keepTabOpen: Boolean(input.keepTabOpen),
+          fetchImpl: options.fetchImpl,
+          connectSession: options.connectSession,
+          resolveTarget: ({ chromeOrigin, fetchImpl }) =>
+            resolveChatGPTTarget({ chromeOrigin, fetchImpl, allowAnyPage: true }),
+          noSocketMessage: "Open ChatGPT in the browser started from Browser Intelligence."
+        },
+        async ({ chromeOrigin, session, target }) => {
         debug.events.push(`${new Date().toISOString()} CDP session connected to ${target.id}`);
 
         if (input.signal) {
@@ -492,7 +393,7 @@ export function createChatGPTCdpCaptureService(
             throw new Error("Aborted before prompt sent");
           }
           input.signal.addEventListener("abort", () => {
-            session?.close();
+            session.close();
             debug.events.push(`${new Date().toISOString()} CDP session closed due to AbortSignal`);
           }, { once: true });
         }
@@ -624,11 +525,12 @@ export function createChatGPTCdpCaptureService(
           const f = await fetchConversationDetailViaPage(session, resolvedConversationId);
           lastFetched = f;
           if (f.notLoggedIn) {
-            return {
+            const notLogged: ChatGPTCdpPromptResult = {
               ok: false,
               debug,
               error: { code: "CHATGPT_CDP_CAPTURE_FAILED", message: "Not logged in to ChatGPT. Open the login profile, sign in, then retry." }
             };
+            return notLogged;
           }
           if (f.status === 200 && f.body) {
             let parsed: unknown = null;
@@ -670,16 +572,17 @@ export function createChatGPTCdpCaptureService(
         debug.events.push(`${new Date().toISOString()} settled with ${messages.length} messages`);
 
         if (messages.length === 0) {
-          return {
+          const timedOut: ChatGPTCdpPromptResult = {
             ok: false,
             debug,
             error: { code: "CHATGPT_CDP_CAPTURE_FAILED", message: "Timed out waiting for the assistant response after sending the prompt." }
           };
+          return timedOut;
         }
 
         reporter.done(phase);
 
-        return {
+        const promptSuccess: ChatGPTCdpPromptSuccess = {
           ok: true,
           conversationId: resolvedConversationId,
           messages,
@@ -691,6 +594,9 @@ export function createChatGPTCdpCaptureService(
             completedAt: new Date().toISOString()
           }
         };
+        return promptSuccess;
+        }
+      );
       } catch (error) {
         return {
           ok: false,
@@ -700,12 +606,18 @@ export function createChatGPTCdpCaptureService(
             message: error instanceof Error ? error.message : "ChatGPT CDP prompt failed."
           }
         };
-      } finally {
-        session?.close();
-        if (openedTabId && !input.keepTabOpen) {
-          await closeChromeTab({ chromeOrigin, fetchImpl: options.fetchImpl, targetId: openedTabId });
-        }
       }
+      if (!sessionResult.ok) {
+        return {
+          ok: false,
+          debug,
+          error: {
+            code: sessionResult.reason === "invalid-input" ? "CHATGPT_CDP_CAPTURE_FAILED" : "CHATGPT_TAB_NOT_FOUND",
+            message: sessionResult.message
+          }
+        };
+      }
+      return sessionResult.result;
     }
   };
 }

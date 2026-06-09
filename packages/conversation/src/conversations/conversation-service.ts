@@ -285,6 +285,11 @@ export class ConversationService {
       ? buildWebAgentSystemPrompt(resolved.appendSystemPrompt, skillDefs, projectCtx)
       : undefined
 
+    // For non-web agents without a profileId there is no filesystem-backed agent
+    // home (writeProfileInstructions is skipped above), so the assembled context
+    // — skills pointer and active project id — must travel inline as appendSystemPrompt.
+    const inlineSystemPrompt = !isWebAgent && !cur.profileId ? profileInstructions : undefined
+
     // Resolve fileReferences to absolute paths (relative refs are anchored to the workspace).
     const resolvedFiles: string[] | undefined = input.fileReferences?.length
       ? input.fileReferences.map(ref => (isAbsolute(ref) ? ref : resolve(cur.workspacePath, ref)))
@@ -297,7 +302,11 @@ export class ConversationService {
         prompt: input.content,
         msgId,
         prevAgentSessionId: prevSession,
-        ...(webSystemPrompt !== undefined ? { appendSystemPrompt: webSystemPrompt } : {}),
+        ...(webSystemPrompt !== undefined
+          ? { appendSystemPrompt: webSystemPrompt }
+          : inlineSystemPrompt !== undefined
+            ? { appendSystemPrompt: inlineSystemPrompt }
+            : {}),
         ...(resolvedFiles?.length ? { files: resolvedFiles } : {}),
       },
     )

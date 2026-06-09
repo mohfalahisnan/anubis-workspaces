@@ -45,51 +45,28 @@ If the user references something by name ("the spacephotography workflow", "the 
 
 ## 1. Find the backend URL
 
-The backend listens on `127.0.0.1` on an OS-assigned port (not persisted to disk). Discover it in this order:
+The backend writes its URL to a well-known file at startup. Read that file — it's a single line containing `http://127.0.0.1:<port>`.
 
-1. `$ANUBIS_BACKEND_URL` env var (if the user set one).
+**Windows (PowerShell):**
+```powershell
+$portFile = "$env:LOCALAPPDATA\Anubis\anubis\backend.port"
+$env:BASE = if (Test-Path $portFile) { Get-Content $portFile -Raw } else { 'http://127.0.0.1:4317' }
+$env:BASE = $env:BASE.Trim()
+```
+
+**macOS/Linux (bash/zsh):**
+```bash
+portFile="${XDG_DATA_HOME:-$HOME/.local/share}/anubis/backend.port"
+BASE=$([ -f "$portFile" ] && cat "$portFile" || echo 'http://127.0.0.1:4317')
+export BASE
+```
+
+If the file doesn't exist (backend not yet started, or started before v2.6.4), fall back to:
+
+1. `$ANUBIS_BACKEND_URL` env var.
 2. `$VITE_API_BASE_URL` env var.
 3. Probe `http://127.0.0.1:4317/health`; accept if `service === "anubis-backend"`.
-4. Scan listening localhost ports and probe `/health` on each — use the snippet for the user's platform:
-
-   **Windows (PowerShell):**
-   ```powershell
-   Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 |
-     Select-Object -Expand LocalPort -Unique | ForEach-Object {
-       try {
-         $h = Invoke-RestMethod "http://127.0.0.1:$_/health" -TimeoutSec 1
-         if ($h.service -eq 'anubis-backend') { "http://127.0.0.1:$_" }
-       } catch {}
-     } | Select-Object -First 1
-   ```
-
-   **macOS (bash/zsh):**
-   ```bash
-   lsof -nP -iTCP -sTCP:LISTEN | awk '/127\.0\.0\.1:/{print $9}' \
-     | sed 's/.*://' | sort -u \
-     | while read p; do
-         curl -sf --max-time 1 "http://127.0.0.1:$p/health" 2>/dev/null \
-           | grep -q anubis-backend && { echo "http://127.0.0.1:$p"; break; }
-       done
-   ```
-
-   **Linux (bash):**
-   ```bash
-   ss -tlnH 'sport != 0' | awk '{print $4}' | grep -E '^(127\.0\.0\.1|\*|\[::\]):' \
-     | sed 's/.*://' | sort -u \
-     | while read p; do
-         curl -sf --max-time 1 "http://127.0.0.1:$p/health" 2>/dev/null \
-           | grep -q anubis-backend && { echo "http://127.0.0.1:$p"; break; }
-       done
-   ```
-5. As a last resort, ask the user for the port. Don't loop forever scanning.
-
-Set `$BASE` once per session so the sub-file examples Just Work:
-
-```bash
-export BASE=http://127.0.0.1:4317   # bash / zsh
-$env:BASE = 'http://127.0.0.1:4317' # PowerShell
-```
+4. Ask the user for the port.
 
 CORS only allows localhost origins. Always hit `127.0.0.1` or `localhost`.
 

@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import { dirname, join, normalize, sep } from 'node:path'
 import matter from 'gray-matter'
+import yaml from 'js-yaml'
 import { unzipSync } from 'fflate'
 import type { SkillSource } from './types.js'
 
@@ -76,7 +77,14 @@ function destRootFor(userSkillsRoot: string, category: SkillCategory): string {
 
 /** Derive a skill name from SKILL.md frontmatter, falling back to a folder name. */
 function skillName(skillMd: string, fallback: string): string {
-  const data = matter(skillMd).data as Record<string, unknown>
+  const data = matter(skillMd, {
+    engines: {
+      yaml: {
+        parse: (str) => yaml.load(str) as any,
+        stringify: (obj) => yaml.dump(obj),
+      },
+    },
+  }).data as Record<string, unknown>
   const name = typeof data.name === 'string' ? data.name.trim() : ''
   const chosen = name || fallback
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(chosen)) {

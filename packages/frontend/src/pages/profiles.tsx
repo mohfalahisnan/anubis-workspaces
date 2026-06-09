@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CopyIcon,
   FolderIcon,
+  LogInIcon,
+  LogOutIcon,
   PlusIcon,
   RefreshCwIcon,
   RotateCcwIcon,
@@ -16,6 +18,7 @@ import {
   deleteProfile,
   getProfile,
   listProfiles,
+  openLoginTerminal,
   resetProfileHome,
 } from '@/api'
 import { cn } from '@/lib/utils'
@@ -168,6 +171,48 @@ export function ProfilesPage() {
     }
   }
 
+  async function handleLogin(source: ProfileSummary) {
+    setBusy(true)
+    setBanner(null)
+    try {
+      await openLoginTerminal(source.id)
+      setBanner({
+        kind: 'success',
+        message: `Login terminal opened for "${source.name}" — complete the login and refresh when done.`,
+      })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not open the login terminal.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleLogout(source: ProfileSummary) {
+    const ok = window.confirm(
+      `Log out of "${source.name}"?\n\n` +
+        `This will delete the agent's credentials for this profile. ` +
+        `You will need to log in again before using it.`,
+    )
+    if (!ok) return
+    setBusy(true)
+    setBanner(null)
+    try {
+      await resetProfileHome(source.id)
+      await refresh()
+      setBanner({ kind: 'success', message: `Logged out of "${source.name}".` })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not log out.',
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const total = profiles?.length ?? 0
 
   return (
@@ -230,6 +275,8 @@ export function ProfilesPage() {
                 profiles={grouped.builtin}
                 onCopy={handleCopy}
                 onEdit={(p) => navigate({ page: 'profile-editor', profileId: p.id })}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
                 onResetHome={handleResetHome}
                 busy={busy}
               />
@@ -245,6 +292,8 @@ export function ProfilesPage() {
                 onCopy={handleCopy}
                 onEdit={(p) => navigate({ page: 'profile-editor', profileId: p.id })}
                 onDelete={handleDelete}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
                 onResetHome={handleResetHome}
                 busy={busy}
               />
@@ -296,6 +345,8 @@ function ProfileGrid({
   onCopy,
   onEdit,
   onDelete,
+  onLogin,
+  onLogout,
   onResetHome,
   busy,
 }: {
@@ -303,6 +354,8 @@ function ProfileGrid({
   onCopy: (p: ProfileSummary) => void
   onEdit: (p: ProfileSummary) => void
   onDelete?: (p: ProfileSummary) => void
+  onLogin: (p: ProfileSummary) => void
+  onLogout: (p: ProfileSummary) => void
   onResetHome: (p: ProfileSummary) => void
   busy: boolean
 }) {
@@ -316,6 +369,8 @@ function ProfileGrid({
           onCopy={() => onCopy(p)}
           onEdit={() => onEdit(p)}
           onDelete={onDelete ? () => onDelete(p) : undefined}
+          onLogin={() => onLogin(p)}
+          onLogout={() => onLogout(p)}
           onResetHome={() => onResetHome(p)}
           busy={busy}
         />
@@ -329,6 +384,8 @@ function ProfileCard({
   onCopy,
   onEdit,
   onDelete,
+  onLogin,
+  onLogout,
   onResetHome,
   busy,
 }: {
@@ -336,6 +393,8 @@ function ProfileCard({
   onCopy: () => void
   onEdit: () => void
   onDelete?: () => void
+  onLogin: () => void
+  onLogout: () => void
   onResetHome: () => void
   busy: boolean
 }) {
@@ -404,6 +463,30 @@ function ProfileCard({
           Edit
         </button>
 
+        {profile.home?.hasCredentials ? (
+          <button
+            type='button'
+            onClick={onLogout}
+            disabled={busy}
+            title='Revoke credentials for this profile'
+            className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40'
+          >
+            <LogOutIcon className='size-[13px]' strokeWidth={2} />
+            Logout
+          </button>
+        ) : (
+          <button
+            type='button'
+            onClick={onLogin}
+            disabled={busy}
+            title='Open a login terminal for this profile'
+            className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-[var(--anubis-gold)] transition-colors hover:bg-[color-mix(in_oklab,var(--anubis-gold)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-40'
+          >
+            <LogInIcon className='size-[13px]' strokeWidth={2} />
+            Login
+          </button>
+        )}
+
         <button
           type='button'
           onClick={onResetHome}
@@ -460,6 +543,16 @@ function HomeBlock({ home }: { home: NonNullable<ProfileSummary['home']> }) {
             )}
           >
             {home.exists ? 'Provisioned' : 'Empty'}
+          </span>
+          <span
+            className={cn(
+              'inline-flex h-4 items-center rounded-sm px-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em]',
+              home.hasCredentials
+                ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_18%,transparent)] text-[var(--anubis-gold)]'
+                : 'bg-muted text-muted-foreground/60',
+            )}
+          >
+            {home.hasCredentials ? 'Authenticated' : 'No credentials'}
           </span>
         </div>
         <p

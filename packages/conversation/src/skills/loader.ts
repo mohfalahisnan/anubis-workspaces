@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import matter from 'gray-matter'
+import yaml from 'js-yaml'
 import type { SkillDefinition, SkillSource } from './types.js'
 
 export interface SkillRoots {
@@ -63,7 +64,14 @@ export class SkillLoader {
       const file = join(dir, 'SKILL.md')
       if (!existsSync(file) || !statSync(file).isFile()) continue
       const raw = readFileSync(file, 'utf8')
-      const parsed = matter(raw)
+      const parsed = matter(raw, {
+        engines: {
+          yaml: {
+            parse: (str) => yaml.load(str) as any,
+            stringify: (obj) => yaml.dump(obj),
+          },
+        },
+      })
       const data = parsed.data as Record<string, unknown>
       const name = typeof data.name === 'string' && data.name.length > 0 ? data.name : e.name
       const description = typeof data.description === 'string' ? data.description : ''

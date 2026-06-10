@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownToLineIcon,
   ArrowUpRightIcon,
@@ -34,6 +34,15 @@ import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
 import { ViewToggle } from '@/components/view-toggle'
+import {
+  PaginationBar,
+  SearchBox,
+  SortControl,
+  compareForSort,
+  paginate,
+  type SortOption,
+  type SortState,
+} from '@/components/list-controls'
 import { levelTip, resolveLevel } from '@/lib/competitor-level'
 import { PostMultiplierBadge } from '@/components/post-multiplier-badge'
 import { PostMultiplierFilter, matchesMultiplierFilter, type MultiplierFilter } from '@/components/post-multiplier-filter'
@@ -56,6 +65,24 @@ import {
 } from '@/components/ui/sheet'
 
 type Format = 'carousel' | 'reel' | 'static'
+
+type FormatFilter = 'all' | Format
+
+type PostSortKey = 'date' | 'likes' | 'comments' | 'handle'
+
+const POST_SORT_OPTIONS: readonly SortOption<PostSortKey>[] = [
+  { value: 'date', label: 'Date' },
+  { value: 'likes', label: 'Likes' },
+  { value: 'comments', label: 'Comments' },
+  { value: 'handle', label: 'Competitor' },
+]
+
+const FORMAT_FILTER_OPTIONS: readonly { value: FormatFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'reel', label: 'Reel' },
+  { value: 'carousel', label: 'Carousel' },
+  { value: 'static', label: 'Static' },
+]
 
 interface CardModel {
   key: string
@@ -172,6 +199,11 @@ export function ContentPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [multiplierFilter, setMultiplierFilter] = useState<MultiplierFilter>('all')
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortState<PostSortKey>>({ key: 'date', dir: 'desc' })
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(24)
   const { config: levelsCfg } = useCompetitorLevels()
   const multipliersCfg = useLevelMultipliers()
 
@@ -372,15 +404,41 @@ export function ContentPage() {
     }
   }
 
-  const allCards = dedupeCapturedPosts(posts ?? []).map(realPostToCard)
-  const cards = allCards
-    .filter((card) => {
-      const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
-      const { rating } = multiplierRatingFor(level, card.post?.likes, card.post?.competitorAvgLikes, multipliersCfg)
-      return matchesMultiplierFilter(rating, multiplierFilter)
-    })
+  const allCards = useMemo(() => dedupeCapturedPosts(posts ?? []).map(realPostToCard), [posts])
+
+  const filteredCards = useMemo(
+    () =>
+      allCards.filter((card) => {
+        const level = effectiveLevel(card.post?.competitorLevel, card.post?.competitorFollowers, levelsCfg)
+        const { rating } = multiplierRatingFor(level, card.post?.likes, card.post?.competitorAvgLikes, multipliersCfg)
+        if (!matchesMultiplierFilter(rating, multiplierFilter)) return false
+        if (formatFilter !== 'all' && card.format !== formatFilter) return false
+        if (!matchesContentQuery(card, query)) return false
+        return true
+      }),
+    [allCards, levelsCfg, multipliersCfg, multiplierFilter, formatFilter, query],
+  )
+
+  const sortedCards = useMemo(() => {
+    const accessor = postSortAccessor(sort.key)
+    return [...filteredCards].sort((a, b) => compareForSort(accessor(a), accessor(b), sort.dir))
+  }, [filteredCards, sort.key, sort.dir])
+
+  const matchCount = sortedCards.length
+  const { slice: cards, page: currentPage } = paginate(sortedCards, page, pageSize)
+
+  // Keep the page in range as filters shrink the result set.
+  useEffect(() => {
+    if (currentPage !== page) setPage(currentPage)
+  }, [currentPage, page])
+
+  // Reset to first page when filters/sort/page-size change.
+  useEffect(() => {
+    setPage(1)
+  }, [multiplierFilter, formatFilter, query, sort.key, sort.dir, pageSize, activeProject?.id])
+
   const headerCount = posts === null ? '—' : posts.length.toLocaleString()
-  const filtersActive = multiplierFilter !== 'all'
+  const filtersActive = multiplierFilter !== 'all' || formatFilter !== 'all' || query.trim() !== ''
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -467,32 +525,48 @@ export function ContentPage() {
           <>
             {/* Sticky filter rail */}
             <div className='sticky top-0 z-[5] -mx-1 bg-background pb-3.5 pt-[18px]'>
-              <div className='flex min-h-14 flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2'>
-                <div className='flex flex-wrap items-center gap-2'>
-                  <span className='text-[12.5px] font-medium text-muted-foreground mr-1'>Performance:</span>
-                  <PostMultiplierFilter value={multiplierFilter} onChange={setMultiplierFilter} />
+              <div className='flex flex-col gap-2 rounded-md border border-border bg-card px-3 py-2'>
+                <div className='flex min-h-10 flex-wrap items-center justify-between gap-2'>
+                  <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                      <span className='text-[12.5px] font-medium text-muted-foreground mr-1'>Performance:</span>
+                      <PostMultiplierFilter value={multiplierFilter} onChange={setMultiplierFilter} />
+                    </div>
+                    <FormatFilterControl value={formatFilter} onChange={setFormatFilter} />
+                  </div>
+                  <ViewToggle view={view} onChange={setView} className='ml-auto' />
+                </div>
+                <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+                  <SearchBox
+                    value={query}
+                    onChange={setQuery}
+                    placeholder='Search caption, handle…'
+                    className='w-full sm:w-[300px]'
+                  />
+                  <SortControl options={POST_SORT_OPTIONS} value={sort} onChange={setSort} />
                   {filtersActive && (
                     <button
                       type='button'
                       onClick={() => {
                         setMultiplierFilter('all')
+                        setFormatFilter('all')
+                        setQuery('')
                       }}
-                      className='inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+                      className='ml-auto inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
                     >
                       <XIcon className='size-3.5' strokeWidth={2} />
-                      Clear
+                      Clear filters
                     </button>
                   )}
                 </div>
-                <ViewToggle view={view} onChange={setView} className='ml-auto' />
               </div>
             </div>
 
         {selectMode && (
           <BulkSelectBar
             count={selected.size}
-            total={cards.filter((c) => c.post).length}
-            onSelectAll={() => setSelected(new Set(cards.filter((c) => c.post).map((c) => c.post!.id)))}
+            total={sortedCards.filter((c) => c.post).length}
+            onSelectAll={() => setSelected(new Set(sortedCards.filter((c) => c.post).map((c) => c.post!.id)))}
             onClear={() => setSelected(new Set())}
             onDelete={() => setBulkConfirm(true)}
             busy={busy}
@@ -500,7 +574,7 @@ export function ContentPage() {
           />
         )}
 
-        {cards.length === 0 ? (
+        {matchCount === 0 ? (
           <div className='mt-8 flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center'>
             <ImageIcon className='size-6 text-muted-foreground' strokeWidth={1.5} />
             <p className='text-[13px] text-muted-foreground'>No content matches these filters.</p>
@@ -533,6 +607,16 @@ export function ContentPage() {
             selected={selected}
             onToggleSelect={toggleSelected}
             onClickDetail={(post) => setSelectedDetailPost(post)}
+          />
+        )}
+
+        {matchCount > 0 && (
+          <PaginationBar
+            page={currentPage}
+            pageSize={pageSize}
+            total={matchCount}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         )}
           </>
@@ -1516,6 +1600,70 @@ function ContentEmptyState({ onCapture, disabled }: { onCapture: () => void; dis
       </button>
     </div>
   )
+}
+
+/* ---------- Format facet filter ---------- */
+
+function FormatFilterControl({
+  value,
+  onChange,
+}: {
+  value: FormatFilter
+  onChange: (next: FormatFilter) => void
+}) {
+  return (
+    <div className='flex flex-wrap items-center gap-2'>
+      <span className='text-[12.5px] font-medium text-muted-foreground mr-1'>Format:</span>
+      <div role='radiogroup' aria-label='Filter by format' className='inline-flex flex-wrap items-center gap-1.5'>
+        {FORMAT_FILTER_OPTIONS.map((opt) => {
+          const active = value === opt.value
+          return (
+            <button
+              key={opt.value}
+              type='button'
+              role='radio'
+              aria-checked={active}
+              onClick={() => onChange(opt.value)}
+              className={cn(
+                'inline-flex h-8 items-center rounded-md border px-2.5 text-[12px] font-medium transition-colors',
+                active
+                  ? 'border-[var(--anubis-gold)] bg-[color-mix(in_oklab,var(--anubis-gold)_12%,transparent)] text-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Content filter + sort helpers ---------- */
+
+function matchesContentQuery(card: CardModel, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return [card.caption, card.handle, card.post?.username, card.post?.postUrl, card.chip]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(q)
+}
+
+function postSortAccessor(key: PostSortKey): (card: CardModel) => unknown {
+  switch (key) {
+    case 'likes':
+      return (card) => card.post?.likes
+    case 'comments':
+      return (card) => card.post?.comments
+    case 'handle':
+      return (card) => card.handle.replace(/^@/, '').toLowerCase()
+    case 'date':
+    default:
+      return (card) => (card.post ? postTimeMs(card.post) : undefined)
+  }
 }
 
 /* ---------- Real → card converter ---------- */

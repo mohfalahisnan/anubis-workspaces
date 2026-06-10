@@ -3,13 +3,16 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import type { CdpSession } from '../src/core/chrome/cdp-session.js'
 import {
   downloadGeneratedImages,
   ensureFlowChrome,
   findFlowTarget,
+  hasGenerationStarted,
   isFlowVariationText,
   normalizeFlowGenerateInput,
   openFlowUrl,
+  resetFlowTab,
   shouldTreatGenerationAsComplete
 } from '../src/core/flow/flow-generate.js'
 
@@ -130,6 +133,65 @@ test('treats generated image growth as completion', () => {
     variations: 4,
     progressing: true
   }), false)
+})
+
+test('detects a started generation from visible progress', () => {
+  assert.equal(hasGenerationStarted({
+    beforeResultLinks: 0, resultLinks: 0, beforeImageUrls: 0, imageUrls: 0, progressing: true
+  }), true)
+})
+
+test('detects a started generation from grown results', () => {
+  assert.equal(hasGenerationStarted({
+    beforeResultLinks: 8, resultLinks: 9, beforeImageUrls: 8, imageUrls: 8, progressing: false
+  }), true)
+  assert.equal(hasGenerationStarted({
+    beforeResultLinks: 8, resultLinks: 8, beforeImageUrls: 8, imageUrls: 12, progressing: false
+  }), true)
+})
+
+test('treats a static page as a generation that never started', () => {
+  assert.equal(hasGenerationStarted({
+    beforeResultLinks: 8, resultLinks: 8, beforeImageUrls: 8, imageUrls: 8, progressing: false
+  }), false)
+})
+
+test('resetFlowTab reloads and resolves once the editor reappears', async () => {
+  const sent: string[] = []
+  let editorPolls = 0
+  const session: CdpSession = {
+    async send(method: string) {
+      sent.push(method)
+      if (method === 'Runtime.evaluate') {
+        editorPolls += 1
+        return { result: { value: editorPolls >= 2 ? 1 : 0 } } as never
+      }
+      return {} as never
+    },
+    on() {},
+    close() {}
+  }
+
+  await resetFlowTab(session, { initialDelayMs: 0, pollMs: 5, settleMs: 0, timeoutMs: 2000 })
+
+  assert.ok(sent.includes('Page.reload'), 'should reload the page')
+  assert.ok(editorPolls >= 2, 'should poll until the composer is interactive')
+})
+
+test('resetFlowTab throws a clear error if the editor never reappears', async () => {
+  const session: CdpSession = {
+    async send(method: string) {
+      if (method === 'Runtime.evaluate') return { result: { value: 0 } } as never
+      return {} as never
+    },
+    on() {},
+    close() {}
+  }
+
+  await assert.rejects(
+    () => resetFlowTab(session, { initialDelayMs: 0, pollMs: 5, timeoutMs: 60 }),
+    /editor did not reappear/i
+  )
 })
 
 test('downloads generated images from page session', async () => {

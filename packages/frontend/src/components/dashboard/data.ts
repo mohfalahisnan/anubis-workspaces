@@ -40,6 +40,7 @@ export const navItems: NavItem[] = [
   { label: 'Knowledge Base', icon: DatabaseIcon, page: 'knowledge-base' },
   { label: 'Knowledge Graph', icon: NetworkIcon, page: 'knowledge-graph' },
   { label: 'Extractor', icon: ScanTextIcon, page: 'extractor' },
+  { label: 'Flow Images', icon: SparklesIcon, page: 'flow' },
   { label: 'Content Planner', icon: ListChecksIcon, page: 'planner' },
   { label: 'Tasks', icon: ClipboardListIcon, page: 'tasks' },
   { label: 'Profiles', icon: SlidersHorizontalIcon, page: 'profiles' },

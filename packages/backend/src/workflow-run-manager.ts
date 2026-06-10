@@ -7,11 +7,19 @@ import {
   runWorkflow,
   WorkflowGraphSchema,
   type CapturedPost,
+  type FlowImageNodeOptions,
   type NodeRunEvent,
   type RunEvent,
   type RunStatus,
 } from '@anubis/workflow-runtime'
-import { captureInstagramData, silentReporter, type StandardCrawlerOutput } from '@anubis/research-crawler'
+import {
+  captureInstagramData,
+  silentReporter,
+  flowGenerate,
+  ensureFlowChrome,
+  openFlowUrl,
+  type StandardCrawlerOutput,
+} from '@anubis/research-crawler'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 import { LessonStore } from './lesson-store.js'
 import { runOcr, runTranscribe, type TranscribeOptions } from './extractor.js'
@@ -231,6 +239,30 @@ export class WorkflowRunManager {
         }},
         transcribe: { fromMedia: async (path: string, opts?: TranscribeOptions) => {
           return runTranscribe(path, opts)
+        }},
+        flow: { generate: async (gen: FlowImageNodeOptions) => {
+          const cfg = this.stack.appConfig.get()
+          const chromeOrigin = await ensureFlowChrome(withCrawlerProfileDefaults(
+            { url: gen.projectUrl, chromePath: cfg.chromePath },
+            'flow', cfg, this.dataDir,
+          ))
+          if (gen.projectUrl) await openFlowUrl({ chromeOrigin, url: gen.projectUrl })
+          const result = await flowGenerate({
+            chromeOrigin,
+            prompt: gen.prompt,
+            ratio: gen.ratio,
+            variations: gen.variations,
+            model: gen.model,
+            downloadDir: gen.downloadDir,
+          })
+          return {
+            resultEditUrls: result.resultEditUrls,
+            ...(result.downloadedImagePaths ? { downloadedImagePaths: result.downloadedImagePaths } : {}),
+            model: result.model,
+            ratio: result.ratio,
+            variations: result.variations,
+            tabUrl: result.tabUrl,
+          }
         }},
         db: { getCapturedPost: async (id: string): Promise<CapturedPost> => {
           const post = this.stack.capturedPosts.findById(id)

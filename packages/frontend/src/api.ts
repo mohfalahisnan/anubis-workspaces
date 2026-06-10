@@ -1209,6 +1209,58 @@ export async function streamQwenPrompt(
   return result
 }
 
+/* -----------------------------------------------------------
+   Google Flow (labs.google) image generation — headed `flow`
+   profile. See docs/flow-crawler-cdp.md.
+   ----------------------------------------------------------- */
+
+export type FlowRatio = '16:9' | '4:3' | '1:1' | '3:4' | '9:16'
+export type FlowVariations = 1 | 2 | 3 | 4
+
+export interface FlowGenerateOptions {
+  prompt: string
+  /** A Flow project URL (…/tools/flow/project/<id>) to open before generating. */
+  projectUrl?: string
+  ratio?: FlowRatio
+  variations?: FlowVariations
+  model?: string
+  generateTimeoutMs?: number
+  downloadDir?: string
+  downloadFilePrefix?: string
+  skipReset?: boolean
+}
+
+export interface FlowGenerateResponse {
+  ok: true
+  chromeOrigin: string
+  tabUrl: string
+  prompt: string
+  ratio: FlowRatio
+  variations: FlowVariations
+  model: string
+  resultEditUrls: string[]
+  downloadedImagePaths?: string[]
+}
+
+/** Launch (or reveal) the headed `flow` Chrome on a Flow project so the user can log in. */
+export async function openFlowChrome(projectUrl?: string): Promise<OpenCrawlerChromeResult> {
+  return api<OpenCrawlerChromeResult>('/research-crawler/chrome/open', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile: 'flow',
+      headless: false,
+      url: projectUrl ?? 'https://labs.google/fx/tools/flow',
+    }),
+  })
+}
+
+export async function generateFlowImage(options: FlowGenerateOptions): Promise<FlowGenerateResponse> {
+  return api<FlowGenerateResponse>('/research-crawler/flow/generate', {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
+
 export async function listProjects(): Promise<ProjectSummary[]> {
   const r = await api<ProjectListResponse>('/projects')
   return r.items

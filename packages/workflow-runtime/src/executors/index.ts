@@ -7,6 +7,7 @@ import { instagramPostExecutor }        from './instagram-post.js'
 import { transformerMediaExecutor }     from './transformer-media.js'
 import { ocrExtractorExecutor }         from './ocr-extractor.js'
 import { transcriberExecutor }          from './transcriber.js'
+import { flowImageExecutor }            from './flow-image.js'
 import { imageVideoExecutor }           from './image-video.js'
 import { aiAgentConversationExecutor }  from './ai-agent-conversation.js'
 import { humanApprovalExecutor }        from './human-approval.js'
@@ -29,6 +30,7 @@ export const executorRegistry: Record<string, Executor<unknown>> = {
   transformerMedia:     transformerMediaExecutor as Executor<unknown>,
   ocrExtractor:         ocrExtractorExecutor as Executor<unknown>,
   transcriber:          transcriberExecutor as Executor<unknown>,
+  flowImage:            flowImageExecutor as Executor<unknown>,
   imageVideo:           imageVideoExecutor as Executor<unknown>,
   aiAgentConversation:  aiAgentConversationExecutor as Executor<unknown>,
   humanApproval:        humanApprovalExecutor as Executor<unknown>,
@@ -48,7 +50,7 @@ export type ExecutorKey = keyof typeof executorRegistry
 export {
   tableExecutor, transformerBriefExecutor, jsonTransformerExecutor, jsonFilterExecutor,
   instagramPostExecutor, transformerMediaExecutor, ocrExtractorExecutor,
-  transcriberExecutor, imageVideoExecutor, aiAgentConversationExecutor,
+  transcriberExecutor, flowImageExecutor, imageVideoExecutor, aiAgentConversationExecutor,
   humanApprovalExecutor, lessonWriterExecutor,
   markdownDisplayExecutor, mediaDisplayExecutor, instagramDraftPreviewExecutor, originalCopyExecutor,
   scheduleTriggerExecutor, fileWatchTriggerExecutor, savePlannerExecutor,

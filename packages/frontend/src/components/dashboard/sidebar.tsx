@@ -94,6 +94,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'knowledge-graph' }
     case 'extractor':
       return { page: 'extractor' }
+    case 'flow':
+      return { page: 'flow' }
     case 'settings':
       return { page: 'settings' }
     default:

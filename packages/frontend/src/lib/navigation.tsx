@@ -26,6 +26,7 @@ export type Route =
   | { page: 'knowledge-base' }
   | { page: 'knowledge-graph' }
   | { page: 'extractor' }
+  | { page: 'flow' }
 
 export type PageKey = Route['page']
 

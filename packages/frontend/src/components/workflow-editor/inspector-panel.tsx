@@ -7,6 +7,7 @@ import { JsonTransformerConfigForm } from './inspector/config/json-transformer-c
 import { JsonFilterConfigForm } from './inspector/config/json-filter-config'
 import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-config'
 import { TranscriberConfigForm }      from './inspector/config/transcriber-config'
+import { FlowImageConfigForm }        from './inspector/config/flow-image-config'
 import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
 import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conversation-config'
@@ -31,6 +32,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   jsonFilter:          JsonFilterConfigForm,
   ocrExtractor:        OcrExtractorConfigForm,
   transcriber:         TranscriberConfigForm,
+  flowImage:           FlowImageConfigForm,
   table:               TableConfigForm,
   imageVideo:          ImageVideoConfigForm,
   aiAgentConversation: AiAgentConversationConfigForm,

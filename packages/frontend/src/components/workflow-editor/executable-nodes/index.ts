@@ -6,6 +6,7 @@ import { JsonTransformerExecutableNode }        from './json-transformer'
 import { JsonFilterExecutableNode }             from './json-filter'
 import { OcrExtractorExecutableNode }           from './ocr-extractor'
 import { TranscriberExecutableNode }            from './transcriber'
+import { FlowImageExecutableNode }              from './flow-image'
 import { TableExecutableNode }                  from './table'
 import { ImageVideoExecutableNode }             from './image-video'
 import { AiAgentConversationExecutableNode }    from './ai-agent-conversation'
@@ -28,6 +29,7 @@ export const executableNodeTypes: NodeTypes = {
   jsonFilter:          JsonFilterExecutableNode as never,
   ocrExtractor:        OcrExtractorExecutableNode as never,
   transcriber:         TranscriberExecutableNode as never,
+  flowImage:           FlowImageExecutableNode as never,
   table:               TableExecutableNode as never,
   imageVideo:          ImageVideoExecutableNode as never,
   aiAgentConversation: AiAgentConversationExecutableNode as never,
@@ -79,6 +81,7 @@ export const NODE_PALETTE = [
   { type: 'jsonFilter',          label: 'JSON Filter',            category: 'tools'     },
   { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
   { type: 'transcriber',         label: 'Transcriber',            category: 'tools'     },
+  { type: 'flowImage',           label: 'Flow Image',             category: 'tools'     },
   { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
   { type: 'humanApproval',       label: 'Human Review',           category: 'agent'    },
   { type: 'lessonWriter',        label: 'Lesson Writer',          category: 'agent'    },

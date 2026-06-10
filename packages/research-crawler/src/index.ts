@@ -4,6 +4,7 @@ export { captureChatGPTConversations, captureChatGPTConversationDetails, sendCha
 export { captureQwenConversations, captureQwenConversationDetails, sendQwenPrompt } from './core/qwen-crawler.js'
 export { calculateAvgLikesSummary } from './core/instagram/avg-likes.js'
 export { silentReporter, stderrReporter } from './core/progress/progress-reporter.js'
+export { flowGenerate, ensureFlowChrome, openFlowUrl } from './core/flow/flow-generate.js'
 
 export type { LaunchChromeInput, LaunchChromeResult } from './core/chrome/launch-chrome.js'
 export type {
@@ -29,3 +30,9 @@ export type {
   QwenConversation,
   QwenMessage,
 } from './core/standard-output.js'
+export type {
+  FlowGenerateInput,
+  FlowGenerateResult,
+  FlowGenerateRatio,
+  FlowGenerateVariations,
+} from './core/flow/flow-generate.js'

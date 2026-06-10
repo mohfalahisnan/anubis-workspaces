@@ -12,6 +12,9 @@ import {
   sendQwenPrompt,
   launchChrome,
   silentReporter,
+  flowGenerate,
+  ensureFlowChrome,
+  openFlowUrl,
 } from '@anubis/research-crawler'
 import type { DiscoverJobResult, DiscoveredCandidate } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
@@ -323,6 +326,62 @@ researchCrawlerRoutes.post('/qwen/prompt/stream', async (c) => {
       await stream.writeSSE({ event: 'error', data: JSON.stringify({ message: err instanceof Error ? err.message : 'stream failed' }) })
     }
   })
+})
+
+/* -----------------------------------------------------------
+   Google Flow (labs.google) image generation — headed `flow`
+   profile, CDP DOM automation. See docs/flow-crawler-cdp.md.
+   ----------------------------------------------------------- */
+
+const flowGenerateSchema = z.object({
+  prompt: z.string().min(1),
+  /** A Flow project URL (…/tools/flow/project/<id>) to open before generating. */
+  projectUrl: z.string().url().optional(),
+  ratio: z.enum(['16:9', '4:3', '1:1', '3:4', '9:16']).optional(),
+  variations: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+  model: z.string().min(1).optional(),
+  generateTimeoutMs: z.number().int().positive().optional(),
+  downloadDir: z.string().min(1).optional(),
+  downloadFilePrefix: z.string().min(1).optional(),
+  skipReset: z.boolean().optional(),
+  chromeOrigin: z.string().url().optional(),
+  remoteDebuggingPort: z.number().int().positive().optional(),
+  profileDir: z.string().min(1).optional(),
+  profileDirectory: z.string().min(1).optional(),
+  chromePath: z.string().min(1).optional(),
+  forceHeadless: z.boolean().optional(),
+}).strict()
+
+researchCrawlerRoutes.post('/flow/generate', async (c) => {
+  const input = flowGenerateSchema.parse(await c.req.json())
+  const cfg = getStack().appConfig.get()
+
+  // Ensure the headed `flow` Chrome is up on the resolved profile, then make
+  // sure the target project tab exists before flowGenerate drives it.
+  const chromeOrigin = input.chromeOrigin ?? await ensureFlowChrome(withCrawlerProfileDefaults({
+    profileDir: input.profileDir,
+    profileDirectory: input.profileDirectory,
+    chromePath: input.chromePath ?? cfg.chromePath,
+    forceHeadless: input.forceHeadless,
+    remoteDebuggingPort: input.remoteDebuggingPort,
+    url: input.projectUrl,
+  }, 'flow', cfg, getDataDir()))
+
+  if (input.projectUrl) {
+    await openFlowUrl({ chromeOrigin, url: input.projectUrl })
+  }
+
+  return c.json(await flowGenerate({
+    chromeOrigin,
+    prompt: input.prompt,
+    ratio: input.ratio,
+    variations: input.variations,
+    model: input.model,
+    generateTimeoutMs: input.generateTimeoutMs,
+    downloadDir: input.downloadDir,
+    downloadFilePrefix: input.downloadFilePrefix,
+    skipReset: input.skipReset,
+  }))
 })
 
 researchCrawlerRoutes.post('/instagram/capture-profile', async (c) => {

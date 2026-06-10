@@ -72,10 +72,33 @@ export interface TranscribeNodeResult {
   cacheHit?: boolean
 }
 
+export type FlowImageRatio = '16:9' | '4:3' | '1:1' | '3:4' | '9:16'
+export type FlowImageVariations = 1 | 2 | 3 | 4
+
+export interface FlowImageNodeOptions {
+  prompt: string
+  /** A Flow project URL (…/tools/flow/project/<id>) to open before generating. */
+  projectUrl?: string
+  ratio?: FlowImageRatio
+  variations?: FlowImageVariations
+  model?: string
+  downloadDir?: string
+}
+
+export interface FlowImageNodeResult {
+  resultEditUrls: string[]
+  downloadedImagePaths?: string[]
+  model: string
+  ratio: FlowImageRatio
+  variations: FlowImageVariations
+  tabUrl: string
+}
+
 export interface ExecutorContext {
   crawler: { captureProfile: (url: string) => Promise<CapturedPost> }
   ocr:     { extractFromImage: (path: string) => Promise<string> }
   transcribe: { fromMedia: (path: string, opts?: TranscribeNodeOptions) => Promise<TranscribeNodeResult> }
+  flow:    { generate: (input: FlowImageNodeOptions) => Promise<FlowImageNodeResult> }
   db:      { getCapturedPost: (id: string) => Promise<CapturedPost> }
   fs:      { writeRunArtifact: (runId: string, nodeId: string, ext: string, data: Buffer) => Promise<string> }
   conversations: {

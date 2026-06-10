@@ -16,6 +16,8 @@ export type FlowGenerateInput = {
   model?: string
   tabUrlIncludes?: string
   generateTimeoutMs?: number
+  /** Skip the reload-to-clean-state guard (default false). Set when the caller already guarantees a fresh, idle project tab. */
+  skipReset?: boolean
   downloadDir?: string
   downloadFilePrefix?: string
   fetchImpl?: typeof fetch
@@ -30,6 +32,7 @@ export type NormalizedFlowGenerateInput = {
   model: string
   tabUrlIncludes: string
   generateTimeoutMs: number
+  skipReset: boolean
   downloadDir?: string
   downloadFilePrefix?: string
   fetchImpl?: typeof fetch
@@ -174,6 +177,7 @@ export function normalizeFlowGenerateInput(input: FlowGenerateInput): Normalized
     model: input.model?.trim() || 'Nano Banana Pro',
     tabUrlIncludes: input.tabUrlIncludes?.trim() || DEFAULT_FLOW_TAB_URL_PART,
     generateTimeoutMs: normalizePositiveInteger(input.generateTimeoutMs, 120000),
+    skipReset: input.skipReset ?? false,
     downloadDir: input.downloadDir?.trim() || undefined,
     downloadFilePrefix: input.downloadFilePrefix?.trim() || undefined,
     fetchImpl: input.fetchImpl,
@@ -242,6 +246,23 @@ export async function flowGenerate(input: FlowGenerateInput): Promise<FlowGenera
   const target = await findFlowTarget(normalized)
   if (!target.webSocketDebuggerUrl) {
     throw new Error('Flow tab did not expose a CDP socket.')
+  }
+
+  // Reset on a SEPARATE, short-lived session: a tab reloaded over a CDP session
+  // stops honoring that same session's synthesized Input events (mouse/keyboard),
+  // though Runtime.evaluate still works. resetFlowTab only evaluates, so it is
+  // safe here; the automation below then runs on a FRESH session whose Input
+  // events work normally. See docs/flow-crawler-cdp.md §3.1.
+  if (!normalized.skipReset) {
+    const resetSession = await normalized.connectSession(target.webSocketDebuggerUrl)
+    try {
+      await resetSession.send('Page.enable')
+      await resetSession.send('Runtime.enable')
+      await resetFlowTab(resetSession)
+    } finally {
+      resetSession.close()
+    }
+    await delay(800)
   }
 
   const session = await normalized.connectSession(target.webSocketDebuggerUrl)
@@ -348,9 +369,9 @@ export async function downloadGeneratedImages(
   }
 
   const saved: string[] = []
-  for (let index = 0; index < urls.length; index += 1) {
+  for (const [index, url] of urls.entries()) {
     const { b64, mime } = await cdp.eval<{ b64: string; mime: string }>(
-      `__flowDl.fetchAsBase64(${JSON.stringify(urls[index])})`
+      `__flowDl.fetchAsBase64(${JSON.stringify(url)})`
     )
     const filename = `${prefix}_${String(index + 1).padStart(2, '0')}.${extensionForMime(mime)}`
     const filepath = join(downloadDir, filename)
@@ -384,15 +405,15 @@ export async function downloadGeneratedImagesFromSession(
   await mkdir(opts.downloadDir, { recursive: true })
   const prefix = opts.filePrefix ?? 'image'
   const saved: string[] = []
-  for (let index = 0; index < urls.length; index += 1) {
-    const response = await fetch(urls[index], {
+  for (const [index, url] of urls.entries()) {
+    const response = await fetch(url, {
       headers: {
         cookie,
         accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'user-agent': 'Mozilla/5.0'
       }
     })
-    if (!response.ok) throw new Error(`fetch ${response.status} for ${urls[index]}`)
+    if (!response.ok) throw new Error(`fetch ${response.status} for ${url}`)
     const mime = response.headers.get('content-type') || 'image/png'
     const filename = `${prefix}_${String(index + 1).padStart(2, '0')}.${extensionForMime(mime)}`
     const filepath = join(opts.downloadDir, filename)
@@ -400,6 +421,42 @@ export async function downloadGeneratedImagesFromSession(
     saved.push(filepath)
   }
   return saved
+}
+
+/**
+ * Reload the Flow project tab and wait for the prompt editor to reappear, so a
+ * generation always begins from a clean, idle state. flowGenerate's click
+ * sequence assumes the settings popover / model dropdown start closed; a tab
+ * left mid-interaction silently breaks submission (submit no-ops, then the run
+ * times out). See docs/flow-crawler-cdp.md §3.1.
+ */
+export async function resetFlowTab(
+  session: CdpSession,
+  opts: { timeoutMs?: number; pollMs?: number; initialDelayMs?: number; settleMs?: number } = {}
+): Promise<void> {
+  await session.send('Page.reload', {})
+  const initialDelayMs = opts.initialDelayMs ?? 1200
+  if (initialDelayMs > 0) await delay(initialDelayMs)
+  const timeoutMs = opts.timeoutMs ?? 25000
+  const pollMs = opts.pollMs ?? 500
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    // Require the composer to be genuinely interactive: the prompt editor AND
+    // the settings summary button. The editor alone renders before the React
+    // handlers are bound, so clicking settings too early silently no-ops.
+    const ready = await evaluate<boolean>(session, `(() => {
+      const editor = document.querySelectorAll('[contenteditable="true"]').length > 0;
+      const settings = [...document.querySelectorAll('button')].some((b) => /Nano Banana/i.test(b.innerText || '') && /crop_/.test(b.innerText || ''));
+      return Boolean(editor && settings);
+    })()`)
+    if (ready) {
+      const settleMs = opts.settleMs ?? 600
+      if (settleMs > 0) await delay(settleMs)
+      return
+    }
+    await delay(pollMs)
+  }
+  throw new Error('Flow project editor did not reappear after reload — is the tab still on a project page?')
 }
 
 export function isFlowVariationText(text: string, variations: FlowGenerateVariations): boolean {
@@ -421,15 +478,28 @@ async function waitForGeneration(
     beforeImageUrls: number
     variations: FlowGenerateVariations
     timeoutMs: number
+    startWindowMs?: number
   }
 ): Promise<void> {
-  const deadline = Date.now() + input.timeoutMs
+  const start = Date.now()
+  const deadline = start + input.timeoutMs
+  const startWindowMs = Math.min(input.startWindowMs ?? 20000, input.timeoutMs)
+  let startedSeen = false
   while (Date.now() < deadline) {
     const [resultLinks, imageUrls, progressing] = await Promise.all([
       evaluate<number>(session, '__flow.resultLinkCount()'),
       evaluate<number>(session, '__flow.generatedImageUrls().length'),
       evaluate<boolean>(session, '__flow.anyProgressVisible()')
     ])
+    if (!startedSeen && hasGenerationStarted({
+      beforeResultLinks: input.beforeResultLinks,
+      resultLinks,
+      beforeImageUrls: input.beforeImageUrls,
+      imageUrls,
+      progressing
+    })) {
+      startedSeen = true
+    }
     if (shouldTreatGenerationAsComplete({
       beforeResultLinks: input.beforeResultLinks,
       resultLinks,
@@ -438,9 +508,30 @@ async function waitForGeneration(
       variations: input.variations,
       progressing
     })) return
+    // Fail fast with a clear message instead of waiting the full timeout when
+    // the submit never registered (e.g. a non-idle tab — see resetFlowTab).
+    if (!startedSeen && Date.now() - start >= startWindowMs) {
+      throw new Error(`Generation did not start within ${startWindowMs}ms — the Flow tab may not be idle (an open popover/menu) or the submit click did not register.`)
+    }
     await delay(1500)
   }
   throw new Error(`Generation did not complete within ${input.timeoutMs}ms.`)
+}
+
+/**
+ * True once a submitted generation shows any sign of life — progress text, a new
+ * result link, or a new generated image. Used to fail fast when submit no-ops.
+ */
+export function hasGenerationStarted(input: {
+  beforeResultLinks: number
+  resultLinks: number
+  beforeImageUrls: number
+  imageUrls: number
+  progressing: boolean
+}): boolean {
+  return input.progressing ||
+    input.resultLinks > input.beforeResultLinks ||
+    input.imageUrls > input.beforeImageUrls
 }
 
 export function shouldTreatGenerationAsComplete(input: {

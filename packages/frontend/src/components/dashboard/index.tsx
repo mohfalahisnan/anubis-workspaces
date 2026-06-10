@@ -31,6 +31,7 @@ import { WorkflowEditorPage } from '@/pages/workflow-editor'
 import { KnowledgeBasePage } from '@/pages/knowledge-base'
 import { KnowledgeGraphPage } from '@/pages/knowledge-graph'
 import { ExtractorPage } from '@/pages/extractor'
+import { FlowPage } from '@/pages/flow'
 import { JobCompletionAlerts } from '@/components/jobs/top-nav-progress'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
@@ -56,6 +57,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   'knowledge-base': 'Knowledge Base',
   'knowledge-graph': 'Knowledge Graph',
   extractor: 'Extractor',
+  flow: 'Flow Images',
 }
 
 type BackendState = 'checking' | 'online' | 'offline'
@@ -240,6 +242,8 @@ function CurrentPage() {
       return <KnowledgeGraphPage />
     case 'extractor':
       return <ExtractorPage />
+    case 'flow':
+      return <FlowPage />
     default:
       return <HomePage />
   }

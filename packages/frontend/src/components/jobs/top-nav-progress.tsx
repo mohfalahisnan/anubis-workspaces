@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2Icon,
   ChevronRightIcon,
@@ -10,6 +10,7 @@ import {
 
 import type {
   CaptureJobResult,
+  CompetitorLevel,
   DiscoverJobResult,
   DiscoveredCandidate,
   JobSummary,
@@ -18,6 +19,13 @@ import { createCompetitor, listCompetitors } from '@/api'
 import { useJobs } from '@/lib/use-jobs'
 import { useNavigation } from '@/lib/navigation'
 import { useProject } from '@/lib/use-project'
+import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { LEVEL_COLOR } from '@/lib/competitor-level'
+import {
+  CompetitorLevelFilter,
+  matchesLevelFilter,
+  type LevelFilter,
+} from '@/components/competitor-level-filter'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -288,18 +296,63 @@ function JobDetailsModal({
 
 function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
   const { activeProject } = useProject()
+  const { levelFor } = useCompetitorLevels()
   const result = job.result as DiscoverJobResult | undefined
   const candidates = result?.candidates ?? []
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(candidates.map((c) => c.username)))
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  // Out-of-range ('black') candidates are hidden by default; flip to review them.
+  const [showBlack, setShowBlack] = useState(false)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const levelOf = (candidate: DiscoveredCandidate): CompetitorLevel =>
+    levelFor(candidate.followers ?? null)
+
+  // Seed the default selection once the candidates are available: pick the
+  // in-range (non-black) ones so a default "Add" never tracks profiles the
+  // user can't see. Re-seeding is guarded so user toggles aren't clobbered.
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (seeded.current || candidates.length === 0) return
+    seeded.current = true
+    setSelected(new Set(candidates.filter((c) => levelOf(c) !== 'black').map((c) => c.username)))
+  }, [candidates, levelFor])
+
+  const visibleCandidates = useMemo(
+    () =>
+      candidates.filter((candidate) => {
+        const level = levelOf(candidate)
+        // Hide black unless the user opted in or is explicitly filtering to it.
+        if (level === 'black' && !showBlack && levelFilter !== 'black') return false
+        return matchesLevelFilter(level, levelFilter)
+      }),
+    [candidates, levelFilter, showBlack, levelFor],
+  )
+  const visibleSelectedCount = visibleCandidates.filter((c) => selected.has(c.username)).length
 
   function toggle(username: string) {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(username)) next.delete(username)
       else next.add(username)
+      return next
+    })
+  }
+
+  function selectVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const c of visibleCandidates) next.add(c.username)
+      return next
+    })
+  }
+
+  function clearVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const c of visibleCandidates) next.delete(c.username)
       return next
     })
   }
@@ -345,17 +398,47 @@ function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => 
         </DialogDescription>
       </DialogHeader>
 
+      {candidates.length > 0 && (
+        <div className='flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5'>
+          <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+          <div className='flex items-center gap-3 text-[11.5px]'>
+            <label className='inline-flex cursor-pointer items-center gap-1.5 text-muted-foreground'>
+              <input
+                type='checkbox'
+                checked={showBlack}
+                onChange={(e) => setShowBlack(e.target.checked)}
+                className='size-3.5 accent-[var(--anubis-gold)]'
+              />
+              Show out-of-range
+            </label>
+            <button
+              type='button'
+              onClick={visibleSelectedCount === visibleCandidates.length ? clearVisible : selectVisible}
+              disabled={visibleCandidates.length === 0}
+              className='font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40'
+            >
+              {visibleSelectedCount === visibleCandidates.length ? 'Clear shown' : 'Select shown'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className='max-h-[min(60vh,460px)] overflow-y-auto px-3 py-3'>
         {candidates.length === 0 ? (
           <p className='m-4 text-center text-[13px] text-muted-foreground'>
             Nothing came back from this run.
           </p>
+        ) : visibleCandidates.length === 0 ? (
+          <p className='m-4 text-center text-[13px] text-muted-foreground'>
+            No candidates match this filter.
+          </p>
         ) : (
           <ul className='flex flex-col gap-1'>
-            {candidates.map((candidate) => (
+            {visibleCandidates.map((candidate) => (
               <CandidateRow
                 key={candidate.username}
                 candidate={candidate}
+                level={levelOf(candidate)}
                 selected={selected.has(candidate.username)}
                 onToggle={() => toggle(candidate.username)}
               />
@@ -403,10 +486,12 @@ function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => 
 
 function CandidateRow({
   candidate,
+  level,
   selected,
   onToggle,
 }: {
   candidate: DiscoveredCandidate
+  level: CompetitorLevel
   selected: boolean
   onToggle: () => void
 }) {
@@ -446,7 +531,13 @@ function CandidateRow({
             <div className='mt-0.5 line-clamp-1 text-[11px] text-muted-foreground'>{candidate.bio}</div>
           )}
         </div>
-        <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
+        <span className='flex shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums text-muted-foreground'>
+          <span
+            aria-hidden
+            title={level}
+            className='size-2 rounded-full ring-1 ring-black/20'
+            style={{ background: LEVEL_COLOR[level] }}
+          />
           {formatBigNumber(candidate.followers)}
         </span>
       </button>

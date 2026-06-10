@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createCompetitor: vi.fn(),
   discoverCompetitorsAsync: vi.fn(),
   listCompetitors: vi.fn(),
+  navigate: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -13,6 +14,7 @@ vi.mock('@/api', () => ({
   discoverCompetitorsAsync: mocks.discoverCompetitorsAsync,
   listCompetitors: mocks.listCompetitors,
   openInstagramLoginChrome: vi.fn(),
+  getAppConfig: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('@/lib/use-project', () => ({
@@ -21,24 +23,38 @@ vi.mock('@/lib/use-project', () => ({
   }),
 }))
 
-import { FindCompetitorsDialog } from '@/pages/competitor-dialogs'
+vi.mock('@/lib/navigation', () => ({
+  useNavigation: () => ({ navigate: mocks.navigate, route: { page: 'discover-competitors' } }),
+}))
 
-describe('<FindCompetitorsDialog>', () => {
+// Minimal zustand-style mock: the page reads `s.jobs` and `s.stop` via selectors.
+vi.mock('@/lib/use-jobs', () => ({
+  useJobs: (selector: (s: { jobs: unknown[]; stop: () => void }) => unknown) =>
+    selector({ jobs: [], stop: vi.fn() }),
+}))
+
+vi.mock('@/hooks/use-competitor-levels', () => ({
+  useCompetitorLevels: () => ({ config: {}, levelFor: () => 'green', reload: vi.fn() }),
+}))
+
+import { DiscoverCompetitorsPage } from '@/pages/discover-competitors'
+
+describe('<DiscoverCompetitorsPage>', () => {
   beforeEach(() => {
     mocks.createCompetitor.mockReset()
     mocks.discoverCompetitorsAsync.mockReset()
     mocks.listCompetitors.mockReset()
+    mocks.navigate.mockReset()
   })
 
-  it('enqueues a background discovery job scoped to the active project and notifies onStarted', async () => {
-    const onStarted = vi.fn()
+  it('enqueues a discovery job scoped to the active project and navigates to its job', async () => {
     mocks.listCompetitors.mockResolvedValue([])
     mocks.discoverCompetitorsAsync.mockResolvedValue({ jobId: 'job-1' })
 
-    render(<FindCompetitorsDialog open onClose={() => {}} onStarted={onStarted} />)
+    render(<DiscoverCompetitorsPage />)
 
     // Default source is "explore", so Discover is enabled immediately.
-    await userEvent.click(screen.getByRole('button', { name: /discover/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^discover$/i }))
 
     await waitFor(() => {
       expect(mocks.discoverCompetitorsAsync).toHaveBeenCalledTimes(1)
@@ -49,21 +65,22 @@ describe('<FindCompetitorsDialog>', () => {
       profile: 'login',
       projectId: 'default',
     })
-    await waitFor(() => expect(onStarted).toHaveBeenCalled())
-    // No synchronous candidate creation happens from the dialog anymore.
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith({ page: 'discover-competitors', jobId: 'job-1' }),
+    )
+    // The page only enqueues; it never creates competitors synchronously.
     expect(mocks.createCompetitor).not.toHaveBeenCalled()
   })
 
   it('passes the trimmed hashtag through when source is hashtag', async () => {
-    const onStarted = vi.fn()
     mocks.listCompetitors.mockResolvedValue([])
     mocks.discoverCompetitorsAsync.mockResolvedValue({ jobId: 'job-2' })
 
-    render(<FindCompetitorsDialog open onClose={() => {}} onStarted={onStarted} />)
+    render(<DiscoverCompetitorsPage />)
 
     await userEvent.click(screen.getByRole('button', { name: /hashtag/i }))
     await userEvent.type(screen.getByPlaceholderText('productivity'), '#growth')
-    await userEvent.click(screen.getByRole('button', { name: /discover/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^discover$/i }))
 
     await waitFor(() => {
       expect(mocks.discoverCompetitorsAsync).toHaveBeenCalledTimes(1)

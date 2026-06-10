@@ -1306,3 +1306,24 @@ export async function runTranscribe(input: {
   return r.result
 }
 
+/**
+ * Kick off a workspace-wide extraction as a background job. Scans the
+ * active project's workdir (respecting `.anubisignore`), then OCRs
+ * images and/or transcribes audio/video. Returns the job id; monitor
+ * progress via {@link streamJobs} / {@link listJobs} (top-nav progress).
+ */
+export async function extractWorkspace(input: {
+  projectId: string
+  images?: boolean
+  media?: boolean
+  force?: boolean
+  language?: string
+  whisperModel?: WhisperModel
+}): Promise<{ jobId: string }> {
+  const r = await api<{ ok: true; jobId: string }>('/extractor/workspace', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return { jobId: r.jobId }
+}
+

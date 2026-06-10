@@ -12,6 +12,7 @@ import type {
   CaptureJobResult,
   DiscoverJobResult,
   DiscoveredCandidate,
+  ExtractWorkspaceJobResult,
   JobSummary,
 } from '@anubis/shared'
 import { createCompetitor, listCompetitors } from '@/api'
@@ -257,6 +258,11 @@ function summariseFinished(job: JobSummary): string {
     const n = result?.capturedCount ?? 0
     return n === 0 ? 'No new posts captured.' : `Captured ${n} post${n === 1 ? '' : 's'} — click to view`
   }
+  if (job.kind === 'extract-workspace') {
+    const result = job.result as ExtractWorkspaceJobResult | undefined
+    const n = result?.processedCount ?? 0
+    return n === 0 ? 'No files extracted.' : `Extracted ${n} file${n === 1 ? '' : 's'} — click for details`
+  }
   return 'Completed — click for details'
 }
 
@@ -278,6 +284,8 @@ function JobDetailsModal({
           <DiscoverJobDetails job={job} onClose={onClose} />
         ) : job?.kind === 'capture-posts' ? (
           <CaptureJobDetails job={job} onClose={onClose} />
+        ) : job?.kind === 'extract-workspace' ? (
+          <ExtractWorkspaceJobDetails job={job} onClose={onClose} />
         ) : job ? (
           <GenericJobDetails job={job} onClose={onClose} />
         ) : null}
@@ -498,6 +506,74 @@ function CaptureJobDetails({ job, onClose }: { job: JobSummary; onClose: () => v
           className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
         >
           View posts
+        </button>
+      </DialogFooter>
+    </>
+  )
+}
+
+function ExtractWorkspaceJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
+  const { navigate } = useNavigation()
+  const result = job.result as ExtractWorkspaceJobResult | undefined
+  const stats: Array<{ label: string; value: number }> = [
+    { label: 'Files found', value: result?.totalCount ?? 0 },
+    { label: 'Processed', value: result?.processedCount ?? 0 },
+    { label: 'Images (OCR)', value: result?.imageCount ?? 0 },
+    { label: 'Audio/Video', value: result?.mediaCount ?? 0 },
+    { label: 'From cache', value: result?.cachedCount ?? 0 },
+    { label: 'Failed', value: result?.failedCount ?? 0 },
+  ]
+
+  return (
+    <>
+      <DialogHeader className='border-b border-border px-6 py-4'>
+        <DialogTitle>Workspace extraction complete</DialogTitle>
+        <DialogDescription>{job.label}</DialogDescription>
+      </DialogHeader>
+
+      <div className='px-6 py-5'>
+        <div className='grid grid-cols-3 gap-3'>
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              className='rounded-md border border-border bg-background/60 px-3 py-3 text-center'
+            >
+              <p className='font-mono text-[22px] font-semibold tabular-nums text-foreground'>{s.value}</p>
+              <p className='mt-0.5 text-[11px] text-muted-foreground'>{s.label}</p>
+            </div>
+          ))}
+        </div>
+        {job.warnings.length > 0 && (
+          <div className='mt-4'>
+            <p className='mb-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground'>
+              {job.warnings.length} warning{job.warnings.length === 1 ? '' : 's'}
+            </p>
+            <ul className='max-h-[160px] list-disc overflow-y-auto rounded-md border border-border bg-background/60 px-6 py-3 text-left text-[11.5px] text-muted-foreground'>
+              {job.warnings.slice(0, 20).map((w, i) => (
+                <li key={i} className='break-words'>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <DialogFooter className='border-t border-border px-6 py-3'>
+        <button
+          type='button'
+          onClick={onClose}
+          className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+        >
+          Close
+        </button>
+        <button
+          type='button'
+          onClick={() => {
+            onClose()
+            navigate({ page: 'knowledge-base' })
+          }}
+          className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
+        >
+          Open Knowledge Base
         </button>
       </DialogFooter>
     </>

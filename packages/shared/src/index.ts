@@ -835,7 +835,7 @@ export interface CaptureResultPayload {
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed'
 
 /** Known job kinds. Add new strings here as more background work is introduced. */
-export type JobKind = 'discover-competitors' | 'capture-posts' | (string & {})
+export type JobKind = 'discover-competitors' | 'capture-posts' | 'extract-workspace' | (string & {})
 
 export interface JobProgress {
   /** Crawler phase, e.g. "discover" or "capture". */
@@ -879,6 +879,22 @@ export interface DiscoverJobResult {
 export interface CaptureJobResult {
   competitor: CompetitorSummary
   capturedCount: number
+}
+
+/** Result payload for an `extract-workspace` job. */
+export interface ExtractWorkspaceJobResult {
+  /** Total candidate files discovered (after `.anubisignore` filtering). */
+  totalCount: number
+  /** Files processed without error. */
+  processedCount: number
+  /** Files that returned from the extractor's sidecar cache (skipped re-extraction). */
+  cachedCount: number
+  /** Files that failed extraction (counted, with messages added to job warnings). */
+  failedCount: number
+  /** How many image files were OCR'd. */
+  imageCount: number
+  /** How many audio/video files were transcribed. */
+  mediaCount: number
 }
 
 export interface CapturePreviewPayload {

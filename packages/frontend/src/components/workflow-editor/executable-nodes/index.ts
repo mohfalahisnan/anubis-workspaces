@@ -3,6 +3,7 @@ import { InstagramPostExecutableNode }          from './instagram-post'
 import { TransformerMediaExecutableNode }       from './transformer-media'
 import { TransformerBriefExecutableNode }       from './transformer-brief'
 import { JsonTransformerExecutableNode }        from './json-transformer'
+import { JsonFilterExecutableNode }             from './json-filter'
 import { OcrExtractorExecutableNode }           from './ocr-extractor'
 import { TranscriberExecutableNode }            from './transcriber'
 import { TableExecutableNode }                  from './table'
@@ -24,6 +25,7 @@ export const executableNodeTypes: NodeTypes = {
   transformerMedia:    TransformerMediaExecutableNode as never,
   transformerBrief:    TransformerBriefExecutableNode as never,
   jsonTransformer:     JsonTransformerExecutableNode as never,
+  jsonFilter:          JsonFilterExecutableNode as never,
   ocrExtractor:        OcrExtractorExecutableNode as never,
   transcriber:         TranscriberExecutableNode as never,
   table:               TableExecutableNode as never,
@@ -74,6 +76,7 @@ export const NODE_PALETTE = [
   { type: 'instagramPost',       label: 'Instagram Post',         category: 'webSearch' },
   { type: 'transformerBrief',    label: 'Transformer · Brief',    category: 'tools'     },
   { type: 'jsonTransformer',     label: 'JSON Transformer',       category: 'tools'     },
+  { type: 'jsonFilter',          label: 'JSON Filter',            category: 'tools'     },
   { type: 'ocrExtractor',        label: 'OCR Extractor',          category: 'tools'     },
   { type: 'transcriber',         label: 'Transcriber',            category: 'tools'     },
   { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },

@@ -24,8 +24,10 @@ export type Segment =
 /**
  * Split a message body into interleaved markdown and component segments.
  * Whitelisted tags only — anything else flows through as markdown text.
- * Unclosed whitelisted tag at end of input ⇒ flushed as trailing markdown
- * (streaming-tolerance hook: the next chunk completes it).
+ * A malformed/unclosed whitelisted tag is treated as prose and scanning
+ * continues, so valid components later in the text still render. A tag cut
+ * off at end of input therefore flushes as trailing markdown (streaming
+ * tolerance: the next chunk completes it).
  */
 export function splitMdxSource(source: string): Segment[] {
   const segments: Segment[] = []
@@ -52,9 +54,8 @@ export function splitMdxSource(source: string): Segment[] {
     }
     const openEnd = findOpenTagEnd(source, j)
     if (openEnd === -1) {
-      flushMd(n)
-      mdStart = n
-      return segments
+      i = j
+      continue
     }
     const selfClosing = source[openEnd - 1] === '/'
     const propsRaw = source.slice(j, selfClosing ? openEnd - 1 : openEnd).trim()
@@ -69,9 +70,8 @@ export function splitMdxSource(source: string): Segment[] {
 
     const closeIdx = findMatchingClose(source, openEnd + 1, tagName)
     if (closeIdx === -1) {
-      flushMd(n)
-      mdStart = n
-      return segments
+      i = openEnd + 1
+      continue
     }
     flushMd(i)
     segments.push({

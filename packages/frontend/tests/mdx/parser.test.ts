@@ -69,4 +69,13 @@ describe('splitMdxSource', () => {
     expect(out).toHaveLength(2)
     expect(out.every((s) => s.kind === 'component')).toBe(true)
   })
+
+  it('does not abort parsing subsequent valid components when encountering an unclosed tag in prose', () => {
+    const src = 'We describe <KeyValueList> first. Then we show: <KeyValueList items={{"a": 1}} /> and done'
+    const out = splitMdxSource(src)
+    expect(out).toHaveLength(3)
+    expect(out[0]).toEqual({ kind: 'markdown', text: 'We describe <KeyValueList> first. Then we show: ' })
+    expect(out[1]).toMatchObject({ kind: 'component', name: 'KeyValueList' })
+    expect(out[2]).toEqual({ kind: 'markdown', text: ' and done' })
+  })
 })

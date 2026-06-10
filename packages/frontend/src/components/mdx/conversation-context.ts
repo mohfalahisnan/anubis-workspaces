@@ -18,6 +18,5 @@ export function MdxConversationProvider({
 
 export function useMdxConversation(): MdxConversationValue {
   const v = useContext(MdxConversationContext)
-  if (!v) throw new Error('useMdxConversation must be used inside <MdxConversationProvider>')
-  return v
+  return v ?? { conversationId: '' }
 }

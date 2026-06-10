@@ -2,6 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import Modal from '@/components/update/modal'
 import Progress from '@/components/update/progress'
 
+// The component is mounted once at the App root (modal + IPC listeners).
+// Other surfaces (Settings) trigger a manual check through this module-level
+// hook instead of mounting a second instance with duplicate IPC listeners.
+let activeCheck: (() => Promise<void>) | null = null
+
+export function requestUpdateCheck() {
+  void activeCheck?.()
+}
+
+export function isUpdaterAvailable() {
+  return Boolean(window.anubis?.updater)
+}
+
 const Update = () => {
   const [checking, setChecking] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -20,7 +33,7 @@ const Update = () => {
   })
 
   const checkUpdate = async () => {
-    if (!window.anubis) return
+    if (!window.anubis || checking) return
 
     setChecking(true)
     const result = await window.anubis.updater.check() as ErrorType | undefined
@@ -76,6 +89,12 @@ const Update = () => {
     }))
   }, [])
 
+  // Re-register every render so the manual trigger always sees fresh state.
+  useEffect(() => {
+    activeCheck = checkUpdate
+    return () => { activeCheck = null }
+  })
+
   useEffect(() => {
     if (!window.anubis) return
 
@@ -96,52 +115,43 @@ const Update = () => {
   }, [])
 
   return (
-    <>
-      <Modal
-        open={modalOpen}
-        cancelText={modalBtn?.cancelText}
-        okText={modalBtn?.okText}
-        onCancel={modalBtn?.onCancel}
-        onOk={modalBtn?.onOk}
-        title="Updater"
-        footer={updateAvailable ? /* hide footer */ null : undefined}
-      >
-        <div className="space-y-3">
-          {updateError ? (
-            <div className="text-sm leading-6 text-rose-700">
-              <p className="font-semibold text-rose-900">Error downloading the latest version.</p>
-              <p className="mt-1 max-h-40 overflow-auto">{updateError.message}</p>
+    <Modal
+      open={modalOpen}
+      cancelText={modalBtn?.cancelText}
+      okText={modalBtn?.okText}
+      onCancel={modalBtn?.onCancel}
+      onOk={modalBtn?.onOk}
+      title="Updater"
+      footer={updateAvailable ? /* hide footer */ null : undefined}
+    >
+      <div className="space-y-3">
+        {updateError ? (
+          <div className="text-sm leading-6 text-rose-700">
+            <p className="font-semibold text-rose-900">Error downloading the latest version.</p>
+            <p className="mt-1 max-h-40 overflow-auto">{updateError.message}</p>
+          </div>
+        ) : updateAvailable ? (
+          <div className="space-y-3 text-sm text-slate-700">
+            <div className="text-base font-semibold text-slate-900">
+              The latest version is v{versionInfo?.newVersion}
             </div>
-          ) : updateAvailable ? (
-            <div className="space-y-3 text-sm text-slate-700">
-              <div className="text-base font-semibold text-slate-900">
-                The latest version is v{versionInfo?.newVersion}
-              </div>
-              <div className="text-slate-600">
-                v{versionInfo?.version} -&gt; v{versionInfo?.newVersion}
-              </div>
-              <div className="flex items-center gap-3 pt-1">
-                <div className="shrink-0 font-medium text-slate-700">Update progress:</div>
-                <div className="min-w-0 flex-1">
-                  <Progress percent={progressInfo?.percent}></Progress>
-                </div>
+            <div className="text-slate-600">
+              v{versionInfo?.version} -&gt; v{versionInfo?.newVersion}
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <div className="shrink-0 font-medium text-slate-700">Update progress:</div>
+              <div className="min-w-0 flex-1">
+                <Progress percent={progressInfo?.percent}></Progress>
               </div>
             </div>
-          ) : (
-            <pre className="overflow-auto text-left text-xs leading-6 text-slate-700">
-              {JSON.stringify(versionInfo ?? {}, null, 2)}
-            </pre>
-          )}
-        </div>
-      </Modal>
-      <button
-        disabled={checking}
-        onClick={checkUpdate}
-        className="inline-flex items-center justify-center rounded-2xl border border-cyan-700/15 bg-cyan-600 px-5 py-3 font-semibold text-white shadow-sm shadow-cyan-800/20 transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300 disabled:text-cyan-700"
-      >
-        {checking ? 'Checking...' : 'Check update'}
-      </button>
-    </>
+          </div>
+        ) : (
+          <pre className="overflow-auto text-left text-xs leading-6 text-slate-700">
+            {JSON.stringify(versionInfo ?? {}, null, 2)}
+          </pre>
+        )}
+      </div>
+    </Modal>
   )
 }
 

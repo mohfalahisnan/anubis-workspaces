@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   CodeIcon,
   FolderSearchIcon,
+  RefreshCwIcon,
   SaveIcon,
 } from 'lucide-react'
 import type { AppConfig, CompetitorLevelsConfig, LevelMultipliersConfig, MultiplierBand, ProfileSummary } from '@anubis/shared'
@@ -15,6 +16,7 @@ import { setCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { setLevelMultipliers } from '@/hooks/use-level-multipliers'
 import { cn } from '@/lib/utils'
 import { EXECUTABLE_FILTERS, isElectron, pickFile } from '@/lib/pick-file'
+import { isUpdaterAvailable, requestUpdateCheck } from '@/components/update'
 
 type Banner = { kind: 'success' | 'error'; message: string }
 
@@ -157,6 +159,23 @@ export function SettingsPage() {
           )}>
             {banner.message}
           </div>
+        )}
+
+        {isUpdaterAvailable() && (
+          <section className='mt-8 border-t border-border pt-6'>
+            <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>Application updates</h2>
+            <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
+              Anubis checks for updates automatically at launch. Run a manual check to see if a newer version is available.
+            </p>
+            <button
+              type='button'
+              onClick={() => requestUpdateCheck()}
+              className='mt-4 inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-4 text-[13.5px] font-medium text-foreground transition-colors hover:bg-accent'
+            >
+              <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
+              Check for updates
+            </button>
+          </section>
         )}
 
         <section className='mt-8 border-t border-border pt-6'>

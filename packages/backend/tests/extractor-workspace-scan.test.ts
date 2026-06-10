@@ -66,6 +66,32 @@ describe('scanWorkspaceFiles', () => {
     expect(rels(scanWorkspaceFiles(root, { images: true, media: true }))).toEqual(['src/a.png'])
   })
 
+  it('prunes multi-segment directory patterns like datasets/exports/', () => {
+    // Regression: these two appear verbatim in DEFAULT_ANUBISIGNORE but a
+    // segment-only matcher never matched them (a path segment never
+    // contains "/"), so the dirs leaked into the scan.
+    writeFileSync(join(root, '.anubisignore'), 'datasets/exports/\ndatasets/snapshots/\n')
+    touch('datasets/keep.png')
+    touch('datasets/exports/skip.png')
+    touch('datasets/snapshots/skip.png')
+
+    expect(rels(scanWorkspaceFiles(root, { images: true, media: true }))).toEqual([
+      'datasets/keep.png',
+    ])
+  })
+
+  it('anchors a slash-bearing pattern to the workspace root', () => {
+    // `datasets/cache` is rooted (contains a slash), so it must only match
+    // at the root, not a same-named dir nested elsewhere.
+    writeFileSync(join(root, '.anubisignore'), 'datasets/cache/\n')
+    touch('datasets/cache/skip.png')
+    touch('other/datasets/cache/keep.png')
+
+    expect(rels(scanWorkspaceFiles(root, { images: true, media: true }))).toEqual([
+      'other/datasets/cache/keep.png',
+    ])
+  })
+
   it('keeps media that matches a selected extension even if .anubisignore globs it out', () => {
     // The default ignore file lists `*.mp4`; selecting media must override it.
     writeFileSync(join(root, '.anubisignore'), '*.mp4\n')

@@ -189,19 +189,25 @@ function parseAnubisIgnore(workdir: string): IgnoreRule[] {
     if (anchored) body = body.slice(1)
     if (!body) continue
 
-    const re = new RegExp(`^${globToRegExpSource(body)}$`)
+    // gitignore semantics: a pattern that is anchored (leading slash) or
+    // contains an internal slash is "rooted" — matched against the whole
+    // workspace-relative path from the root. A bare single-segment pattern
+    // (e.g. `dist/`, `*.log`) matches any path segment at any depth.
+    const rooted = anchored || body.includes('/')
+    const src = globToRegExpSource(body)
+    // Rooted patterns also match everything beneath a matched dir so the
+    // rule still fires if tested against a descendant path directly.
+    const re = rooted ? new RegExp(`^${src}(?:/.*)?$`) : new RegExp(`^${src}$`)
 
     rules.push({
       test: (relPosix, isDir) => {
         if (dirOnly && !isDir) return false
-        if (anchored) {
-          // Anchored: match the first path segment only.
-          const first = relPosix.split('/')[0] ?? relPosix
-          return re.test(first)
+        if (rooted) {
+          // Rooted: match against the full relative path.
+          return re.test(relPosix)
         }
-        // Unanchored: match the basename or any path segment.
-        const segments = relPosix.split('/')
-        return segments.some((s) => re.test(s))
+        // Unanchored single segment: match the basename or any path segment.
+        return relPosix.split('/').some((s) => re.test(s))
       },
     })
   }

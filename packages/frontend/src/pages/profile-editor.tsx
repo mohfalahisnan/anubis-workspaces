@@ -12,6 +12,7 @@ import {
 } from '@/api'
 import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
+import { ModelSelect } from '@/components/model-select'
 
 /* -----------------------------------------------------------
    Profile editor
@@ -245,10 +246,10 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
               <button
                 type='button'
                 onClick={() => void handleSave()}
-                disabled={busy || !dirty || !form.name.trim()}
+                disabled={busy || !dirty || !form.name.trim() || !form.model.trim()}
                 className={cn(
                   'inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13.5px] font-semibold transition-colors',
-                  busy || !dirty || !form.name.trim()
+                  busy || !dirty || !form.name.trim() || !form.model.trim()
                     ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-50'
                     : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
                 )}
@@ -329,19 +330,19 @@ export function ProfileEditorPage({ profileId }: { profileId: string }) {
             />
           </Field>
 
-          <Field label='Model' htmlFor='profile-model'>
-            <select
+          <Field
+            label='Model'
+            htmlFor='profile-model'
+            hint='Pick from the catalog or enter any model id the agent CLI accepts.'
+          >
+            <ModelSelect
               id='profile-model'
+              models={models}
               value={form.model}
-              onChange={(e) => update('model', e.target.value)}
-              className={selectInput}
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.id} — {m.description}
-                </option>
-              ))}
-            </select>
+              onChange={(m) => update('model', m)}
+              selectClassName={selectInput}
+              inputClassName={textInput}
+            />
           </Field>
 
           <Field label='Reasoning effort' hint='Higher tiers think longer and cost more tokens.'>

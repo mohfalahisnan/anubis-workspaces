@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
-import { AGENTS, DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, MODELS, REASONING_EFFORTS } from '../agents/catalog.js'
+import { AGENTS, DEFAULT_REASONING_EFFORT, REASONING_EFFORTS } from '../agents/catalog.js'
 import type { Agent, ReasoningEffort } from '../agents/catalog.js'
+import { loadCatalogModels } from '../agents/catalog-overrides.js'
 import { extractUsage, type ExtractedUsage } from '../agents/usage.js'
 import { CodexAgent } from '../agents/codex/run.js'
 import { CodexPool } from '../agents/codex/pool.js'
@@ -115,10 +116,13 @@ export class AiAgentService {
   }
 
   catalog() {
+    // Re-read {dataDir}/models.json on every call so user edits show up
+    // on the next UI refresh without a backend restart.
+    const { models, defaultModel } = loadCatalogModels()
     return {
       agents: AGENTS,
-      models: MODELS,
-      defaultModel: DEFAULT_MODEL,
+      models,
+      defaultModel,
       reasoningEfforts: REASONING_EFFORTS,
       defaultReasoningEffort: DEFAULT_REASONING_EFFORT,
       agentAvailability: this.availability,

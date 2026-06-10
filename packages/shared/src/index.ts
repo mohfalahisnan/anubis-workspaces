@@ -224,7 +224,7 @@ export interface SkillDetail extends SkillSummary {
   body: string
 }
 
-export type CronActionType = 'message' | 'competitor-discovery' | 'capture-posts'
+export type CronActionType = 'message' | 'competitor-discovery' | 'capture-posts' | 'workflow'
 export type CronCaptureProfile = 'public' | 'login'
 
 export interface CompetitorDiscoveryCronConfig {
@@ -247,9 +247,25 @@ export interface CapturePostsCronConfig {
   postLimit?: number
 }
 
+export interface WorkflowCronConfig {
+  /** Resolve the workflow by id first; falls back to `workflowName` within `projectId` scope. */
+  workflowId?: string
+  /** Friendly name lookup, used when `workflowId` is omitted. */
+  workflowName?: string
+  /** Project scope used to disambiguate a name lookup. */
+  projectId?: string
+  /**
+   * Optional per-node data overrides applied to the published graph on run,
+   * forwarded verbatim to the workflow run path (same shape as the manual
+   * "run workflow" override payload). Keyed by node id.
+   */
+  input?: Record<string, unknown>
+}
+
 export type CronActionConfig =
   | CompetitorDiscoveryCronConfig
   | CapturePostsCronConfig
+  | WorkflowCronConfig
 
 export interface CronJobSummary {
   id: string

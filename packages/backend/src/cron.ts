@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { getStack } from './services.js'
 
 const captureProfileSchema = z.enum(['public', 'login'])
-const actionTypeSchema = z.enum(['message', 'competitor-discovery', 'capture-posts'])
+const actionTypeSchema = z.enum(['message', 'competitor-discovery', 'capture-posts', 'workflow'])
 const actionConfigSchema = z.union([
   z.object({
     projectId: z.string().min(1),
@@ -17,6 +17,15 @@ const actionConfigSchema = z.union([
     captureProfile: captureProfileSchema,
     postLimit: z.number().int().positive().optional(),
   }).strict(),
+  z.object({
+    workflowId: z.string().min(1).optional(),
+    workflowName: z.string().min(1).optional(),
+    projectId: z.string().min(1).optional(),
+    input: z.record(z.string(), z.unknown()).optional(),
+  }).strict().refine(
+    (v) => Boolean(v.workflowId) || Boolean(v.workflowName),
+    { message: 'workflow config requires workflowId or workflowName' },
+  ),
 ])
 
 const CreateBody = z.object({

@@ -4,6 +4,7 @@ import { InstagramPostConfigForm }    from './inspector/config/instagram-post-co
 import { TransformerMediaConfigForm } from './inspector/config/transformer-media-config'
 import { TransformerBriefConfigForm } from './inspector/config/transformer-brief-config'
 import { JsonTransformerConfigForm } from './inspector/config/json-transformer-config'
+import { JsonFilterConfigForm } from './inspector/config/json-filter-config'
 import { OcrExtractorConfigForm }     from './inspector/config/ocr-extractor-config'
 import { TranscriberConfigForm }      from './inspector/config/transcriber-config'
 import { TableConfigForm }            from './inspector/config/table-config'
@@ -27,6 +28,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   transformerMedia:    TransformerMediaConfigForm,
   transformerBrief:    TransformerBriefConfigForm,
   jsonTransformer:     JsonTransformerConfigForm,
+  jsonFilter:          JsonFilterConfigForm,
   ocrExtractor:        OcrExtractorConfigForm,
   transcriber:         TranscriberConfigForm,
   table:               TableConfigForm,

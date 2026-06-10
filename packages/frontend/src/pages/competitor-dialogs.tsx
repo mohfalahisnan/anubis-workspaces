@@ -11,18 +11,19 @@ import {
 } from 'lucide-react'
 
 import type {
+  CompetitorLevel,
   CompetitorSummary,
   DiscoverCompetitorsInput,
-  DiscoveredCandidate,
   DiscoverySource,
 } from '@anubis/shared'
 
 import {
-  createCompetitor,
   discoverCompetitorsAsync,
   listCompetitors,
   openInstagramLoginChrome,
 } from '@/api'
+import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { LEVEL_COLOR, resolveLevel } from '@/lib/competitor-level'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import {
@@ -42,6 +43,61 @@ import {
    tracked handle by default. "Select all" / "Deselect all"
    shortcuts cover the common cases.
    =========================================================== */
+
+/* ===========================================================
+   Competitor level filtering (shared by both dialogs)
+   ===========================================================
+   Levels (green/yellow/red/black) are derived from the active
+   project's follower thresholds via `levelFor` / `resolveLevel`.
+   'black' = out of active bounds (too small or too big); it is
+   hidden by default but can be revealed with a toggle.
+   =========================================================== */
+
+/** Filter selection: a concrete level, or 'all' (every non-black). */
+type LevelFilter = 'all' | CompetitorLevel
+
+/** Levels offered as filter chips, in tier order. */
+const LEVEL_FILTERS: { value: LevelFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'green', label: 'Green' },
+  { value: 'yellow', label: 'Yellow' },
+  { value: 'red', label: 'Red' },
+  { value: 'black', label: 'Black' },
+]
+
+const LEVEL_LABEL: Record<CompetitorLevel, string> = {
+  green: 'Green',
+  yellow: 'Yellow',
+  red: 'Red',
+  black: 'Black',
+  unknown: 'Unknown',
+}
+
+/**
+ * Small colored level badge — consistent with the tier colors used
+ * across the rest of the competitor surfaces (`LEVEL_COLOR`).
+ */
+function LevelBadge({ level }: { level: CompetitorLevel }) {
+  const color = LEVEL_COLOR[level]
+  return (
+    <span
+      title={LEVEL_LABEL[level]}
+      className='inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.06em]'
+      style={{
+        borderColor: `color-mix(in oklab, ${color} 55%, var(--border))`,
+        background: `color-mix(in oklab, ${color} 16%, transparent)`,
+        color: `color-mix(in oklab, ${color} 72%, var(--foreground))`,
+      }}
+    >
+      <span
+        aria-hidden
+        className='size-2 rounded-full'
+        style={{ background: color }}
+      />
+      {LEVEL_LABEL[level]}
+    </span>
+  )
+}
 
 export type RunMode = 'login' | 'public'
 
@@ -68,6 +124,7 @@ export function CaptureSelectionDialog({
   const [items, setItems] = useState<CompetitorSummary[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
   // Default: anonymous + headless (current fast-default behaviour).
   // Toggle to 'login' if you want authenticated captures.
   const [runMode, setRunMode] = useState<RunMode>('public')
@@ -75,6 +132,7 @@ export function CaptureSelectionDialog({
   const [targetPostsPerProfile, setTargetPostsPerProfile] = useState(12)
 
   const { activeProject } = useProject()
+  const { config: levelsConfig } = useCompetitorLevels()
 
   useEffect(() => {
     if (!open) return
@@ -82,6 +140,7 @@ export function CaptureSelectionDialog({
     setItems(null)
     setSelected(new Set())
     setError(null)
+    setLevelFilter('all')
     setRunMode('public')
     setHeadless(true)
     setTargetPostsPerProfile(12)
@@ -116,13 +175,31 @@ export function CaptureSelectionDialog({
     })
   }
 
+  const levelOf = (c: CompetitorSummary): CompetitorLevel =>
+    resolveLevel(c.followers, c.level, levelsConfig)
+
+  const visibleItems = (items ?? []).filter(
+    (c) => levelFilter === 'all' || levelOf(c) === levelFilter,
+  )
+
   function selectAll() {
-    if (!items) return
-    setSelected(new Set(items.map((c) => c.id)))
+    setSelected(new Set(visibleItems.map((c) => c.id)))
   }
 
   function deselectAll() {
     setSelected(new Set())
+  }
+
+  /** Add every tracked competitor at `level` to the selection. */
+  function selectByLevel(level: CompetitorLevel) {
+    if (!items) return
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const c of items) {
+        if (levelOf(c) === level) next.add(c.id)
+      }
+      return next
+    })
   }
 
   const count = selected.size
@@ -152,9 +229,45 @@ export function CaptureSelectionDialog({
             </p>
           ) : (
             <>
-              <div className='flex items-center justify-between px-3 pb-1 pt-2'>
+              <div className='flex flex-wrap items-center gap-1.5 px-3 pb-1.5 pt-2'>
+                <span className='mr-1 text-[11px] text-muted-foreground'>Level</span>
+                {LEVEL_FILTERS.map((filter) => (
+                  <button
+                    key={filter.value}
+                    type='button'
+                    onClick={() => setLevelFilter(filter.value)}
+                    className={cn(
+                      'inline-flex h-7 items-center rounded-md border px-2.5 text-[12px] font-medium transition-colors',
+                      levelFilter === filter.value
+                        ? 'border-[color-mix(in_oklab,var(--anubis-gold)_58%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_12%,transparent)] text-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+              <div className='flex flex-wrap items-center gap-2 px-3 pb-1 text-[12px]'>
+                <span className='mr-1 text-[11px] text-muted-foreground'>Quick select</span>
+                {(['green', 'yellow', 'red'] as const).map((lvl) => (
+                  <button
+                    key={lvl}
+                    type='button'
+                    onClick={() => selectByLevel(lvl)}
+                    className='inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+                  >
+                    <span
+                      aria-hidden
+                      className='size-2 rounded-full'
+                      style={{ background: LEVEL_COLOR[lvl] }}
+                    />
+                    All {LEVEL_LABEL[lvl]}
+                  </button>
+                ))}
+              </div>
+              <div className='flex items-center justify-between px-3 pb-1 pt-1'>
                 <span className='font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground'>
-                  {count} of {items.length} selected
+                  {count} of {visibleItems.length} selected
                 </span>
                 <div className='flex items-center gap-2 text-[12px]'>
                   <button
@@ -174,45 +287,55 @@ export function CaptureSelectionDialog({
                   </button>
                 </div>
               </div>
-              <ul className='py-1'>
-                {items.map((c) => {
-                  const isSelected = selected.has(c.id)
-                  return (
-                    <li key={c.id}>
-                      <button
-                        type='button'
-                        onClick={() => toggle(c.id)}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors',
-                          isSelected
-                            ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_10%,transparent)]'
-                            : 'hover:bg-muted',
-                        )}
-                      >
-                        <Checkbox checked={isSelected} />
-                        <span
-                          aria-hidden
-                          className='flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white/85'
-                          style={{ background: c.tint ?? '#565B63' }}
+              {visibleItems.length === 0 ? (
+                <p className='m-4 text-[13px] text-muted-foreground'>
+                  No tracked competitors match this level.
+                </p>
+              ) : (
+                <ul className='py-1'>
+                  {visibleItems.map((c) => {
+                    const isSelected = selected.has(c.id)
+                    const level = levelOf(c)
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type='button'
+                          onClick={() => toggle(c.id)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors',
+                            isSelected
+                              ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_10%,transparent)]'
+                              : 'hover:bg-muted',
+                          )}
                         >
-                          {c.handle.replace('@', '').slice(0, 1).toUpperCase()}
-                        </span>
-                        <div className='min-w-0 flex-1'>
-                          <div className='truncate font-mono text-[12.5px] text-foreground'>
-                            {c.handle}
+                          <Checkbox checked={isSelected} />
+                          <span
+                            aria-hidden
+                            className='flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white/85'
+                            style={{ background: c.tint ?? '#565B63' }}
+                          >
+                            {c.handle.replace('@', '').slice(0, 1).toUpperCase()}
+                          </span>
+                          <div className='min-w-0 flex-1'>
+                            <div className='flex items-center gap-2'>
+                              <span className='truncate font-mono text-[12.5px] text-foreground'>
+                                {c.handle}
+                              </span>
+                              <LevelBadge level={level} />
+                            </div>
+                            <div className='truncate text-[11.5px] text-muted-foreground'>
+                              {c.lastRefreshedAt
+                                ? `Last refreshed ${relativeTime(c.lastRefreshedAt)}`
+                                : 'Never refreshed'}
+                              {c.niche ? ` · ${c.niche}` : ''}
+                            </div>
                           </div>
-                          <div className='truncate text-[11.5px] text-muted-foreground'>
-                            {c.lastRefreshedAt
-                              ? `Last refreshed ${relativeTime(c.lastRefreshedAt)}`
-                              : 'Never refreshed'}
-                            {c.niche ? ` · ${c.niche}` : ''}
-                          </div>
-                        </div>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </>
           )}
         </div>
@@ -315,15 +438,6 @@ interface DiscoveryFormState {
   headless: boolean
 }
 
-type FollowersFilter = 'all' | 'under50k' | '50kPlus' | '100kPlus'
-
-const FOLLOWER_FILTERS: { value: FollowersFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'under50k', label: '<50K' },
-  { value: '50kPlus', label: '50K+' },
-  { value: '100kPlus', label: '100K+' },
-]
-
 const DEFAULT_FORM: DiscoveryFormState = {
   source: 'explore',
   hashtag: '',
@@ -349,7 +463,8 @@ export function FindCompetitorsDialog({
   const [form, setForm] = useState<DiscoveryFormState>(DEFAULT_FORM)
   // Discovery now runs as a background job, so the dialog only needs the
   // input form and a brief "starting…" state; results surface from the
-  // top-nav completion alert + job details modal.
+  // top-nav completion alert + job details modal (which carries the level
+  // filters this dialog used to host).
   const [stage, setStage] = useState<'form' | 'running'>('form')
   const [error, setError] = useState<string | null>(null)
 
@@ -795,28 +910,6 @@ function formatBigNumber(n: number | undefined): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return n.toLocaleString()
-}
-
-function matchesCandidateFilters(
-  candidate: DiscoveredCandidate,
-  query: string,
-  followersFilter: FollowersFilter,
-): boolean {
-  const q = query.trim().toLowerCase()
-  if (q) {
-    const haystack = [
-      candidate.username,
-      candidate.fullName,
-      candidate.bio,
-    ].filter(Boolean).join(' ').toLowerCase()
-    if (!haystack.includes(q)) return false
-  }
-
-  const followers = candidate.followers
-  if (followersFilter === 'under50k') return followers !== undefined && followers < 50_000
-  if (followersFilter === '50kPlus') return followers !== undefined && followers >= 50_000
-  if (followersFilter === '100kPlus') return followers !== undefined && followers >= 100_000
-  return true
 }
 
 function relativeTime(ms: number): string {

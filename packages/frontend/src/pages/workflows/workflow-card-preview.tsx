@@ -12,6 +12,7 @@ const previewNodeTypes: NodeTypes = {
   instagramPost: PreviewNode as never,
   imageVideo: PreviewNode as never,
   jsonTransformer: PreviewNode as never,
+  jsonFilter: PreviewNode as never,
   transformerMedia: PreviewNode as never,
   transformerBrief: PreviewNode as never,
   ocrExtractor: PreviewNode as never,

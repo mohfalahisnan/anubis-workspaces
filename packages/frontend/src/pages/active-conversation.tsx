@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { extractImageReferencesFromUnknown } from '@anubis/shared'
 import {
   GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
-  FolderIcon, FolderOpenIcon,
+  FolderIcon, FolderOpenIcon, CopyIcon, CheckIcon,
 } from 'lucide-react'
 
 import type { AgentAvailability, AgentKind, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary, AppConfig } from '@anubis/shared'
@@ -39,6 +39,13 @@ import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
 import { BudgetPicker } from '@/components/composer/budget-picker'
+
+/**
+ * Default context-pack token budget used when neither the conversation override
+ * nor the profile config specifies one. Keep in sync with the backend default in
+ * `packages/conversation/src/conversations/conversation-service.ts`.
+ */
+const DEFAULT_CONTEXT_PACK_BUDGET = 1000
 
 /** Friendly install target per agent, used in the composer's "not on PATH" hint. */
 const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
@@ -260,7 +267,9 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       : undefined
 
   const effectiveBudget: number | undefined =
-    pickedBudget !== null ? pickedBudget : (convOverrideBudget ?? profileDefaultBudget)
+    pickedBudget !== null
+      ? pickedBudget
+      : (convOverrideBudget ?? profileDefaultBudget ?? DEFAULT_CONTEXT_PACK_BUDGET)
 
   const onEnableContextChange = useCallback(async (next: boolean) => {
     setPickedEnableContext(next)
@@ -735,12 +744,13 @@ function RenderedMessage({
   }
   const imageReferences = normalizeMessageImageReferences(message.metadata?.imageReferences)
   return (
-    <div className='flex flex-col gap-3'>
+    <div className='group/anubis flex flex-col gap-3'>
       <div className='flex items-center gap-2'>
         <AnubisMark size={15} />
         <span className='font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground'>
           Anubis
         </span>
+        <CopyMessageButton text={message.content} />
       </div>
       <MdxContent
         source={message.content}
@@ -748,6 +758,59 @@ function RenderedMessage({
         imageReferences={imageReferences}
       />
     </div>
+  )
+}
+
+/**
+ * Subtle "copy message to clipboard" button for Anubis responses. Stays
+ * dimmed/hidden until the message block is hovered (revealed via the parent's
+ * `group/anubis` class) or the button itself is focused — so it never competes
+ * with the content. On a successful copy it swaps to a check icon + "Copied!"
+ * label for ~1.5s, then reverts. On touch devices (no hover) it stays visible.
+ */
+function CopyMessageButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
+
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard write can reject (permissions / insecure context); fail
+      // silently rather than surfacing an error on a convenience action.
+    }
+  }, [text])
+
+  return (
+    <button
+      type='button'
+      onClick={() => void onCopy()}
+      aria-label={copied ? 'Copied to clipboard' : 'Copy message to clipboard'}
+      title={copied ? 'Copied!' : 'Copy'}
+      className={cn(
+        'inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-mono uppercase tracking-[0.1em]',
+        'text-muted-foreground/70 transition-all hover:bg-muted hover:text-foreground',
+        'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--anubis-gold-hi)]',
+        // Hidden on hover-capable pointers until the message is hovered/focused;
+        // always visible where hover isn't available (touch).
+        'opacity-0 group-hover/anubis:opacity-100 max-[640px]:opacity-100 [@media(hover:none)]:opacity-100',
+        copied && 'opacity-100 text-[var(--anubis-success)]',
+      )}
+    >
+      {copied ? (
+        <CheckIcon className='size-[12px]' strokeWidth={2.4} />
+      ) : (
+        <CopyIcon className='size-[12px]' strokeWidth={2} />
+      )}
+      {copied && <span>Copied!</span>}
+    </button>
   )
 }
 

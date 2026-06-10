@@ -108,6 +108,50 @@ describe('CapturedPostsRepo', () => {
     expect(repo.delete(id)).toBeNull()
   })
 
+  it('list respects limit and returns the top rows of the requested order', () => {
+    for (let i = 1; i <= 10; i++) {
+      repo.upsert(post(competitorId, `/p/P${i}`, i * 10))
+    }
+    const top = repo.list({ competitorId, orderBy: 'engagement', limit: 3 })
+    expect(top).toHaveLength(3)
+    expect(top.map((p) => p.postUrl)).toEqual(['/p/P10', '/p/P9', '/p/P8'])
+  })
+
+  it('list without competitorId dedups the same URL across competitors before applying limit', () => {
+    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const otherId = svc.create({ handle: '@linear' }).id
+    repo.upsert(post(competitorId, '/p/SHARED', 100))
+    repo.upsert({ ...post(otherId, '/p/SHARED', 50), id: 'id-shared-other' })
+    repo.upsert(post(competitorId, '/p/ONLY-A', 80))
+    repo.upsert(post(otherId, '/p/ONLY-B', 60))
+    const list = repo.list({ orderBy: 'engagement', limit: 10 })
+    expect(list.map((p) => p.postUrl).sort()).toEqual(['/p/ONLY-A', '/p/ONLY-B', '/p/SHARED'])
+    // First in ORDER BY wins: the higher-engagement copy of the shared post.
+    expect(list.find((p) => p.postUrl === '/p/SHARED')?.competitorId).toBe(competitorId)
+  })
+
+  it('countForCompetitor counts only that competitor', () => {
+    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const otherId = svc.create({ handle: '@linear' }).id
+    repo.upsert(post(competitorId, '/p/A', 1))
+    repo.upsert(post(competitorId, '/p/B', 2))
+    repo.upsert(post(otherId, '/p/C', 3))
+    expect(repo.countForCompetitor(competitorId)).toBe(2)
+    expect(repo.countForCompetitor(otherId)).toBe(1)
+    expect(repo.countForCompetitor('missing')).toBe(0)
+  })
+
+  it('countAll dedups the same post URL captured under two competitors', () => {
+    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const otherId = svc.create({ handle: '@linear' }).id
+    repo.upsert(post(competitorId, '/p/SHARED', 100))
+    repo.upsert(post(otherId, 'https://instagram.com/p/SHARED', 50))
+    repo.upsert({ ...post(otherId, '/p/SHARED', 50), id: 'id-shared-other' })
+    repo.upsert(post(competitorId, '/p/ONLY-A', 80))
+    expect(repo.countAll()).toBe(3) // /p/SHARED (x2 competitors), instagram URL, /p/ONLY-A
+    expect(repo.countAll()).toBe(repo.list({ limit: 1_000 }).length)
+  })
+
   it('markRefreshedAt updates lastRefreshedAt without touching other fields', () => {
     const svc = new CompetitorsService(new CompetitorsRepo(db))
     svc.update(competitorId, { followers: 1_000 })

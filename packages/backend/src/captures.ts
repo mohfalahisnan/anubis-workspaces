@@ -365,9 +365,14 @@ postRoutes.get('/', (c) => {
 
   const competitorsById = new Map(stack.competitors.list(opts.projectId).map((c) => [c.id, c]))
   const items = rows.map((row) => {
+    // The frontend never reads the full scraped Instagram blob (`raw`); the
+    // fields it does need (`assetPaths`, `failedAssets`) are already derived
+    // top-level by the repo. Drop `raw` so we don't serialise/transfer/parse
+    // megabytes of unused data on every list. See captured-posts-repo `toPost`.
+    const { raw: _raw, ...rest } = row
     const owner = competitorsById.get(row.competitorId)
     return {
-      ...row,
+      ...rest,
       competitorHandle: owner?.handle,
       competitorTint: owner?.tint,
       competitorFollowers: owner?.followers,

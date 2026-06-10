@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { Notification, BrowserWindow } from 'electron'
 
@@ -52,7 +52,7 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, 
 
     const timeout = setTimeout(() => {
       if (!settled) {
-        child.kill()
+        killBackendTree(child)
         reject(new Error('Backend did not report a ready URL in time.'))
       }
     }, 15000)
@@ -76,7 +76,7 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, 
             resolve({
               process: child,
               url: message.url,
-              stop: () => child.kill(),
+              stop: () => killBackendTree(child),
             })
           }
           // Don't also print the ready handshake JSON.
@@ -122,6 +122,23 @@ export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, 
 
 function nodeCommand() {
   return process.env.npm_node_execpath ?? 'node'
+}
+
+// `child.kill()` only signals the backend process itself. The node-pty shells
+// and agent CLIs it spawned survive, keep DLLs from the install dir loaded,
+// and — because the packaged backend runs as Anubis.exe — make the NSIS
+// installer/updater report "Anubis is running" with no visible window.
+// `taskkill /T` walks the whole tree. Synchronous on purpose: this runs from
+// `before-quit`, where an async kill would race app shutdown.
+function killBackendTree(child: ChildProcess) {
+  if (process.platform === 'win32' && child.pid) {
+    const result = spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+      windowsHide: true,
+      timeout: 5000,
+    })
+    if (!result.error && result.status === 0) return
+  }
+  child.kill()
 }
 
 function parseReadyMessage(line: string): BackendReadyMessage | undefined {

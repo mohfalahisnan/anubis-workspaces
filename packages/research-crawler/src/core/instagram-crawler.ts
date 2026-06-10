@@ -249,7 +249,7 @@ async function downloadPostAssets(
 ): Promise<{ assetPaths: { absolute: string[]; relative: string[] }; failedAssets: string[] }> {
   const handle = (post.username || 'unknown').trim().replace(/^@/, '').toLowerCase()
   const shortcode = extractInstagramShortcode(post.postUrl) || 'unknown'
-  const targetDir = join(workspacePath, 'instagram', handle, shortcode)
+  const targetDir = join(workspacePath, 'runtime', 'cache', 'instagram', handle, shortcode)
 
   await mkdir(targetDir, { recursive: true })
 
@@ -284,7 +284,7 @@ async function downloadPostAssets(
 
   for (const dl of downloads) {
     const filePath = join(targetDir, dl.filename)
-    const relativePath = join('instagram', handle, shortcode, dl.filename).replace(/\\/g, '/')
+    const relativePath = join('runtime', 'cache', 'instagram', handle, shortcode, dl.filename).replace(/\\/g, '/')
 
     if (existsSync(filePath)) {
       absolutePaths.push(resolve(filePath).replace(/\\/g, '/'))

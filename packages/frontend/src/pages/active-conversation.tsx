@@ -40,6 +40,13 @@ import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
 import { BudgetPicker } from '@/components/composer/budget-picker'
 
+/**
+ * Default context-pack token budget used when neither the conversation override
+ * nor the profile config specifies one. Keep in sync with the backend default in
+ * `packages/conversation/src/conversations/conversation-service.ts`.
+ */
+const DEFAULT_CONTEXT_PACK_BUDGET = 1000
+
 /** Friendly install target per agent, used in the composer's "not on PATH" hint. */
 const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
   claude: 'Claude Code',
@@ -260,7 +267,9 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       : undefined
 
   const effectiveBudget: number | undefined =
-    pickedBudget !== null ? pickedBudget : (convOverrideBudget ?? profileDefaultBudget)
+    pickedBudget !== null
+      ? pickedBudget
+      : (convOverrideBudget ?? profileDefaultBudget ?? DEFAULT_CONTEXT_PACK_BUDGET)
 
   const onEnableContextChange = useCallback(async (next: boolean) => {
     setPickedEnableContext(next)

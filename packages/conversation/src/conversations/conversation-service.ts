@@ -33,6 +33,13 @@ import type { TaskManager } from './task-manager.js'
 import type { Conversation, ConversationExtra, Message } from './types.js'
 import { StreamRelay } from './stream-relay.js'
 
+/**
+ * Default context-pack token budget used when neither the conversation override
+ * nor the profile config specifies one. Keep in sync with the frontend default in
+ * `packages/frontend/src/pages/active-conversation.tsx`.
+ */
+const DEFAULT_CONTEXT_PACK_BUDGET = 1000
+
 export interface CreateConversationInput {
   title: string
   profileId?: string
@@ -256,7 +263,7 @@ export class ConversationService {
         const improverProfileId = appConfig.contextInjectionProfileId || 'antigravity-context-builder'
         const improverProfile = this.deps.profiles.get(improverProfileId)
         if (improverProfile) {
-          const budget = resolved.contextPackBudget
+          const budget = resolved.contextPackBudget ?? DEFAULT_CONTEXT_PACK_BUDGET
           contextPackText = await this.deps.contextPacker(cur.projectId!, input.content, budget)
           if (contextPackText && contextPackText.trim()) {
             const improverResolved = this.deps.profiles.resolve(improverProfileId)

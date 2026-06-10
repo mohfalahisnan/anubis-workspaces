@@ -1,0 +1,285 @@
+import { randomUUID } from 'node:crypto'
+import { EventEmitter } from 'node:events'
+import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
+import type { JobKind, JobProgress, JobState, JobSummary } from '@anubis/shared'
+
+/**
+ * Structural match for the research-crawler's ProgressReporter. Declared
+ * locally (rather than imported) so the job manager stays decoupled from
+ * the crawler package; it's structurally assignable wherever a crawler
+ * reporter is expected.
+ */
+export interface ProgressReporter {
+  start(phase: string, total?: number): void
+  update(phase: string, current: number, note?: string): void
+  event(phase: string, message: string): void
+  done(phase: string): void
+}
+
+/* -----------------------------------------------------------
+   Background job manager
+   -----------------------------------------------------------
+   A small, generic in-memory registry for long-running work
+   (competitor discovery, post capture, and later workspace
+   extraction). Jobs run detached from the request that started
+   them; the HTTP route returns the job id immediately and the
+   frontend monitors progress via SSE (`GET /jobs/stream`) or by
+   polling (`GET /jobs`, `GET /jobs/:id`).
+
+   The manager is deliberately decoupled from any specific job
+   kind — `runJob` takes an executor closure and a `kind` string,
+   so adding a new background feature needs no changes here.
+   ----------------------------------------------------------- */
+
+/** Mutable internal job record; `JobSummary` is the serialisable view. */
+interface JobRecord<TResult = unknown> extends JobSummary<TResult> {}
+
+export interface RunJobInput {
+  kind: JobKind
+  label: string
+  projectId?: string
+}
+
+/** Handle passed to a job executor for reporting progress + warnings. */
+export interface JobContext {
+  /** A research-crawler ProgressReporter that funnels phases into job progress. */
+  reporter: ProgressReporter
+  /** Record a non-fatal warning. */
+  warn: (message: string) => void
+  /** Manually set a progress note/phase (independent of the reporter). */
+  setProgress: (progress: JobProgress) => void
+}
+
+type JobEvent =
+  | { type: 'snapshot'; jobs: JobSummary[] }
+  | { type: 'job'; job: JobSummary }
+  | { type: 'removed'; id: string }
+
+const MAX_FINISHED_JOBS = 50
+
+class JobManager {
+  private readonly jobs = new Map<string, JobRecord>()
+  private readonly emitter = new EventEmitter()
+
+  constructor() {
+    // Job runs are fire-and-forget; many SSE clients may subscribe.
+    this.emitter.setMaxListeners(0)
+  }
+
+  list(): JobSummary[] {
+    return [...this.jobs.values()]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(toSummary)
+  }
+
+  get(id: string): JobSummary | undefined {
+    const record = this.jobs.get(id)
+    return record ? toSummary(record) : undefined
+  }
+
+  /** Remove a finished job (dismiss). Running jobs cannot be removed. */
+  remove(id: string): boolean {
+    const record = this.jobs.get(id)
+    if (!record) return false
+    if (record.state === 'queued' || record.state === 'running') return false
+    this.jobs.delete(id)
+    this.emit({ type: 'removed', id })
+    return true
+  }
+
+  onChange(listener: (event: JobEvent) => void): () => void {
+    this.emitter.on('change', listener)
+    return () => this.emitter.off('change', listener)
+  }
+
+  /**
+   * Enqueue + start a job. Returns the created job synchronously; the
+   * executor runs on the next microtask so the HTTP handler can respond
+   * immediately with the job id.
+   */
+  runJob<TResult>(
+    input: RunJobInput,
+    executor: (ctx: JobContext) => Promise<TResult>,
+  ): JobSummary<TResult> {
+    const now = Date.now()
+    const record: JobRecord<TResult> = {
+      id: randomUUID(),
+      kind: input.kind,
+      label: input.label,
+      state: 'queued',
+      progress: {},
+      warnings: [],
+      projectId: input.projectId,
+      createdAt: now,
+    }
+    this.jobs.set(record.id, record as JobRecord)
+    this.publish(record)
+
+    queueMicrotask(() => void this.execute(record, executor))
+
+    return toSummary(record)
+  }
+
+  private async execute<TResult>(
+    record: JobRecord<TResult>,
+    executor: (ctx: JobContext) => Promise<TResult>,
+  ): Promise<void> {
+    record.state = 'running'
+    record.startedAt = Date.now()
+    this.publish(record)
+
+    const ctx: JobContext = {
+      reporter: this.makeReporter(record),
+      warn: (message) => {
+        record.warnings.push(message)
+        this.publish(record)
+      },
+      setProgress: (progress) => {
+        record.progress = { ...record.progress, ...progress }
+        this.publish(record)
+      },
+    }
+
+    try {
+      const result = await executor(ctx)
+      record.result = result
+      record.state = 'succeeded'
+    } catch (err) {
+      record.error = err instanceof Error ? err.message : 'Job failed.'
+      record.state = 'failed'
+    } finally {
+      record.finishedAt = Date.now()
+      this.publish(record)
+      this.pruneFinished()
+    }
+  }
+
+  /** Bridge the crawler's ProgressReporter into job-progress updates. */
+  private makeReporter(record: JobRecord): ProgressReporter {
+    const apply = (progress: JobProgress) => {
+      record.progress = { ...record.progress, ...progress }
+      this.publish(record)
+    }
+    return {
+      start: (phase, total) => apply({ phase, total, current: 0 }),
+      update: (phase, current, note) => apply({ phase, current, note }),
+      event: (phase, message) => apply({ phase, note: message }),
+      done: (phase) => apply({ phase, note: 'done' }),
+    }
+  }
+
+  private publish(record: JobRecord): void {
+    this.emit({ type: 'job', job: toSummary(record) })
+  }
+
+  private emit(event: JobEvent): void {
+    this.emitter.emit('change', event)
+  }
+
+  /** Keep memory bounded: drop the oldest finished jobs past the cap. */
+  private pruneFinished(): void {
+    const finished = [...this.jobs.values()]
+      .filter((j) => j.state === 'succeeded' || j.state === 'failed')
+      .sort((a, b) => (a.finishedAt ?? 0) - (b.finishedAt ?? 0))
+    while (finished.length > MAX_FINISHED_JOBS) {
+      const oldest = finished.shift()
+      if (!oldest) break
+      this.jobs.delete(oldest.id)
+      this.emit({ type: 'removed', id: oldest.id })
+    }
+  }
+}
+
+function toSummary<TResult>(record: JobRecord<TResult>): JobSummary<TResult> {
+  return {
+    id: record.id,
+    kind: record.kind,
+    label: record.label,
+    state: record.state as JobState,
+    progress: { ...record.progress },
+    result: record.result,
+    error: record.error,
+    warnings: [...record.warnings],
+    projectId: record.projectId,
+    createdAt: record.createdAt,
+    startedAt: record.startedAt,
+    finishedAt: record.finishedAt,
+  }
+}
+
+/** Process-wide singleton; the backend is a single child process. */
+export const jobManager = new JobManager()
+
+/* -----------------------------------------------------------
+   Routes
+   ----------------------------------------------------------- */
+
+export const jobRoutes = new Hono()
+
+jobRoutes.get('/', (c) => {
+  return c.json({ ok: true, items: jobManager.list() })
+})
+
+jobRoutes.get('/:id', (c) => {
+  const job = jobManager.get(c.req.param('id'))
+  if (!job) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, job })
+})
+
+jobRoutes.delete('/:id', (c) => {
+  const removed = jobManager.remove(c.req.param('id'))
+  if (!removed) return c.json({ ok: false, error: 'not_found_or_running' }, 404)
+  return c.json({ ok: true })
+})
+
+// Live job feed. Emits:
+//   event: snapshot  data: JobSummary[]        (sent once on connect)
+//   event: job       data: JobSummary          (created / progress / finished)
+//   event: removed   data: { id }              (dismissed / pruned)
+jobRoutes.get('/stream', (c) => {
+  return streamSSE(c, async (stream) => {
+    const queue: JobEvent[] = [{ type: 'snapshot', jobs: jobManager.list() }]
+    let notify: (() => void) | null = null
+    let closed = false
+
+    const unsubscribe = jobManager.onChange((event) => {
+      queue.push(event)
+      notify?.()
+    })
+
+    stream.onAbort(() => {
+      closed = true
+      unsubscribe()
+      notify?.()
+    })
+
+    try {
+      while (!closed) {
+        while (queue.length > 0) {
+          const event = queue.shift()!
+          if (event.type === 'snapshot') {
+            await stream.writeSSE({ event: 'snapshot', data: JSON.stringify(event.jobs) })
+          } else if (event.type === 'job') {
+            await stream.writeSSE({ event: 'job', data: JSON.stringify(event.job) })
+          } else {
+            await stream.writeSSE({ event: 'removed', data: JSON.stringify({ id: event.id }) })
+          }
+        }
+        if (closed) break
+        // Park until the next event (or a heartbeat) wakes us.
+        await new Promise<void>((resolve) => {
+          notify = resolve
+          setTimeout(resolve, 15_000)
+        })
+        notify = null
+        if (!closed && queue.length === 0) {
+          // Heartbeat comment keeps the connection alive through proxies.
+          await stream.writeSSE({ event: 'ping', data: '{}' })
+        }
+      }
+    } finally {
+      unsubscribe()
+    }
+  })
+})

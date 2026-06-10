@@ -58,6 +58,8 @@ import {
   type OcrResult,
   type TranscribeResult,
   type WhisperModel,
+  type JobSummary,
+  type JobListResponse,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -528,6 +530,21 @@ export async function captureCompetitor(
   }
 }
 
+/**
+ * Start a post capture as a background job. Returns the job id immediately;
+ * monitor progress via {@link streamJobs} or {@link listJobs}.
+ */
+export async function captureCompetitorAsync(
+  id: string,
+  options: CaptureOptions = {},
+): Promise<{ jobId: string }> {
+  const r = await api<{ ok: true; jobId: string }>(
+    `/captures/competitors/${encodeURIComponent(id)}`,
+    { method: 'POST', body: JSON.stringify({ ...options, async: true }) },
+  )
+  return { jobId: r.jobId }
+}
+
 export async function captureCompetitorPreview(
   id: string,
   options: CaptureOptions = {},
@@ -607,6 +624,113 @@ export async function discoverCompetitors(
     profileImageUrl: p.profileImageUrl,
     profileUrl: p.profileUrl,
   }))
+}
+
+/**
+ * Start competitor discovery as a background job. Returns the job id
+ * immediately; the job's result (on completion) carries the candidate
+ * profiles. Monitor via {@link streamJobs} or {@link listJobs}.
+ */
+export async function discoverCompetitorsAsync(
+  input: DiscoverCompetitorsInput & { projectId?: string },
+): Promise<{ jobId: string }> {
+  const r = await api<{ ok: true; jobId: string }>('/research-crawler/instagram/discover', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: input.source,
+      hashtag: input.source === 'hashtag' ? input.hashtag : undefined,
+      keyword: input.source === 'keyword' ? input.keyword : undefined,
+      targetCompetitors: input.targetCompetitors,
+      timeoutMs: input.timeoutMs,
+      profile: input.profile,
+      headless: input.headless,
+      forceHeadless: input.forceHeadless,
+      projectId: input.projectId,
+      async: true,
+    }),
+  })
+  return { jobId: r.jobId }
+}
+
+/* ---------- Background jobs ---------- */
+
+export async function listJobs(): Promise<JobSummary[]> {
+  const r = await api<JobListResponse>('/jobs')
+  return r.items
+}
+
+export async function getJob(id: string): Promise<JobSummary | null> {
+  const baseUrl = await getApiBaseUrl()
+  const response = await fetch(new URL(`/jobs/${encodeURIComponent(id)}`, baseUrl))
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(`getJob failed: HTTP ${response.status}`)
+  const body = (await response.json()) as { ok: true; job: JobSummary }
+  return body.job
+}
+
+export async function dismissJob(id: string): Promise<void> {
+  await api<{ ok: true }>(`/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export interface JobStreamHandlers {
+  /** Full set of current jobs, sent once on connect. */
+  onSnapshot?: (jobs: JobSummary[]) => void
+  /** A job was created or changed (progress / finished). */
+  onJob?: (job: JobSummary) => void
+  /** A job was dismissed or pruned. */
+  onRemoved?: (id: string) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Subscribe to the backend job feed via Server-Sent Events. Resolves when
+ * the stream closes; pass an AbortSignal to stop listening.
+ */
+export async function streamJobs(handlers: JobStreamHandlers = {}): Promise<void> {
+  const baseUrl = await getApiBaseUrl()
+  const response = await fetch(new URL('/jobs/stream', baseUrl), {
+    headers: { accept: 'text/event-stream' },
+    signal: handlers.signal,
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`Job stream failed: HTTP ${response.status}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  const handleEvent = (raw: string) => {
+    let event = 'message'
+    const dataLines: string[] = []
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+    }
+    if (dataLines.length === 0) return
+    const data = dataLines.join('\n')
+    try {
+      if (event === 'snapshot') handlers.onSnapshot?.(JSON.parse(data) as JobSummary[])
+      else if (event === 'job') handlers.onJob?.(JSON.parse(data) as JobSummary)
+      else if (event === 'removed') handlers.onRemoved?.((JSON.parse(data) as { id: string }).id)
+      // 'ping' heartbeats are ignored.
+    } catch {
+      /* ignore malformed frames */
+    }
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let sep: number
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      if (chunk.trim()) handleEvent(chunk)
+    }
+  }
+  if (buffer.trim()) handleEvent(buffer)
 }
 
 export async function listPosts(

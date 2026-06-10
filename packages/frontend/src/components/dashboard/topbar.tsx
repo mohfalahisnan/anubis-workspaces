@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
 import { useNavigation } from '@/lib/navigation'
 import { useKbLoader } from '@/lib/use-kb-loader'
+import { TopNavProgress } from '@/components/jobs/top-nav-progress'
 
 function KbBackgroundLoaderIndicator() {
   const loading = useKbLoader((s) => s.loading)
@@ -42,6 +43,7 @@ export function TopBar({ breadcrumb }: { breadcrumb?: string }) {
       </div>
 
       <div className='flex flex-1 items-center justify-end gap-1.5 sm:flex-none'>
+        <TopNavProgress />
         <KbBackgroundLoaderIndicator />
         <Button
           size='sm'

@@ -12,7 +12,8 @@ import {
 import type { CapturedPost } from '@anubis/conversation'
 import type { BatchCaptureJobResult, CaptureJobResult } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
-import { withCrawlerProfileDefaults } from './chrome-defaults.js'
+import { withCrawlerProfileDefaults, crawlerProfileSchema } from './chrome-defaults.js'
+import { HttpError } from './http-errors.js'
 import { jobManager, type ProgressReporter } from './jobs.js'
 import { runBatchCapture } from './capture-batch.js'
 
@@ -38,7 +39,7 @@ type PostOwner = {
    ----------------------------------------------------------- */
 
 const CaptureBody = z.object({
-  profile: z.enum(['login', 'public', 'flow']).optional(),
+  profile: crawlerProfileSchema.optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
   maxResponses: z.number().int().positive().max(120).optional(),
@@ -58,7 +59,7 @@ type CaptureOptions = z.infer<typeof CaptureBody>
  */
 const BatchCaptureBody = z.object({
   competitorIds: z.array(z.string().min(1)).min(1).max(500),
-  profile: z.enum(['login', 'public', 'flow']).optional(),
+  profile: crawlerProfileSchema.optional(),
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
   maxResponses: z.number().int().positive().max(120).optional(),
@@ -118,30 +119,24 @@ captureRoutes.post('/competitors/:id', async (c) => {
       reporter: silentReporter(),
     }, selectedProfile, cfg, getDataDir()))
   } catch (e) {
-    return c.json(
-      {
-        ok: false,
-        error: {
-          code: 'CAPTURE_FAILED',
-          message: e instanceof Error ? e.message : 'Capture threw.',
-        },
+    throw new HttpError(500, {
+      ok: false,
+      error: {
+        code: 'CAPTURE_FAILED',
+        message: e instanceof Error ? e.message : 'Capture threw.',
       },
-      500,
-    )
+    })
   }
 
   if (!result.ok) {
-    return c.json(
-      {
-        ok: false,
-        error: {
-          code: result.error?.code ?? 'CAPTURE_FAILED',
-          message: result.error?.message ?? 'Capture failed.',
-          warnings: result.meta.warnings,
-        },
+    throw new HttpError(500, {
+      ok: false,
+      error: {
+        code: result.error?.code ?? 'CAPTURE_FAILED',
+        message: result.error?.message ?? 'Capture failed.',
+        warnings: result.meta.warnings,
       },
-      500,
-    )
+    })
   }
 
   // Preview: build candidate posts without persisting.

@@ -1,4 +1,13 @@
 export { launchChrome, killChrome } from './core/chrome/launch-chrome.js'
+// Canonical Chrome remote-debugging ports for the three-profile architecture.
+// Re-exported so the backend resolves profiles against these values instead of
+// re-stating 9222/9223/9224 as magic numbers (which would silently drift).
+export {
+  LOGIN_PROFILE_PORT,
+  PUBLIC_PROFILE_PORT,
+  FLOW_PROFILE_PORT,
+} from './core/chrome/profile-resolver.js'
+export type { ProfileName } from './core/chrome/profile-resolver.js'
 export { captureInstagramData, discoverInstagramCompetitors } from './core/instagram-crawler.js'
 export { captureChatGPTConversations, captureChatGPTConversationDetails, sendChatGPTPrompt } from './core/chatgpt-crawler.js'
 export { captureQwenConversations, captureQwenConversationDetails, sendQwenPrompt } from './core/qwen-crawler.js'

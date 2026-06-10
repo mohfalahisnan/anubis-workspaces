@@ -165,7 +165,10 @@ export class CapturedPostsRepo {
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
     const sql = `SELECT cp.* FROM captured_posts cp ${whereSql} ORDER BY ${order}`
-    const rows = this.db.prepare(sql).all(...params) as Row[]
+    // Stream rows instead of materializing the whole table: `.iterate()` lets us
+    // stop pulling (and JSON.parsing the potentially-large `raw` blob) as soon as
+    // we have `limit` deduped posts.
+    const rows = this.db.prepare(sql).iterate(...params) as IterableIterator<Row>
     const seen = new Set<string>()
     const out: CapturedPost[] = []
     for (const row of rows) {
@@ -225,10 +228,22 @@ export class CapturedPostsRepo {
   }
 
   countForCompetitor(competitorId: string): number {
-    return this.list({ competitorId, limit: 10_000 }).length
+    // Exact equivalent of the old list()-based dedup count: the unique index
+    // uq_captured_posts_url(competitor_id, post_url) plus upsert()'s URL
+    // normalisation guarantee no per-competitor duplicates exist in the DB.
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM captured_posts WHERE competitor_id = ?')
+      .get(competitorId) as { n: number }
+    return row.n
   }
 
   countAll(): number {
-    return this.list({ limit: 10_000 }).length
+    // Cross-competitor dedup by post URL. Stored post_url values are already
+    // normalised by upsert(), so DISTINCT post_url matches the old JS dedup
+    // (without the old 10_000-row cap, which silently undercounted).
+    const row = this.db
+      .prepare('SELECT COUNT(DISTINCT post_url) AS n FROM captured_posts')
+      .get() as { n: number }
+    return row.n
   }
 }

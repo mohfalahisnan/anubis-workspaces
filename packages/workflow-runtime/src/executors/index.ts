@@ -2,6 +2,7 @@ import type { Executor } from '../types.js'
 import { tableExecutor }                from './table.js'
 import { transformerBriefExecutor }     from './transformer-brief.js'
 import { jsonTransformerExecutor }      from './json-transformer.js'
+import { jsonFilterExecutor }           from './json-filter.js'
 import { instagramPostExecutor }        from './instagram-post.js'
 import { transformerMediaExecutor }     from './transformer-media.js'
 import { ocrExtractorExecutor }         from './ocr-extractor.js'
@@ -23,6 +24,7 @@ export const executorRegistry: Record<string, Executor<unknown>> = {
   table:                tableExecutor as Executor<unknown>,
   transformerBrief:     transformerBriefExecutor as Executor<unknown>,
   jsonTransformer:      jsonTransformerExecutor as Executor<unknown>,
+  jsonFilter:           jsonFilterExecutor as Executor<unknown>,
   instagramPost:        instagramPostExecutor as Executor<unknown>,
   transformerMedia:     transformerMediaExecutor as Executor<unknown>,
   ocrExtractor:         ocrExtractorExecutor as Executor<unknown>,
@@ -44,7 +46,7 @@ export const executorRegistry: Record<string, Executor<unknown>> = {
 export type ExecutorKey = keyof typeof executorRegistry
 
 export {
-  tableExecutor, transformerBriefExecutor, jsonTransformerExecutor,
+  tableExecutor, transformerBriefExecutor, jsonTransformerExecutor, jsonFilterExecutor,
   instagramPostExecutor, transformerMediaExecutor, ocrExtractorExecutor,
   transcriberExecutor, imageVideoExecutor, aiAgentConversationExecutor,
   humanApprovalExecutor, lessonWriterExecutor,

@@ -5,12 +5,11 @@ import {
   RefreshCwIcon,
   SaveIcon,
 } from 'lucide-react'
-import type { AppConfig, CompetitorLevelsConfig, LevelMultipliersConfig, MultiplierBand, ProfileSummary } from '@anubis/shared'
+import type { AppConfig, CompetitorLevelsConfig, LevelMultipliersConfig, MultiplierBand } from '@anubis/shared'
 import { DEFAULT_COMPETITOR_LEVELS, DEFAULT_LEVEL_MULTIPLIERS, isValidCompetitorLevels, isValidLevelMultipliers } from '@anubis/shared'
 import {
   getAppConfig,
   updateAppConfig,
-  listProfiles,
 } from '@/api'
 import { setCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { setLevelMultipliers } from '@/hooks/use-level-multipliers'
@@ -25,7 +24,6 @@ export function SettingsPage() {
   const [form, setForm] = useState<AppConfig>({})
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
-  const [profiles, setProfiles] = useState<ProfileSummary[]>([])
 
   useEffect(() => {
     let alive = true
@@ -38,12 +36,6 @@ export function SettingsPage() {
         if (!alive) return
         setBanner({ kind: 'error', message: e instanceof Error ? `Couldn't load settings: ${e.message}` : 'Could not load settings.' })
       })
-
-    void listProfiles()
-      .then((items) => {
-        if (alive) setProfiles(items)
-      })
-      .catch(() => {})
 
     return () => { alive = false }
   }, [])
@@ -75,12 +67,7 @@ export function SettingsPage() {
     config !== null &&
     (form.enableNotifications ?? true) !== (config.enableNotifications ?? true)
 
-  const contextInjectionDirty =
-    config !== null &&
-    ((form.enableContextInjection ?? false) !== (config.enableContextInjection ?? false) ||
-     (form.contextInjectionProfileId ?? '') !== (config.contextInjectionProfileId ?? ''))
-
-  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty || contextInjectionDirty
+  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty
   const canSave = dirty && levelsValid && multipliersValid
 
   async function handleSave() {
@@ -93,8 +80,6 @@ export function SettingsPage() {
         competitorLevels: form.competitorLevels ?? config?.competitorLevels,
         levelMultipliers: form.levelMultipliers ?? config?.levelMultipliers,
         enableNotifications: form.enableNotifications ?? true,
-        enableContextInjection: form.enableContextInjection ?? false,
-        contextInjectionProfileId: form.contextInjectionProfileId ?? '',
       })
       setConfig(next)
       setForm((f) => ({
@@ -105,8 +90,6 @@ export function SettingsPage() {
         competitorLevels: next.competitorLevels,
         levelMultipliers: next.levelMultipliers,
         enableNotifications: next.enableNotifications ?? true,
-        enableContextInjection: next.enableContextInjection ?? false,
-        contextInjectionProfileId: next.contextInjectionProfileId ?? '',
       }))
       setCompetitorLevels(next.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS)
       setLevelMultipliers(next.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS)
@@ -248,51 +231,6 @@ export function SettingsPage() {
               Enable local notifications
             </label>
           </div>
-        </section>
-
-        <section className='mt-8 border-t border-border pt-6'>
-          <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>Prompt &amp; Context Middleware</h2>
-          <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
-            Automatically query the project's Knowledge Base for a context pack and use a dedicated agent to improve and enrich your prompt before sending it to the target conversation agent.
-          </p>
-          <div className='mt-4 flex items-center gap-3'>
-            <input
-              type='checkbox'
-              id='enable-context-injection'
-              checked={form.enableContextInjection ?? false}
-              onChange={(e) => setForm((f) => ({ ...f, enableContextInjection: e.target.checked }))}
-              className='size-4 rounded border-border text-[var(--anubis-gold)] bg-card outline-none focus:ring-0 focus:ring-offset-0 accent-[var(--anubis-gold)] cursor-pointer'
-            />
-            <label htmlFor='enable-context-injection' className='text-[13px] font-medium text-foreground cursor-pointer select-none'>
-              Enable context injection &amp; prompt improvement
-            </label>
-          </div>
-
-          {(form.enableContextInjection ?? false) && (
-            <div className='mt-4 flex flex-col gap-1.5'>
-              <label htmlFor='context-injection-profile' className='text-[12.5px] font-medium text-foreground'>
-                Dedicated prompt builder agent profile
-              </label>
-              <div className='relative'>
-                <select
-                  id='context-injection-profile'
-                  value={form.contextInjectionProfileId ?? 'antigravity-context-builder'}
-                  onChange={(e) => setForm((f) => ({ ...f, contextInjectionProfileId: e.target.value }))}
-                  className='h-10 w-full rounded-md border border-border bg-card px-3 text-[13px] text-foreground outline-none focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))] cursor-pointer'
-                >
-                  <option value="" disabled>-- Select Profile --</option>
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.config.agent})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className='text-[12px] text-muted-foreground'>
-                Select which agent profile is responsible for analyzing the context pack and refining the prompt.
-              </p>
-            </div>
-          )}
         </section>
 
         <section className='mt-8 border-t border-border pt-6'>

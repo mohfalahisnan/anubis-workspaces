@@ -1,0 +1,24 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "-p",
+    "List the three primary colors as a markdown bullet list. No other text."
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 7330,
+  "rawLength": 95,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[H- Red\r\n- Yellow\r\n- Blue\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSC0gUmVkDQotIFllbGxvdw0KLSBCbHVlDQobXTA7QzpcVXNlcnNcVXNlclxBcHBEYXRhXExvY2FsXGFneVxiaW5cYWd5LmV4ZQcbWz8yNWg=",
+  "stripped": "- Red\n- Yellow\n- Blue",
+  "chunkCount": 1,
+  "chunks": [
+    {
+      "t": 4666,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[H- Red\r\n- Yellow\r\n- Blue\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    }
+  ]
+}

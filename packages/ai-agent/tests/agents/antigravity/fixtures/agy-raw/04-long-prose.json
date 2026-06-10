@@ -1,0 +1,24 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "-p",
+    "Explain what a binary search tree is in about four sentences."
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 7026,
+  "rawLength": 568,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[HA binary search tree (BST) is a hierarchical, node-based data structure where each node has at most two children, referred to as the left and right child. The defining property of a BST is that for any given node, all keys in its left subtree are less than the node's key. Conversely, all keys in its right subtree are greater than the node's key. This ordered structure allows for efficient search, insertion, and deletion operations, typically taking logarithmic time when the tree is balanced.\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSEEgYmluYXJ5IHNlYXJjaCB0cmVlIChCU1QpIGlzIGEgaGllcmFyY2hpY2FsLCBub2RlLWJhc2VkIGRhdGEgc3RydWN0dXJlIHdoZXJlIGVhY2ggbm9kZSBoYXMgYXQgbW9zdCB0d28gY2hpbGRyZW4sIHJlZmVycmVkIHRvIGFzIHRoZSBsZWZ0IGFuZCByaWdodCBjaGlsZC4gVGhlIGRlZmluaW5nIHByb3BlcnR5IG9mIGEgQlNUIGlzIHRoYXQgZm9yIGFueSBnaXZlbiBub2RlLCBhbGwga2V5cyBpbiBpdHMgbGVmdCBzdWJ0cmVlIGFyZSBsZXNzIHRoYW4gdGhlIG5vZGUncyBrZXkuIENvbnZlcnNlbHksIGFsbCBrZXlzIGluIGl0cyByaWdodCBzdWJ0cmVlIGFyZSBncmVhdGVyIHRoYW4gdGhlIG5vZGUncyBrZXkuIFRoaXMgb3JkZXJlZCBzdHJ1Y3R1cmUgYWxsb3dzIGZvciBlZmZpY2llbnQgc2VhcmNoLCBpbnNlcnRpb24sIGFuZCBkZWxldGlvbiBvcGVyYXRpb25zLCB0eXBpY2FsbHkgdGFraW5nIGxvZ2FyaXRobWljIHRpbWUgd2hlbiB0aGUgdHJlZSBpcyBiYWxhbmNlZC4NChtdMDtDOlxVc2Vyc1xVc2VyXEFwcERhdGFcTG9jYWxcYWd5XGJpblxhZ3kuZXhlBxtbPzI1aA==",
+  "stripped": "A binary search tree (BST) is a hierarchical, node-based data structure where each node has at most two children, referred to as the left and right child. The defining property of a BST is that for any given node, all keys in its left subtree are less than the node's key. Conversely, all keys in its right subtree are greater than the node's key. This ordered structure allows for efficient search, insertion, and deletion operations, typically taking logarithmic time when the tree is balanced.",
+  "chunkCount": 1,
+  "chunks": [
+    {
+      "t": 5153,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[HA binary search tree (BST) is a hierarchical, node-based data structure where each node has at most two children, referred to as the left and right child. The defining property of a BST is that for any given node, all keys in its left subtree are less than the node's key. Conversely, all keys in its right subtree are greater than the node's key. This ordered structure allows for efficient search, insertion, and deletion operations, typically taking logarithmic time when the tree is balanced.\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "--dangerously-skip-permissions",
+    "-p",
+    "Create a file named hello.txt containing exactly the word banana, then confirm you are done."
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 9750,
+  "rawLength": 245,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[HI have created the file [hello.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/hello.txt) containing exactly the word `banana`.\u001b[3;1HThe task is completed.\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSEkgaGF2ZSBjcmVhdGVkIHRoZSBmaWxlIFtoZWxsby50eHRdKGZpbGU6Ly8vQzovVXNlcnMvVXNlci9BcHBEYXRhL0xvY2FsL1RlbXAvYWd5LWNhcHR1cmUvc2NyYXRjaC9oZWxsby50eHQpIGNvbnRhaW5pbmcgZXhhY3RseSB0aGUgd29yZCBgYmFuYW5hYC4bWzM7MUhUaGUgdGFzayBpcyBjb21wbGV0ZWQuDQobXTA7QzpcVXNlcnNcVXNlclxBcHBEYXRhXExvY2FsXGFneVxiaW5cYWd5LmV4ZQcbWz8yNWg=",
+  "stripped": "I have created the file [hello.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/hello.txt) containing exactly the word `banana`.The task is completed.",
+  "chunkCount": 1,
+  "chunks": [
+    {
+      "t": 8653,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[HI have created the file [hello.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/hello.txt) containing exactly the word `banana`.\u001b[3;1HThe task is completed.\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    }
+  ]
+}

@@ -2,8 +2,7 @@ import * as pty from 'node-pty'
 import { TypedEmitter, type AgentEventMap } from '../../events/stream.js'
 import { wrapPromptWithSystem } from '../wrap-system-prompt.js'
 import { buildAntigravityArgs } from './build-args.js'
-import { parseAntigravityOutput, tryParse, ingest, type ParsedAntigravityOutput } from './parser.js'
-import { stripTerminalSequences } from './terminal.js'
+import { renderTerminalOutput, diffAppended } from './terminal.js'
 
 export interface AntigravityRunOpts {
   workspaceId: string
@@ -42,11 +41,13 @@ function cleanEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 /**
  * Drives the Antigravity CLI (`agy`) in non-interactive print mode.
  *
- * Unlike claude/codex, `agy -p` writes its response ONLY to a TTY — with a piped
- * stdout it detects a non-terminal and prints nothing (the run "succeeds" with
- * an empty message). So we spawn it under a pseudo-terminal (node-pty), buffer
- * the rendered output, strip the terminal control sequences, then emit the text
- * once the process exits.
+ * `agy -p` writes its response ONLY to a TTY — with a piped stdout it detects a
+ * non-terminal and prints nothing. So we spawn it under a pseudo-terminal
+ * (node-pty) and scrape the rendered output. `agy` lays text out spatially
+ * (cursor-forward = spaces, cursor-position = line breaks) and emits no JSON, so
+ * we reconstruct the answer by emulating the terminal screen on each chunk and
+ * streaming the newly-rendered suffix. See
+ * docs/antigravity/agy-output-reference.md for the captured evidence.
  */
 export class AntigravityAgent {
   constructor(private opts: AntigravityAgentOpts = {}) {}
@@ -111,74 +112,19 @@ export class AntigravityAgent {
       try { proc.kill() } catch { /* already gone */ }
     }
 
-    // node-pty merges stdout+stderr into one data stream.
+    // node-pty merges stdout+stderr into one stream. We accumulate the raw
+    // bytes and re-render the whole screen on every chunk; `lastEmitted` is the
+    // rendered text already streamed to the consumer.
     let buf = ''
-    let lastCleanedText = ''
-    let processedLinesCount = 0
-    let isJsonMode: boolean | null = null
-    let emittedAny = false
+    let lastEmitted = ''
 
     proc.onData((chunk) => {
       buf += chunk
-
-      if (isJsonMode === null) {
-        const cleaned = stripTerminalSequences(buf)
-        const trimmed = cleaned.trim()
-        if (trimmed.length > 0) {
-          isJsonMode = trimmed.startsWith('{') || trimmed.startsWith('[')
-        }
-      }
-
-      if (isJsonMode === true) {
-        const lines = buf.split(/\r?\n/)
-        // Process all completed lines
-        while (processedLinesCount < lines.length - 1) {
-          const rawLine = lines[processedLinesCount]
-          processedLinesCount++
-          if (rawLine === undefined) continue
-          const cleanedLine = stripTerminalSequences(rawLine).trim()
-          if (!cleanedLine) continue
-          try {
-            const parsed = JSON.parse(cleanedLine)
-            if (parsed && typeof parsed === 'object') {
-              const tempOut: ParsedAntigravityOutput = {
-                events: [],
-                sessionId: undefined,
-                usageRaw: undefined,
-                finishReason: undefined,
-              }
-              ingest(parsed, tempOut)
-              if (tempOut.sessionId) {
-                emitter.emit('session', { sessionId: tempOut.sessionId })
-                emittedAny = true
-              }
-              for (const ev of tempOut.events) {
-                if (ev.kind === 'partial') {
-                  emitter.emit('partial', { deltaText: ev.text })
-                } else if (ev.kind === 'tool_call') {
-                  emitter.emit('tool_call', { name: ev.name, args: ev.args })
-                } else {
-                  emitter.emit('tool_result', {
-                    name: ev.name,
-                    result: ev.result,
-                    isError: ev.isError,
-                  })
-                }
-                emittedAny = true
-              }
-            }
-          } catch {
-            // Incomplete or single JSON object line, ignore for now
-          }
-        }
-      } else if (isJsonMode === false) {
-        const cleaned = stripTerminalSequences(buf, true)
-        if (cleaned.length > lastCleanedText.length) {
-          const delta = cleaned.slice(lastCleanedText.length)
-          emitter.emit('partial', { deltaText: delta })
-          lastCleanedText = cleaned
-          emittedAny = true
-        }
+      const text = renderTerminalOutput(buf)
+      const delta = diffAppended(lastEmitted, text)
+      if (delta) {
+        emitter.emit('partial', { deltaText: delta })
+        lastEmitted = text
       }
     })
 
@@ -189,7 +135,7 @@ export class AntigravityAgent {
         return
       }
 
-      const text = stripTerminalSequences(buf)
+      const text = renderTerminalOutput(buf)
       if (exitCode !== 0) {
         emitter.emit('error', {
           error: new Error(
@@ -199,94 +145,10 @@ export class AntigravityAgent {
         return
       }
 
-      if (isJsonMode === true) {
-        // Check if the whole output is a single JSON object or array.
-        const trimmed = text.trim()
-        const whole = tryParse(trimmed)
-        if (whole && typeof whole === 'object') {
-          if (!emittedAny) {
-            const parsed = parseAntigravityOutput(text)
-            if (parsed.sessionId) {
-              emitter.emit('session', { sessionId: parsed.sessionId })
-            }
-            for (const ev of parsed.events) {
-              if (ev.kind === 'partial') {
-                emitter.emit('partial', { deltaText: ev.text })
-              } else if (ev.kind === 'tool_call') {
-                emitter.emit('tool_call', { name: ev.name, args: ev.args })
-              } else {
-                emitter.emit('tool_result', {
-                  name: ev.name,
-                  result: ev.result,
-                  isError: ev.isError,
-                })
-              }
-            }
-            emitter.emit('done', {
-              finishReason: parsed.finishReason ?? 'stop',
-              usage: parsed.usageRaw,
-            })
-            return
-          }
-        }
-
-        // Process any remaining lines (e.g. the last line without a trailing newline)
-        const lines = buf.split(/\r?\n/)
-        let finalUsageRaw: unknown = undefined
-        let finalFinishReason: string | undefined = undefined
-        for (let i = processedLinesCount; i < lines.length; i++) {
-          const rawLine = lines[i]
-          if (rawLine === undefined) continue
-          const cleanedLine = stripTerminalSequences(rawLine).trim()
-          if (!cleanedLine) continue
-          try {
-            const parsed = JSON.parse(cleanedLine)
-            if (parsed && typeof parsed === 'object') {
-              const tempOut: ParsedAntigravityOutput = {
-                events: [],
-                sessionId: undefined,
-                usageRaw: undefined,
-                finishReason: undefined,
-              }
-              ingest(parsed, tempOut)
-              if (tempOut.sessionId) {
-                emitter.emit('session', { sessionId: tempOut.sessionId })
-              }
-              if (tempOut.usageRaw) finalUsageRaw = tempOut.usageRaw
-              if (tempOut.finishReason) finalFinishReason = tempOut.finishReason
-              for (const ev of tempOut.events) {
-                if (ev.kind === 'partial') {
-                  emitter.emit('partial', { deltaText: ev.text })
-                } else if (ev.kind === 'tool_call') {
-                  emitter.emit('tool_call', { name: ev.name, args: ev.args })
-                } else {
-                  emitter.emit('tool_result', {
-                    name: ev.name,
-                    result: ev.result,
-                    isError: ev.isError,
-                  })
-                }
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
-        const parsed = parseAntigravityOutput(text)
-        emitter.emit('done', {
-          finishReason: finalFinishReason ?? parsed.finishReason ?? 'stop',
-          usage: finalUsageRaw ?? parsed.usageRaw,
-        })
-      } else {
-        // Plain text mode
-        if (text.length > lastCleanedText.length) {
-          const delta = text.slice(lastCleanedText.length)
-          emitter.emit('partial', { deltaText: delta })
-        }
-        emitter.emit('done', {
-          finishReason: 'stop',
-        })
-      }
+      // Flush whatever the final render added beyond what we've streamed.
+      const delta = diffAppended(lastEmitted, text)
+      if (delta) emitter.emit('partial', { deltaText: delta })
+      emitter.emit('done', { finishReason: 'stop' })
     })
 
     return { emitter, sessionId, cancel }

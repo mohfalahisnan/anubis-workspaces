@@ -1,0 +1,46 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "--model",
+    "definitely-not-a-real-model-xyz",
+    "-p",
+    "hi"
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 10211,
+  "rawLength": 736,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[HI should check what files are available in the workspace directory to understand the context of the user's project.\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h\r\nI will inspect the contents of `hello.txt` and `notes.txt` to see what notes or files have been left in this workspace.\r\nI will check the contents of `notes.txt` as well.\r\n\u001b[?25lHi! I'm Antigravity, your AI coding assistant. \u001b[6;1HI see we have two files in our workspace:\r\n- [hello.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/hello.txt) (contains `banana`)\r\n- [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) (contains `The secret word is pineapple.`)\u001b[10;1HHow can I help you today?\r\n\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSEkgc2hvdWxkIGNoZWNrIHdoYXQgZmlsZXMgYXJlIGF2YWlsYWJsZSBpbiB0aGUgd29ya3NwYWNlIGRpcmVjdG9yeSB0byB1bmRlcnN0YW5kIHRoZSBjb250ZXh0IG9mIHRoZSB1c2VyJ3MgcHJvamVjdC4bXTA7QzpcVXNlcnNcVXNlclxBcHBEYXRhXExvY2FsXGFneVxiaW5cYWd5LmV4ZQcbWz8yNWgNCkkgd2lsbCBpbnNwZWN0IHRoZSBjb250ZW50cyBvZiBgaGVsbG8udHh0YCBhbmQgYG5vdGVzLnR4dGAgdG8gc2VlIHdoYXQgbm90ZXMgb3IgZmlsZXMgaGF2ZSBiZWVuIGxlZnQgaW4gdGhpcyB3b3Jrc3BhY2UuDQpJIHdpbGwgY2hlY2sgdGhlIGNvbnRlbnRzIG9mIGBub3Rlcy50eHRgIGFzIHdlbGwuDQobWz8yNWxIaSEgSSdtIEFudGlncmF2aXR5LCB5b3VyIEFJIGNvZGluZyBhc3Npc3RhbnQuIBtbNjsxSEkgc2VlIHdlIGhhdmUgdHdvIGZpbGVzIGluIG91ciB3b3Jrc3BhY2U6DQotIFtoZWxsby50eHRdKGZpbGU6Ly8vQzovVXNlcnMvVXNlci9BcHBEYXRhL0xvY2FsL1RlbXAvYWd5LWNhcHR1cmUvc2NyYXRjaC9oZWxsby50eHQpIChjb250YWlucyBgYmFuYW5hYCkNCi0gW25vdGVzLnR4dF0oZmlsZTovLy9DOi9Vc2Vycy9Vc2VyL0FwcERhdGEvTG9jYWwvVGVtcC9hZ3ktY2FwdHVyZS9zY3JhdGNoL25vdGVzLnR4dCkgKGNvbnRhaW5zIGBUaGUgc2VjcmV0IHdvcmQgaXMgcGluZWFwcGxlLmApG1sxMDsxSEhvdyBjYW4gSSBoZWxwIHlvdSB0b2RheT8NChtbPzI1aA==",
+  "stripped": "I should check what files are available in the workspace directory to understand the context of the user's project.\nI will inspect the contents of `hello.txt` and `notes.txt` to see what notes or files have been left in this workspace.\nI will check the contents of `notes.txt` as well.\nHi! I'm Antigravity, your AI coding assistant. I see we have two files in our workspace:\n- [hello.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/hello.txt) (contains `banana`)\n- [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) (contains `The secret word is pineapple.`)How can I help you today?",
+  "chunkCount": 6,
+  "chunks": [
+    {
+      "t": 5078,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[HI should check what files are available in the workspace directory to understand the context of the user's project.\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    },
+    {
+      "t": 5273,
+      "data": "\r\n"
+    },
+    {
+      "t": 7072,
+      "data": "I will inspect the contents of `hello.txt` and `notes.txt` to see what notes or files have been left in this workspace.\r\n"
+    },
+    {
+      "t": 7877,
+      "data": "I will check the contents of `notes.txt` as well"
+    },
+    {
+      "t": 8079,
+      "data": ".\r\n"
+    },
+    {
+      "t": 9073,
+      "data": "\u001b[?25lHi! I'm Antigravity, your AI coding assistant. \u001b[6;1HI see we have two files in our workspace:\r\n- [hello.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/hello.txt) (contains `banana`)\r\n- [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) (contains `The secret word is pineapple.`)\u001b[10;1HHow can I help you today?\r\n\u001b[?25h"
+    }
+  ]
+}

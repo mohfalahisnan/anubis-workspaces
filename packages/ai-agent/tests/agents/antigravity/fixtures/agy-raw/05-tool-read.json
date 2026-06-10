@@ -1,0 +1,29 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "--dangerously-skip-permissions",
+    "-p",
+    "Read the file notes.txt in the working directory and tell me exactly what the secret word is."
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 20936,
+  "rawLength": 508,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[HThe secret word in [notes.txt](file:///C:/Users/User/AppData/Local/Temp/\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h\u001b[?25lagy-capture/scratch/notes.txt) is **pineapple**.\u001b[3;1H### Summary of Work\r\n1. Listed the files in the workspace directory to find [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt).\r\n2. Read the contents of [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) to retrieve the secret word.\r\n\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSFRoZSBzZWNyZXQgd29yZCBpbiBbbm90ZXMudHh0XShmaWxlOi8vL0M6L1VzZXJzL1VzZXIvQXBwRGF0YS9Mb2NhbC9UZW1wLxtdMDtDOlxVc2Vyc1xVc2VyXEFwcERhdGFcTG9jYWxcYWd5XGJpblxhZ3kuZXhlBxtbPzI1aBtbPzI1bGFneS1jYXB0dXJlL3NjcmF0Y2gvbm90ZXMudHh0KSBpcyAqKnBpbmVhcHBsZSoqLhtbMzsxSCMjIyBTdW1tYXJ5IG9mIFdvcmsNCjEuIExpc3RlZCB0aGUgZmlsZXMgaW4gdGhlIHdvcmtzcGFjZSBkaXJlY3RvcnkgdG8gZmluZCBbbm90ZXMudHh0XShmaWxlOi8vL0M6L1VzZXJzL1VzZXIvQXBwRGF0YS9Mb2NhbC9UZW1wL2FneS1jYXB0dXJlL3NjcmF0Y2gvbm90ZXMudHh0KS4NCjIuIFJlYWQgdGhlIGNvbnRlbnRzIG9mIFtub3Rlcy50eHRdKGZpbGU6Ly8vQzovVXNlcnMvVXNlci9BcHBEYXRhL0xvY2FsL1RlbXAvYWd5LWNhcHR1cmUvc2NyYXRjaC9ub3Rlcy50eHQpIHRvIHJldHJpZXZlIHRoZSBzZWNyZXQgd29yZC4NChtbPzI1aA==",
+  "stripped": "The secret word in [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) is **pineapple**.### Summary of Work\n1. Listed the files in the workspace directory to find [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt).\n2. Read the contents of [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) to retrieve the secret word.",
+  "chunkCount": 2,
+  "chunks": [
+    {
+      "t": 19665,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[HThe secret word in [notes.txt](file:///C:/Users/User/AppData/Local/Temp/\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    },
+    {
+      "t": 19864,
+      "data": "\u001b[?25lagy-capture/scratch/notes.txt) is **pineapple**.\u001b[3;1H### Summary of Work\r\n1. Listed the files in the workspace directory to find [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt).\r\n2. Read the contents of [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) to retrieve the secret word.\r\n\u001b[?25h"
+    }
+  ]
+}

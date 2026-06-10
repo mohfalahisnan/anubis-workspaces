@@ -1,0 +1,24 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "-p",
+    "Output exactly this and nothing else: <Button>Click & go</Button>"
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 7201,
+  "rawLength": 99,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[H<Button>Click & go</Button>\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSDxCdXR0b24+Q2xpY2sgJiBnbzwvQnV0dG9uPg0KG10wO0M6XFVzZXJzXFVzZXJcQXBwRGF0YVxMb2NhbFxhZ3lcYmluXGFneS5leGUHG1s/MjVo",
+  "stripped": "<Button>Click & go</Button>",
+  "chunkCount": 1,
+  "chunks": [
+    {
+      "t": 5332,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[H<Button>Click & go</Button>\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    }
+  ]
+}

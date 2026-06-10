@@ -1,0 +1,24 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "-p",
+    "What is 2+2? Reply with just the number."
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 7364,
+  "rawLength": 73,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[H4\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSDQNChtdMDtDOlxVc2Vyc1xVc2VyXEFwcERhdGFcTG9jYWxcYWd5XGJpblxhZ3kuZXhlBxtbPzI1aA==",
+  "stripped": "4",
+  "chunkCount": 1,
+  "chunks": [
+    {
+      "t": 4713,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[H4\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "command": "C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe",
+  "args": [
+    "--add-dir",
+    "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+    "--dangerously-skip-permissions",
+    "-p",
+    "List the files in the current working directory."
+  ],
+  "cwd": "C:\\Users\\User\\AppData\\Local\\Temp\\agy-capture\\scratch",
+  "exitCode": 0,
+  "signal": null,
+  "elapsedMs": 7106,
+  "rawLength": 232,
+  "raw": "\u001b[?25l\u001b[2J\u001b[m\u001b[HThe current working directory contains the following file:\u001b[3;1H* [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) (29 bytes)\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h",
+  "rawBase64": "G1s/MjVsG1syShtbbRtbSFRoZSBjdXJyZW50IHdvcmtpbmcgZGlyZWN0b3J5IGNvbnRhaW5zIHRoZSBmb2xsb3dpbmcgZmlsZTobWzM7MUgqIFtub3Rlcy50eHRdKGZpbGU6Ly8vQzovVXNlcnMvVXNlci9BcHBEYXRhL0xvY2FsL1RlbXAvYWd5LWNhcHR1cmUvc2NyYXRjaC9ub3Rlcy50eHQpICgyOSBieXRlcykNChtdMDtDOlxVc2Vyc1xVc2VyXEFwcERhdGFcTG9jYWxcYWd5XGJpblxhZ3kuZXhlBxtbPzI1aA==",
+  "stripped": "The current working directory contains the following file:* [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) (29 bytes)",
+  "chunkCount": 1,
+  "chunks": [
+    {
+      "t": 6002,
+      "data": "\u001b[?25l\u001b[2J\u001b[m\u001b[HThe current working directory contains the following file:\u001b[3;1H* [notes.txt](file:///C:/Users/User/AppData/Local/Temp/agy-capture/scratch/notes.txt) (29 bytes)\r\n\u001b]0;C:\\Users\\User\\AppData\\Local\\agy\\bin\\agy.exe\u0007\u001b[?25h"
+    }
+  ]
+}

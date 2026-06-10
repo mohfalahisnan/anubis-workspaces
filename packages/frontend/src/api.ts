@@ -545,6 +545,31 @@ export async function captureCompetitorAsync(
   return { jobId: r.jobId }
 }
 
+/**
+ * Capture a selection of competitors as a single chunked background job
+ * (max 8 profiles per chunk, with a randomized cooldown between chunks).
+ * Returns the job id immediately; monitor + stop it via the jobs feed.
+ */
+export async function captureCompetitorsBatch(
+  competitorIds: string[],
+  options: Omit<CaptureOptions, 'preview'> = {},
+): Promise<{ jobId: string }> {
+  const { profile, headless, forceHeadless, maxResponses, targetPosts, timeoutMs } = options
+  const r = await api<{ ok: true; jobId: string }>('/captures/competitors/batch', {
+    method: 'POST',
+    body: JSON.stringify({
+      competitorIds,
+      profile,
+      headless,
+      forceHeadless,
+      maxResponses,
+      targetPosts,
+      timeoutMs,
+    }),
+  })
+  return { jobId: r.jobId }
+}
+
 export async function captureCompetitorPreview(
   id: string,
   options: CaptureOptions = {},
@@ -670,6 +695,18 @@ export async function getJob(id: string): Promise<JobSummary | null> {
 
 export async function dismissJob(id: string): Promise<void> {
   await api<{ ok: true }>(`/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/**
+ * Request a stop for a queued/running job. The job winds down gracefully and
+ * settles as `stopped`; already-completed work is preserved.
+ */
+export async function cancelJob(id: string): Promise<JobSummary | null> {
+  const r = await api<{ ok: true; job: JobSummary | null }>(
+    `/jobs/${encodeURIComponent(id)}/cancel`,
+    { method: 'POST' },
+  )
+  return r.job ?? null
 }
 
 export interface JobStreamHandlers {

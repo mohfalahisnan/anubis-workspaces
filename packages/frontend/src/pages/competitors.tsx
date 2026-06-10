@@ -13,11 +13,12 @@ import {
 } from 'lucide-react'
 
 import type { CompetitorLevelsConfig, CompetitorLevelOverride, CompetitorSummary } from '@anubis/shared'
-import { effectiveLevel } from '@anubis/shared'
+import { CAPTURE_CHUNK_SIZE, effectiveLevel } from '@anubis/shared'
 import { useProject } from '@/lib/use-project'
 
 import {
   captureCompetitorAsync,
+  captureCompetitorsBatch,
   createCompetitor,
   deleteCompetitor,
   listCompetitors,
@@ -72,11 +73,18 @@ export function CompetitorsPage() {
   // shared jobs store by matching the job label's handle, so the inline
   // "Capturing…" indicator stays in sync with the top-nav progress bar.
   const capturing = useMemo(() => {
-    const activeHandles = new Set(
-      jobs
-        .filter((j) => j.kind === 'capture-posts' && (j.state === 'queued' || j.state === 'running'))
-        .map((j) => j.label.replace(/^Capture · /, '').replace(/^@/, '').toLowerCase()),
-    )
+    // Single-competitor jobs encode the handle in their label; the batch job
+    // surfaces the live handle in `progress.currentHandle`.
+    const activeHandles = new Set<string>()
+    for (const j of jobs) {
+      const active = j.state === 'queued' || j.state === 'running' || j.state === 'stopping'
+      if (!active) continue
+      if (j.kind === 'capture-posts') {
+        activeHandles.add(j.label.replace(/^Capture · /, '').replace(/^@/, '').toLowerCase())
+      } else if (j.kind === 'capture-posts-batch' && j.progress.currentHandle) {
+        activeHandles.add(j.progress.currentHandle.replace(/^@/, '').toLowerCase())
+      }
+    }
     const ids = new Set<string>()
     for (const c of items ?? []) {
       if (activeHandles.has(c.handle.replace(/^@/, '').toLowerCase())) ids.add(c.id)
@@ -87,7 +95,9 @@ export function CompetitorsPage() {
   // Refresh the list whenever a capture job finishes so freshly-captured
   // stats (post counts, avg likes) show up without a manual reload.
   const finishedCaptureCount = jobs.filter(
-    (j) => j.kind === 'capture-posts' && (j.state === 'succeeded' || j.state === 'failed'),
+    (j) =>
+      (j.kind === 'capture-posts' || j.kind === 'capture-posts-batch') &&
+      (j.state === 'succeeded' || j.state === 'failed' || j.state === 'stopped'),
   ).length
   useEffect(() => {
     if (finishedCaptureCount > 0) void refresh()
@@ -194,6 +204,30 @@ export function CompetitorsPage() {
       setBanner({
         kind: 'error',
         message: `Removed ${ids.length - errors.length} of ${ids.length}; ${errors.length} failed.`,
+      })
+    }
+  }
+
+  async function handleBulkCapture() {
+    if (selected.size === 0) return
+    setBanner(null)
+    // Preserve selection order as shown in the grid/table.
+    const order = new Map((items ?? []).map((c, i) => [c.id, i]))
+    const ids = [...selected].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
+    try {
+      await captureCompetitorsBatch(ids)
+      exitSelectMode()
+      setBanner({
+        kind: 'success',
+        message:
+          ids.length <= CAPTURE_CHUNK_SIZE
+            ? `Capturing ${ids.length} competitor${ids.length === 1 ? '' : 's'} in the background — track it in the top nav.`
+            : `Capturing ${ids.length} competitors in chunks of ${CAPTURE_CHUNK_SIZE} (with short cooldowns between) — track progress and stop anytime in the top nav.`,
+      })
+    } catch (e) {
+      setBanner({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not start batch capture.',
       })
     }
   }
@@ -324,6 +358,7 @@ export function CompetitorsPage() {
             total={items.length}
             onSelectAll={() => setSelected(new Set(items.map((c) => c.id)))}
             onClear={() => setSelected(new Set())}
+            onCapture={() => void handleBulkCapture()}
             onDelete={() => setBulkConfirm(true)}
             busy={busy}
             label='competitor'
@@ -427,6 +462,7 @@ function BulkSelectBar({
   total,
   onSelectAll,
   onClear,
+  onCapture,
   onDelete,
   busy,
   label,
@@ -435,6 +471,7 @@ function BulkSelectBar({
   total: number
   onSelectAll: () => void
   onClear: () => void
+  onCapture?: () => void
   onDelete: () => void
   busy: boolean
   label: string
@@ -463,6 +500,17 @@ function BulkSelectBar({
         >
           Clear
         </button>
+        {onCapture && (
+          <button
+            type='button'
+            onClick={onCapture}
+            disabled={busy || count === 0}
+            className='inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-3 text-[12.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:cursor-not-allowed disabled:opacity-50'
+          >
+            <DownloadCloudIcon className='size-[14px]' strokeWidth={2.2} />
+            Capture {count > 0 ? count : ''}
+          </button>
+        )}
         <button
           type='button'
           onClick={onDelete}

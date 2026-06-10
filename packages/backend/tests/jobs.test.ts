@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest'
 import type { JobSummary } from '@anubis/shared'
 import { jobManager } from '../src/jobs.js'
 
+const TERMINAL = new Set(['succeeded', 'failed', 'stopped'])
+
 /** Wait until a job reaches a terminal state (or timeout). */
 async function waitForFinish(id: string, timeoutMs = 2000): Promise<JobSummary> {
   const start = Date.now()
   for (;;) {
     const job = jobManager.get(id)
-    if (job && (job.state === 'succeeded' || job.state === 'failed')) return job
+    if (job && TERMINAL.has(job.state)) return job
     if (Date.now() - start > timeoutMs) throw new Error('job did not finish in time')
     await new Promise((r) => setTimeout(r, 10))
   }
@@ -92,6 +94,77 @@ describe('jobManager', () => {
     await waitForFinish(started.id)
     expect(jobManager.remove(started.id)).toBe(true)
     expect(jobManager.get(started.id)).toBeUndefined()
+  })
+
+  it('cancels a running job: signal aborts, state becomes stopping → stopped', async () => {
+    let sawAbort = false
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const started = jobManager.runJob<{ cancelled: boolean }>(
+      { kind: 'capture-posts-batch', label: 'Capture · 3 competitors' },
+      async (ctx) => {
+        ctx.signal.addEventListener('abort', () => {
+          sawAbort = true
+          release()
+        })
+        await gate
+        // Cooperative executor returns a partial result rather than throwing.
+        return { cancelled: ctx.isCancelled() }
+      },
+    )
+
+    await new Promise((r) => setTimeout(r, 20))
+    expect(jobManager.cancel(started.id)).toBe(true)
+    // Immediately reflects the winding-down state.
+    expect(jobManager.get(started.id)?.state).toBe('stopping')
+
+    const finished = await waitForFinish(started.id)
+    expect(sawAbort).toBe(true)
+    expect(finished.state).toBe('stopped')
+    // A cancelled job settles as `stopped`, never `failed`.
+    expect(finished.error).toBeUndefined()
+    expect((finished.result as { cancelled: boolean }).cancelled).toBe(true)
+  })
+
+  it('refuses to cancel an already-finished job', async () => {
+    const started = jobManager.runJob(
+      { kind: 'capture-posts', label: 'Capture · @done' },
+      async () => 'ok',
+    )
+    await waitForFinish(started.id)
+    expect(jobManager.cancel(started.id)).toBe(false)
+  })
+})
+
+describe('/jobs/:id/cancel route', () => {
+  it('POST /jobs/:id/cancel stops a running job; 404s an unknown id', async () => {
+    const { default: app } = await import('../src/app.js')
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const started = jobManager.runJob(
+      { kind: 'capture-posts-batch', label: 'Capture · 2 competitors' },
+      async (ctx) => {
+        ctx.signal.addEventListener('abort', () => release())
+        await gate
+        return 'partial'
+      },
+    )
+    await new Promise((r) => setTimeout(r, 20))
+
+    const res = await app.request(`/jobs/${started.id}/cancel`, { method: 'POST' })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { ok: boolean; job: JobSummary }
+    expect(body.ok).toBe(true)
+
+    const finished = await waitForFinish(started.id)
+    expect(finished.state).toBe('stopped')
+
+    const missing = await app.request('/jobs/does-not-exist/cancel', { method: 'POST' })
+    expect(missing.status).toBe(404)
   })
 })
 

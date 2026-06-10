@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  BanIcon,
   CheckCircle2Icon,
   ChevronRightIcon,
   Loader2Icon,
   PlusIcon,
+  SquareIcon,
+  TimerIcon,
   XCircleIcon,
   XIcon,
 } from 'lucide-react'
 
 import type {
+  BatchCaptureJobResult,
   CaptureJobResult,
   DiscoverJobResult,
   DiscoveredCandidate,
+  JobProgress,
   JobSummary,
 } from '@anubis/shared'
 import { createCompetitor, listCompetitors } from '@/api'
@@ -47,26 +52,99 @@ import {
    =========================================================== */
 
 function isActive(job: JobSummary): boolean {
-  return job.state === 'queued' || job.state === 'running'
+  return job.state === 'queued' || job.state === 'running' || job.state === 'stopping'
 }
 
 function isFinished(job: JobSummary): boolean {
-  return job.state === 'succeeded' || job.state === 'failed'
+  return job.state === 'succeeded' || job.state === 'failed' || job.state === 'stopped'
+}
+
+/** A job that hasn't finished and can still be stopped. */
+function isStoppable(job: JobSummary): boolean {
+  return job.state === 'queued' || job.state === 'running'
+}
+
+function isDelaying(job: JobSummary): boolean {
+  return job.state === 'running' && job.progress.status === 'delaying-between-chunks'
+}
+
+/**
+ * The six observable phases the UI distinguishes. `delaying-between-chunks`
+ * is a sub-phase of `running` (driven by JobProgress.status), the rest map to
+ * the lifecycle JobState.
+ */
+function phaseLabel(job: JobSummary): string {
+  switch (job.state) {
+    case 'queued':
+      return 'Queued'
+    case 'running':
+      return isDelaying(job) ? 'Cooling down' : 'Running'
+    case 'stopping':
+      return 'Stopping'
+    case 'stopped':
+      return 'Stopped'
+    case 'succeeded':
+      return 'Completed'
+    case 'failed':
+      return 'Failed'
+    default:
+      return job.state
+  }
 }
 
 function progressPercent(job: JobSummary): number {
-  if (job.state === 'succeeded') return 100
-  if (job.state === 'failed') return 100
+  if (isFinished(job)) return 100
   const { current, total } = job.progress
   if (typeof current === 'number' && typeof total === 'number' && total > 0) {
     return Math.min(100, Math.max(2, Math.round((current / total) * 100)))
   }
   // Indeterminate — show a small sliver so the bar reads as "working".
-  return job.state === 'running' ? 12 : 4
+  return job.state === 'queued' ? 4 : 12
+}
+
+function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds))
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  return rem === 0 ? `${m}m` : `${m}m ${rem}s`
+}
+
+/** True when the progress carries chunked-batch counters. */
+function isBatchProgress(p: JobProgress): boolean {
+  return typeof p.totalProfiles === 'number' && typeof p.totalChunks === 'number'
 }
 
 function progressNote(job: JobSummary): string {
-  const { phase, current, total, note } = job.progress
+  const p = job.progress
+
+  // Chunked batch capture: surface chunk/profile counters + the live handle or
+  // the inter-chunk cooldown countdown.
+  if (isBatchProgress(p)) {
+    const chunkPart =
+      p.chunkIndex && p.totalChunks ? `chunk ${p.chunkIndex}/${p.totalChunks}` : ''
+    const profilePart =
+      typeof p.totalProfiles === 'number'
+        ? `${p.profilesCompleted ?? 0}/${p.totalProfiles} profiles`
+        : ''
+    if (job.state === 'stopping') {
+      return joinDot('Finishing current profile…', profilePart)
+    }
+    if (isDelaying(job) && typeof p.delaySecondsRemaining === 'number') {
+      return joinDot(
+        `Waiting ${formatCountdown(p.delaySecondsRemaining)} before next chunk`,
+        chunkPart,
+        profilePart,
+      )
+    }
+    if (p.currentHandle) {
+      return joinDot(`Capturing ${p.currentHandle}`, profilePart, chunkPart)
+    }
+    return joinDot(profilePart || 'Working…', chunkPart)
+  }
+
+  const { phase, current, total, note } = p
+  if (job.state === 'stopping') return 'Stopping…'
   if (note && note !== 'done') return note
   if (typeof current === 'number' && typeof total === 'number') {
     return `${phase ?? 'Working'} · ${current}/${total}`
@@ -75,15 +153,21 @@ function progressNote(job: JobSummary): string {
   return job.state === 'queued' ? 'Queued…' : 'Working…'
 }
 
+/** Join non-empty parts with a middot separator. */
+function joinDot(...parts: string[]): string {
+  return parts.filter(Boolean).join(' · ')
+}
+
 export function TopNavProgress() {
   const jobs = useJobs((s) => s.jobs)
   const active = useMemo(() => jobs.filter(isActive), [jobs])
   const dismiss = useJobs((s) => s.dismiss)
+  const stop = useJobs((s) => s.stop)
   const [open, setOpen] = useState(false)
 
   // Recent finished jobs (shown in the popover list alongside active ones).
   const recentFinished = useMemo(
-    () => jobs.filter((j) => j.state === 'succeeded' || j.state === 'failed').slice(0, 6),
+    () => jobs.filter(isFinished).slice(0, 6),
     [jobs],
   )
 
@@ -135,7 +219,34 @@ export function TopNavProgress() {
                 <span className='min-w-0 flex-1 truncate font-mono text-[11.5px] text-foreground'>
                   {job.label}
                 </span>
-                {(job.state === 'succeeded' || job.state === 'failed') && (
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide',
+                    job.state === 'failed'
+                      ? 'bg-[color-mix(in_oklab,var(--destructive)_14%,transparent)] text-destructive'
+                      : job.state === 'succeeded'
+                        ? 'bg-[color-mix(in_oklab,var(--anubis-success)_16%,transparent)] text-[var(--anubis-success)]'
+                        : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {phaseLabel(job)}
+                </span>
+                {isStoppable(job) && (
+                  <button
+                    type='button'
+                    aria-label='Stop job'
+                    title='Stop — keeps everything captured so far'
+                    onClick={() => void stop(job.id)}
+                    className='inline-flex items-center gap-1 rounded-[5px] border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-[color-mix(in_oklab,var(--destructive)_50%,var(--border))] hover:text-destructive'
+                  >
+                    <SquareIcon className='size-2.5 fill-current' strokeWidth={0} />
+                    Stop
+                  </button>
+                )}
+                {job.state === 'stopping' && (
+                  <span className='text-[10px] font-medium text-muted-foreground'>Stopping…</span>
+                )}
+                {isFinished(job) && (
                   <button
                     type='button'
                     aria-label='Dismiss job'
@@ -146,7 +257,7 @@ export function TopNavProgress() {
                   </button>
                 )}
               </div>
-              {(job.state === 'queued' || job.state === 'running') && (
+              {isActive(job) && (
                 <>
                   <Progress
                     value={progressPercent(job)}
@@ -162,6 +273,11 @@ export function TopNavProgress() {
                   {job.error ?? 'Failed.'}
                 </span>
               )}
+              {job.state === 'stopped' && (
+                <span className='truncate text-[10.5px] text-muted-foreground'>
+                  {summariseFinished(job)}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -171,11 +287,17 @@ export function TopNavProgress() {
 }
 
 function JobStateIcon({ job }: { job: JobSummary }) {
-  if (job.state === 'running' || job.state === 'queued') {
+  if (isDelaying(job)) {
+    return <TimerIcon className='size-3.5 shrink-0 text-[var(--anubis-gold)]' />
+  }
+  if (job.state === 'running' || job.state === 'queued' || job.state === 'stopping') {
     return <Loader2Icon className='size-3.5 shrink-0 animate-spin text-[var(--anubis-gold)]' />
   }
   if (job.state === 'succeeded') {
     return <CheckCircle2Icon className='size-3.5 shrink-0 text-[var(--anubis-success)]' />
+  }
+  if (job.state === 'stopped') {
+    return <BanIcon className='size-3.5 shrink-0 text-muted-foreground' />
   }
   return <XCircleIcon className='size-3.5 shrink-0 text-destructive' />
 }
@@ -247,6 +369,15 @@ export function JobCompletionAlerts() {
 
 function summariseFinished(job: JobSummary): string {
   if (job.state === 'failed') return job.error ?? 'Job failed.'
+  if (job.kind === 'capture-posts-batch') {
+    const result = job.result as BatchCaptureJobResult | undefined
+    const done = result?.profilesCompleted ?? 0
+    const total = result?.totalProfiles ?? 0
+    const posts = result?.capturedCount ?? 0
+    const prefix = job.state === 'stopped' ? `Stopped — ${done}/${total} profiles` : `${done} profiles`
+    return `${prefix} · ${posts} post${posts === 1 ? '' : 's'} captured`
+  }
+  if (job.state === 'stopped') return 'Stopped — partial results kept.'
   if (job.kind === 'discover-competitors') {
     const result = job.result as DiscoverJobResult | undefined
     const n = result?.candidates.length ?? 0
@@ -276,6 +407,8 @@ function JobDetailsModal({
       <DialogContent className='max-w-2xl bg-card p-0'>
         {job?.kind === 'discover-competitors' ? (
           <DiscoverJobDetails job={job} onClose={onClose} />
+        ) : job?.kind === 'capture-posts-batch' ? (
+          <BatchCaptureJobDetails job={job} onClose={onClose} />
         ) : job?.kind === 'capture-posts' ? (
           <CaptureJobDetails job={job} onClose={onClose} />
         ) : job ? (
@@ -501,6 +634,91 @@ function CaptureJobDetails({ job, onClose }: { job: JobSummary; onClose: () => v
         </button>
       </DialogFooter>
     </>
+  )
+}
+
+function BatchCaptureJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
+  const { navigate } = useNavigation()
+  const result = job.result as BatchCaptureJobResult | undefined
+  const done = result?.profilesCompleted ?? 0
+  const total = result?.totalProfiles ?? 0
+  const posts = result?.capturedCount ?? 0
+  const stopped = job.state === 'stopped' || result?.stopped
+  const per = result?.perCompetitor ?? []
+  const failed = per.filter((p) => !p.ok)
+
+  return (
+    <>
+      <DialogHeader className='border-b border-border px-6 py-4'>
+        <DialogTitle>{stopped ? 'Capture stopped' : 'Batch capture complete'}</DialogTitle>
+        <DialogDescription>
+          {job.label}
+          {stopped ? ' — stopped early; everything captured so far was kept.' : ''}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className='px-6 py-5'>
+        <div className='flex items-center justify-center gap-8'>
+          <Stat value={`${done}/${total}`} label='profiles processed' />
+          <Stat value={String(posts)} label={`post${posts === 1 ? '' : 's'} captured`} />
+          {failed.length > 0 && <Stat value={String(failed.length)} label='failed' tone='warn' />}
+        </div>
+
+        {per.length > 0 && (
+          <ul className='mx-auto mt-5 max-h-[min(40vh,300px)] max-w-md divide-y divide-border overflow-y-auto rounded-md border border-border bg-background/60'>
+            {per.map((p, i) => (
+              <li key={`${p.handle}-${i}`} className='flex items-center gap-2 px-3 py-1.5 text-[12px]'>
+                {p.ok ? (
+                  <CheckCircle2Icon className='size-3.5 shrink-0 text-[var(--anubis-success)]' />
+                ) : (
+                  <XCircleIcon className='size-3.5 shrink-0 text-destructive' />
+                )}
+                <span className='min-w-0 flex-1 truncate font-mono text-foreground'>{p.handle}</span>
+                <span className='shrink-0 tabular-nums text-muted-foreground'>
+                  {p.ok ? `${p.capturedCount} post${p.capturedCount === 1 ? '' : 's'}` : 'failed'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <DialogFooter className='border-t border-border px-6 py-3'>
+        <button
+          type='button'
+          onClick={onClose}
+          className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+        >
+          Close
+        </button>
+        <button
+          type='button'
+          onClick={() => {
+            onClose()
+            navigate({ page: 'content' })
+          }}
+          className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
+        >
+          View posts
+        </button>
+      </DialogFooter>
+    </>
+  )
+}
+
+function Stat({ value, label, tone }: { value: string; label: string; tone?: 'warn' }) {
+  return (
+    <div className='text-center'>
+      <p
+        className={cn(
+          'font-mono text-[32px] font-semibold tabular-nums',
+          tone === 'warn' ? 'text-destructive' : 'text-foreground',
+        )}
+      >
+        {value}
+      </p>
+      <p className='mt-0.5 text-[12px] text-muted-foreground'>{label}</p>
+    </div>
   )
 }
 

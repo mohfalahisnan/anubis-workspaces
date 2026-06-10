@@ -834,6 +834,69 @@ export interface CaptureResultPayload {
   warnings: string[]
 }
 
+/* ============================================================
+   Background jobs
+   ============================================================
+   Generic in-app job model. The backend runs long-running work
+   (competitor discovery, post capture, and — later — workspace
+   extraction) as detached jobs and surfaces their state through
+   `GET /jobs`, `GET /jobs/:id`, and an SSE feed at `GET /jobs/stream`.
+
+   The model is intentionally generic over `kind` and carries an
+   opaque `result` so new job kinds can reuse the same registry,
+   top-nav progress bar, and completion alerts without backend or
+   UI changes beyond a new `kind` string + result shape.
+   ============================================================ */
+
+export type JobState = 'queued' | 'running' | 'succeeded' | 'failed'
+
+/** Known job kinds. Add new strings here as more background work is introduced. */
+export type JobKind = 'discover-competitors' | 'capture-posts' | (string & {})
+
+export interface JobProgress {
+  /** Crawler phase, e.g. "discover" or "capture". */
+  phase?: string
+  /** Items processed so far (when known). */
+  current?: number
+  /** Target item count (when known). */
+  total?: number
+  /** Latest human-readable note. */
+  note?: string
+}
+
+export interface JobSummary<TResult = unknown> {
+  id: string
+  kind: JobKind
+  /** Short human label for the top-nav progress bar, e.g. "Discover · #productivity". */
+  label: string
+  state: JobState
+  progress: JobProgress
+  /** Present once the job has succeeded. Shape depends on `kind`. */
+  result?: TResult
+  /** Present once the job has failed. */
+  error?: string
+  /** Non-fatal warnings collected during the run. */
+  warnings: string[]
+  /** Optional project scoping so the UI can filter by active project. */
+  projectId?: string
+  createdAt: number
+  startedAt?: number
+  finishedAt?: number
+}
+
+export type JobListResponse = ListResponse<JobSummary>
+
+/** Result payload for a `discover-competitors` job. */
+export interface DiscoverJobResult {
+  candidates: DiscoveredCandidate[]
+}
+
+/** Result payload for a `capture-posts` job. */
+export interface CaptureJobResult {
+  competitor: CompetitorSummary
+  capturedCount: number
+}
+
 export interface CapturePreviewPayload {
   ok: true
   competitor: CompetitorSummary

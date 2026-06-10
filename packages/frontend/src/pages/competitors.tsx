@@ -17,7 +17,7 @@ import { effectiveLevel } from '@anubis/shared'
 import { useProject } from '@/lib/use-project'
 
 import {
-  captureCompetitor,
+  captureCompetitorAsync,
   createCompetitor,
   deleteCompetitor,
   listCompetitors,
@@ -37,6 +37,7 @@ import {
 import { ViewToggle, type ViewMode } from '@/components/view-toggle'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { levelTint, levelTip, resolveLevel } from '@/lib/competitor-level'
+import { useJobs } from '@/lib/use-jobs'
 import { cn } from '@/lib/utils'
 import {
   Dialog,
@@ -96,7 +97,6 @@ export function CompetitorsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<CompetitorSummary | null>(null)
   const [findOpen, setFindOpen] = useState(false)
-  const [capturing, setCapturing] = useState<Set<string>>(() => new Set())
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
@@ -107,6 +107,33 @@ export function CompetitorsPage() {
   const [pageSize, setPageSize] = useState(24)
   const [view, setView] = useState<ViewMode>('grid')
   const { config: levelsCfg } = useCompetitorLevels()
+  const jobs = useJobs((s) => s.jobs)
+
+  // Which tracked competitors have an in-flight capture job. Derived from the
+  // shared jobs store by matching the job label's handle, so the inline
+  // "Capturing…" indicator stays in sync with the top-nav progress bar.
+  const capturing = useMemo(() => {
+    const activeHandles = new Set(
+      jobs
+        .filter((j) => j.kind === 'capture-posts' && (j.state === 'queued' || j.state === 'running'))
+        .map((j) => j.label.replace(/^Capture · /, '').replace(/^@/, '').toLowerCase()),
+    )
+    const ids = new Set<string>()
+    for (const c of items ?? []) {
+      if (activeHandles.has(c.handle.replace(/^@/, '').toLowerCase())) ids.add(c.id)
+    }
+    return ids
+  }, [jobs, items])
+
+  // Refresh the list whenever a capture job finishes so freshly-captured
+  // stats (post counts, avg likes) show up without a manual reload.
+  const finishedCaptureCount = jobs.filter(
+    (j) => j.kind === 'capture-posts' && (j.state === 'succeeded' || j.state === 'failed'),
+  ).length
+  useEffect(() => {
+    if (finishedCaptureCount > 0) void refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishedCaptureCount])
 
   const filteredItems = useMemo(
     () =>
@@ -150,28 +177,20 @@ export function CompetitorsPage() {
   }, [activeProject?.id])
 
   async function handleCapture(c: CompetitorSummary) {
-    setCapturing((prev) => new Set(prev).add(c.id))
+    // Capture now runs as a background job: enqueue it and let the top-nav
+    // progress bar + completion alert report progress/results. The user can
+    // keep working while the crawler runs.
     setBanner(null)
     try {
-      const result = await captureCompetitor(c.id)
-      await refresh()
+      await captureCompetitorAsync(c.id)
       setBanner({
         kind: 'success',
-        message:
-          result.capturedCount > 0
-            ? `Captured ${result.capturedCount} post${result.capturedCount === 1 ? '' : 's'} from ${c.handle}.`
-            : `${c.handle} responded but no new posts came back.`,
+        message: `Capturing ${c.handle} in the background — track it in the top nav.`,
       })
     } catch (e) {
       setBanner({
         kind: 'error',
-        message: e instanceof Error ? e.message : 'Capture failed.',
-      })
-    } finally {
-      setCapturing((prev) => {
-        const next = new Set(prev)
-        next.delete(c.id)
-        return next
+        message: e instanceof Error ? e.message : 'Could not start capture.',
       })
     }
   }
@@ -462,15 +481,12 @@ export function CompetitorsPage() {
       <FindCompetitorsDialog
         open={findOpen}
         onClose={() => setFindOpen(false)}
-        onComplete={async (added) => {
+        onStarted={() => {
           setFindOpen(false)
-          await refresh()
           setBanner({
             kind: 'success',
             message:
-              added === 0
-                ? 'Selected candidates were already tracked — nothing new added.'
-                : `Added ${added} new competitor${added === 1 ? '' : 's'} from discovery.`,
+              'Discovery is running in the background. You\'ll get an alert with the candidates when it finishes.',
           })
         }}
       />

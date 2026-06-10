@@ -12,6 +12,7 @@ import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import { useNavigation, type PageKey } from '@/lib/navigation'
 import { useKbLoader } from '@/lib/use-kb-loader'
+import { useJobs } from '@/lib/use-jobs'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { PlannerPage } from '@/pages/planner'
@@ -30,6 +31,7 @@ import { WorkflowEditorPage } from '@/pages/workflow-editor'
 import { KnowledgeBasePage } from '@/pages/knowledge-base'
 import { KnowledgeGraphPage } from '@/pages/knowledge-graph'
 import { ExtractorPage } from '@/pages/extractor'
+import { JobCompletionAlerts } from '@/components/jobs/top-nav-progress'
 import { Sidebar } from './sidebar'
 import { TopBar } from './topbar'
 import { ActionsGrid, type LiveCounts } from './actions-grid'
@@ -247,12 +249,20 @@ export function Dashboard() {
   const { route } = useNavigation()
   const { activeProject } = useProject()
   const loadProjectData = useKbLoader((s) => s.loadProjectData)
+  const connectJobs = useJobs((s) => s.connect)
+  const disconnectJobs = useJobs((s) => s.disconnect)
 
   useEffect(() => {
     if (activeProject?.id) {
       void loadProjectData(activeProject.id)
     }
   }, [activeProject?.id, loadProjectData])
+
+  // Subscribe to the backend job feed for the lifetime of the app shell.
+  useEffect(() => {
+    connectJobs()
+    return () => disconnectJobs()
+  }, [connectJobs, disconnectJobs])
 
   return (
     <div className='flex h-screen w-screen overflow-hidden bg-background text-foreground'>
@@ -261,6 +271,7 @@ export function Dashboard() {
         <TopBar breadcrumb={BREADCRUMBS[route.page]} />
         <CurrentPage />
       </div>
+      <JobCompletionAlerts />
     </div>
   )
 }

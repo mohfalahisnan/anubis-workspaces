@@ -13,8 +13,10 @@ import {
   launchChrome,
   silentReporter,
 } from '@anubis/research-crawler'
+import type { DiscoverJobResult, DiscoveredCandidate } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults, type CrawlerProfileName } from './chrome-defaults.js'
+import { jobManager } from './jobs.js'
 
 /* -----------------------------------------------------------
    Research-crawler routes
@@ -77,6 +79,10 @@ const discoverInstagramSchema = z.object({
   headless: z.boolean().optional(),
   forceHeadless: z.boolean().optional(),
   keepChromeOpen: z.boolean().optional(),
+  /** When true, run as a background job and return { jobId } immediately. */
+  async: z.boolean().optional(),
+  /** Optional project scope for the job (used to filter the top-nav job list). */
+  projectId: z.string().min(1).optional(),
 }).strict().refine((value) => value.source !== 'hashtag' || value.hashtag, {
   message: 'Pass hashtag when source is hashtag.',
 }).refine((value) => value.source !== 'keyword' || value.keyword, {
@@ -336,6 +342,39 @@ researchCrawlerRoutes.post('/instagram/discover', async (c) => {
   const input = discoverInstagramSchema.parse(await c.req.json())
   const cfg = getStack().appConfig.get()
   const profile = inferDiscoverProfile(input.profile, input.remoteDebuggingPort)
+
+  // Background mode: enqueue a job and return its id immediately. The
+  // job result carries the candidate profiles so the UI can render the
+  // "pick competitors to add" modal on completion.
+  if (input.async) {
+    const sourceLabel =
+      input.source === 'hashtag'
+        ? `#${input.hashtag}`
+        : input.source === 'keyword'
+          ? `"${input.keyword}"`
+          : 'explore'
+    const job = jobManager.runJob<DiscoverJobResult>(
+      {
+        kind: 'discover-competitors',
+        label: `Discover · ${sourceLabel}`,
+        projectId: input.projectId,
+      },
+      async (ctx) => {
+        const result = await discoverInstagramCompetitors(withCrawlerProfileDefaults({
+          ...input,
+          chromePath: input.chromePath ?? cfg.chromePath,
+          reporter: ctx.reporter,
+        }, profile, cfg, getDataDir()))
+        if (!result.ok) {
+          throw new Error(result.error?.message ?? 'Discovery failed.')
+        }
+        for (const warning of result.meta.warnings ?? []) ctx.warn(warning)
+        return { candidates: mapDiscoveredCandidates(result.output.profiles) }
+      },
+    )
+    return c.json({ ok: true, jobId: job.id })
+  }
+
   return c.json(
     await discoverInstagramCompetitors(withCrawlerProfileDefaults({
       ...input,
@@ -344,6 +383,27 @@ researchCrawlerRoutes.post('/instagram/discover', async (c) => {
     }, profile, cfg, getDataDir())),
   )
 })
+
+/** Map the crawler's raw profile shape to the UI's DiscoveredCandidate. */
+function mapDiscoveredCandidates(
+  profiles: Array<{
+    username: string
+    fullName?: string
+    bio?: string
+    followers?: number
+    profileImageUrl?: string
+    profileUrl?: string
+  }>,
+): DiscoveredCandidate[] {
+  return profiles.map((p) => ({
+    username: p.username,
+    fullName: p.fullName,
+    bio: p.bio,
+    followers: p.followers,
+    profileImageUrl: p.profileImageUrl,
+    profileUrl: p.profileUrl,
+  }))
+}
 
 function inferCaptureProfile(
   profile: CrawlerProfileName | undefined,

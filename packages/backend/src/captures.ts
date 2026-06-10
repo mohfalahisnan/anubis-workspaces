@@ -10,8 +10,10 @@ import {
   type StandardCrawlerOutput,
 } from '@anubis/research-crawler'
 import type { CapturedPost } from '@anubis/conversation'
+import type { CaptureJobResult } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
+import { jobManager, type ProgressReporter } from './jobs.js'
 
 type PostOwner = {
   handle?: string
@@ -42,7 +44,17 @@ const CaptureBody = z.object({
   targetPosts: z.number().int().positive().max(120).optional(),
   preview: z.boolean().optional(),
   timeoutMs: z.number().int().positive().max(180_000).optional(),
+  /** When true, run as a background job and return { jobId } immediately. */
+  async: z.boolean().optional(),
 }).strict()
+
+type CaptureOptions = z.infer<typeof CaptureBody>
+
+interface PersistedCapture {
+  competitor: NonNullable<ReturnType<ReturnType<typeof getStack>['competitors']['get']>>
+  capturedCount: number
+  warnings: string[]
+}
 
 export const captureRoutes = new Hono()
 
@@ -52,9 +64,29 @@ captureRoutes.post('/competitors/:id', async (c) => {
   if (!competitor) return c.json({ ok: false, error: 'not_found' }, 404)
 
   const body = CaptureBody.parse(await c.req.json().catch(() => ({})))
+
+  // Background mode: enqueue a job and return its id immediately. Preview
+  // captures are always synchronous (the caller blocks on the candidate list).
+  if (body.async && !body.preview) {
+    const job = jobManager.runJob<CaptureJobResult>(
+      {
+        kind: 'capture-posts',
+        label: `Capture · ${competitor.handle}`,
+        projectId: competitor.projectId,
+      },
+      async (ctx) => {
+        const persisted = await runCapture(competitor.id, body, ctx.reporter)
+        for (const warning of persisted.warnings) ctx.warn(warning)
+        return { competitor: persisted.competitor, capturedCount: persisted.capturedCount }
+      },
+    )
+    return c.json({ ok: true, jobId: job.id })
+  }
+
+  const stackForOwner = getStack()
   const usernameNoAt = competitor.handle.replace(/^@/, '')
   const selectedProfile = body.profile ?? 'public'
-  const cfg = stack.appConfig.get()
+  const cfg = stackForOwner.appConfig.get()
   const targetPosts = body.targetPosts ?? body.maxResponses ?? 30
 
   let result: StandardCrawlerOutput
@@ -96,7 +128,79 @@ captureRoutes.post('/competitors/:id', async (c) => {
     )
   }
 
-  // Persist posts
+  // Preview: build candidate posts without persisting.
+  if (body.preview) {
+    const now = Date.now()
+    const posts = uniqueCapturedPosts(result.output.posts
+      .filter((p) => Boolean(p.postUrl))
+      .slice(0, targetPosts)
+      .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now, competitor.projectId)))
+    return c.json({
+      ok: true,
+      competitor,
+      posts: posts.map((post) => enrichPostForOwner(post, competitor)),
+      candidateCount: posts.length,
+      warnings: result.meta.warnings,
+    })
+  }
+
+  const persisted = persistCaptureResult(competitor.id, result, targetPosts)
+  return c.json({
+    ok: true,
+    competitor: persisted.competitor,
+    capturedCount: persisted.capturedCount,
+    warnings: persisted.warnings,
+  })
+})
+
+/**
+ * Run a (non-preview) capture for a competitor and persist its posts.
+ * Shared by the synchronous route and the background job executor; throws
+ * on crawler failure so the job manager records the error.
+ */
+async function runCapture(
+  competitorId: string,
+  body: CaptureOptions,
+  reporter: ProgressReporter,
+): Promise<PersistedCapture> {
+  const stack = getStack()
+  const competitor = stack.competitors.get(competitorId)
+  if (!competitor) throw new Error('Competitor not found.')
+
+  const usernameNoAt = competitor.handle.replace(/^@/, '')
+  const selectedProfile = body.profile ?? 'public'
+  const cfg = stack.appConfig.get()
+  const targetPosts = body.targetPosts ?? body.maxResponses ?? 30
+
+  const result = await captureInstagramData(withCrawlerProfileDefaults({
+    username: usernameNoAt,
+    profile: selectedProfile,
+    chromePath: cfg.chromePath,
+    headless: body.headless,
+    forceHeadless: body.forceHeadless,
+    maxResponses: targetPosts,
+    timeoutMs: body.timeoutMs ?? 90_000,
+    reporter,
+  }, selectedProfile, cfg, getDataDir()))
+
+  if (!result.ok) {
+    throw new Error(result.error?.message ?? 'Capture failed.')
+  }
+
+  return persistCaptureResult(competitorId, result, targetPosts)
+}
+
+/** Persist captured posts + refresh competitor stats; returns the saved view. */
+function persistCaptureResult(
+  competitorId: string,
+  result: StandardCrawlerOutput,
+  targetPosts: number,
+): PersistedCapture {
+  const stack = getStack()
+  const competitor = stack.competitors.get(competitorId)
+  if (!competitor) throw new Error('Competitor not found.')
+  const usernameNoAt = competitor.handle.replace(/^@/, '')
+
   const now = Date.now()
   const posts: CapturedPost[] = uniqueCapturedPosts(result.output.posts
     .filter((p) => Boolean(p.postUrl))
@@ -112,16 +216,6 @@ captureRoutes.post('/competitors/:id', async (c) => {
   const avgLikesSummary =
     avgLikesEntry ?? calculateAvgLikesSummary(usernameNoAt, posts.map(capturedPostToPostData))
 
-  if (body.preview) {
-    return c.json({
-      ok: true,
-      competitor,
-      posts: posts.map((post) => enrichPostForOwner(post, competitor)),
-      candidateCount: posts.length,
-      warnings: result.meta.warnings,
-    })
-  }
-
   stack.capturedPosts.upsertMany(posts)
   const totalPostsInDb = stack.capturedPosts.countForCompetitor(competitor.id)
   stack.competitors.update(competitor.id, {
@@ -133,13 +227,12 @@ captureRoutes.post('/competitors/:id', async (c) => {
   })
   stack.competitors.markRefreshedAt(competitor.id, now)
 
-  return c.json({
-    ok: true,
-    competitor: stack.competitors.get(competitor.id),
+  return {
+    competitor: stack.competitors.get(competitor.id)!,
     capturedCount: posts.length,
     warnings: result.meta.warnings,
-  })
-})
+  }
+}
 
 /** GET /posts — flat captured-post feed for the Content page. */
 const ListQuery = z.object({

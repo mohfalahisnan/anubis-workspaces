@@ -101,4 +101,37 @@ config_json: {"projectId":"project-id","handles":["@nasa","@spacex"],"capturePro
 [/CRON_CREATE]
 ```
 
+### `workflow`
+
+Schedules a saved workflow to run on the cron cadence. The job fires the workflow's **published** version through the same execution path used by the workflow's own arm/trigger mechanism (so concurrent fires are skipped while a run is active, and the run shows up under the workflow's run history). Run results and errors surface via a desktop notification plus a cron run-output sidecar under `<workspace>/.anubis/tmp/`.
+
+Use `config_json` on one line with this schema:
+
+```json
+{
+  "workflowId": "workflow-id",
+  "workflowName": "Friendly workflow name",
+  "projectId": "project-id",
+  "input": { "node-id": { "field": "value" } }
+}
+```
+
+- Provide **either** `workflowId` (preferred) **or** `workflowName`. When only a name is given, it is resolved within `projectId` scope (exact match first, then case-insensitive).
+- `projectId` is optional; it scopes the name lookup and defaults to the job's project.
+- `input` is optional. It is a JSON object of **per-node data overrides** applied to the published graph on run (same shape as a manual "run workflow" override payload), keyed by node id. Omit it for no overrides.
+
+Example:
+
+```text
+[CRON_CREATE]
+name: Nightly content pipeline
+schedule: 0 2 * * *
+schedule_description: Every day at 2am
+action_type: workflow
+config_json: {"workflowName":"Content pipeline","projectId":"project-id","input":{"prompt-node":{"value":"daily digest"}}}
+[/CRON_CREATE]
+```
+
 `[CRON_UPDATE]` accepts the same optional `action_type:` and `config_json:` fields when changing an existing job.
+
+> Re-emitting `[CRON_CREATE]` with the same `name:` and `schedule:` in the same conversation **updates** the existing job in place instead of creating a duplicate — safe to re-run a scheduling prompt.

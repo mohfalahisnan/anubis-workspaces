@@ -221,18 +221,11 @@ jobRoutes.get('/', (c) => {
   return c.json({ ok: true, items: jobManager.list() })
 })
 
-jobRoutes.get('/:id', (c) => {
-  const job = jobManager.get(c.req.param('id'))
-  if (!job) return c.json({ ok: false, error: 'not_found' }, 404)
-  return c.json({ ok: true, job })
-})
-
-jobRoutes.delete('/:id', (c) => {
-  const removed = jobManager.remove(c.req.param('id'))
-  if (!removed) return c.json({ ok: false, error: 'not_found_or_running' }, 404)
-  return c.json({ ok: true })
-})
-
+// NOTE: `/stream` MUST be registered before `/:id`. Hono matches
+// same-method routes in registration order, so a `/:id` handler placed
+// first would capture `/jobs/stream` as `id="stream"` and 404 the SSE
+// feed (regression covered in tests/jobs.test.ts).
+//
 // Live job feed. Emits:
 //   event: snapshot  data: JobSummary[]        (sent once on connect)
 //   event: job       data: JobSummary          (created / progress / finished)
@@ -267,11 +260,15 @@ jobRoutes.get('/stream', (c) => {
           }
         }
         if (closed) break
-        // Park until the next event (or a heartbeat) wakes us.
+        // Park until the next event (or a heartbeat) wakes us. Clear the
+        // heartbeat timer when an event resolves us early so handles don't
+        // pile up over the life of the connection.
+        let timer: ReturnType<typeof setTimeout> | null = null
         await new Promise<void>((resolve) => {
           notify = resolve
-          setTimeout(resolve, 15_000)
+          timer = setTimeout(resolve, 15_000)
         })
+        if (timer) clearTimeout(timer)
         notify = null
         if (!closed && queue.length === 0) {
           // Heartbeat comment keeps the connection alive through proxies.
@@ -282,4 +279,16 @@ jobRoutes.get('/stream', (c) => {
       unsubscribe()
     }
   })
+})
+
+jobRoutes.get('/:id', (c) => {
+  const job = jobManager.get(c.req.param('id'))
+  if (!job) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, job })
+})
+
+jobRoutes.delete('/:id', (c) => {
+  const removed = jobManager.remove(c.req.param('id'))
+  if (!removed) return c.json({ ok: false, error: 'not_found_or_running' }, 404)
+  return c.json({ ok: true })
 })

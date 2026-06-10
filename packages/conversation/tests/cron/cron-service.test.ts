@@ -81,6 +81,42 @@ describe('CronService', () => {
     expect(scheduler.schedule).toHaveBeenCalledTimes(1)
   })
 
+  it('stores workflow cron actions with typed config', () => {
+    svc.handle({
+      kind: 'create',
+      params: {
+        name: 'Nightly pipeline',
+        schedule: '0 2 * * *',
+        actionType: 'workflow',
+        actionConfig: { workflowId: 'wf-1', input: { n1: { value: 'x' } } },
+      },
+    }, 'c1')
+
+    expect(svc.list('c1')[0]!).toMatchObject({
+      actionType: 'workflow',
+      actionConfig: { workflowId: 'wf-1', input: { n1: { value: 'x' } } },
+      prompt: '',
+    })
+  })
+
+  it('handle(create) with same name + schedule updates instead of duplicating', () => {
+    svc.handle({ kind: 'create', params: { name: 'Daily', schedule: '0 0 * * *', message: 'first' } }, 'c1')
+    const summary = svc.handle(
+      { kind: 'create', params: { name: 'Daily', schedule: '0 0 * * *', message: 'second' } },
+      'c1',
+    )
+    expect(summary).toMatch(/Updated existing/i)
+    const jobs = svc.list('c1')
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0]!.prompt).toBe('second')
+  })
+
+  it('handle(create) with different schedule creates a separate job', () => {
+    svc.handle({ kind: 'create', params: { name: 'Daily', schedule: '0 0 * * *', message: 'a' } }, 'c1')
+    svc.handle({ kind: 'create', params: { name: 'Daily', schedule: '0 12 * * *', message: 'b' } }, 'c1')
+    expect(svc.list('c1')).toHaveLength(2)
+  })
+
   it('stores non-message cron actions with typed config', () => {
     svc.handle({
       kind: 'create',

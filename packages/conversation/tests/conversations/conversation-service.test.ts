@@ -344,8 +344,8 @@ describe('ConversationService', () => {
     await ctx.svc.sendMessage(c.id, { content: 'original user prompt' })
     await new Promise((rs) => setTimeout(rs, 20))
 
-    // Check contextPacker was called
-    expect(ctx.svc['deps'].contextPacker).toHaveBeenCalledWith(project.id, 'original user prompt', undefined)
+    // Check contextPacker was called with the default 1k budget (no override, no profile budget)
+    expect(ctx.svc['deps'].contextPacker).toHaveBeenCalledWith(project.id, 'original user prompt', 1000)
 
     // Check aiAgent.runAgent was called
     expect(ctx.aiAgent.runAgent).toHaveBeenCalled()

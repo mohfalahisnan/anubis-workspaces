@@ -132,4 +132,16 @@ describe('/jobs routes', () => {
     const after = await app.request(`/jobs/${started.id}`)
     expect(after.status).toBe(404)
   })
+
+  // Regression: the SSE feed route must not be shadowed by `/:id`. Hono
+  // matches same-method routes in registration order, so `/stream` has to
+  // be registered before `/:id` or it resolves to the param handler (404).
+  it('GET /jobs/stream opens an SSE event stream (not shadowed by /:id)', async () => {
+    const { default: app } = await import('../src/app.js')
+    const res = await app.request('/jobs/stream')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type') ?? '').toContain('text/event-stream')
+    // The handler streams forever; close it so the test doesn't hang.
+    await res.body?.cancel()
+  })
 })

@@ -88,6 +88,44 @@ export class TriggerManager {
     this.armed.clear()
   }
 
+  /**
+   * Start a workflow run on behalf of a cron job, reusing the exact same
+   * execution path as armed trigger fires (the {@link WorkflowRunManager}).
+   * Unlike {@link fire}, this does not require the workflow to carry a trigger
+   * node — it seeds the trigger node only when one exists. Returns `null` when
+   * the run was skipped because a run is already active for the workflow, or
+   * the started `{ runId }` otherwise. Errors propagate to the caller so the
+   * cron action layer can surface them.
+   */
+  async fireWorkflowCron(
+    workflowId: string,
+    payload: unknown,
+    nodeDataOverrides?: Record<string, unknown>,
+  ): Promise<{ runId: string } | null> {
+    if (this.runManager.activeRunFor(workflowId)) {
+      console.warn('[trigger] skip workflow cron fire — run already active for', workflowId)
+      return null
+    }
+    const triggerNodeId = this.resolveTriggerNodeId(workflowId)
+    const triggerContext = triggerNodeId
+      ? { nodeId: triggerNodeId, payload }
+      : undefined
+    return this.runManager.start(workflowId, triggerContext, nodeDataOverrides)
+  }
+
+  /** Best-effort lookup of the single trigger node id in the published graph. */
+  private resolveTriggerNodeId(workflowId: string): string | undefined {
+    const wf = this.stack.workflows.get(workflowId)
+    if (!wf?.publishedGraph) return undefined
+    try {
+      const graph = WorkflowGraphSchema.parse(JSON.parse(wf.publishedGraph))
+      const triggers = graph.nodes.filter((n) => TRIGGER_TYPES.has(n.type))
+      return triggers.length === 1 ? triggers[0]!.id : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   private fire(workflowId: string, nodeId: string, payload: unknown): void {
     // Respect the one-active-run-per-workflow guard: drop overlapping fires.
     if (this.runManager.activeRunFor(workflowId)) {

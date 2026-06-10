@@ -10,6 +10,7 @@ import {
 import type { CronJobSummary } from '@anubis/shared'
 
 import { deleteCronJob, listCronJobs, updateCronJob, createCronJob } from '@/api'
+import { workflowsApi, type WorkflowSummary } from '@/api/workflows'
 import {
   Dialog,
   DialogContent,
@@ -405,7 +406,7 @@ function CreateCronDialog({
   const [name, setName] = useState('')
   const [schedule, setSchedule] = useState('*/30 * * * *')
   const [scheduleDescription, setScheduleDescription] = useState('Every 30 minutes')
-  const [actionType, setActionType] = useState<'message' | 'competitor-discovery' | 'capture-posts'>('message')
+  const [actionType, setActionType] = useState<'message' | 'competitor-discovery' | 'capture-posts' | 'workflow'>('message')
   const [prompt, setPrompt] = useState('')
 
   const [discoveryQuery, setDiscoveryQuery] = useState('')
@@ -415,6 +416,10 @@ function CreateCronDialog({
   const [captureHandles, setCaptureHandles] = useState('all')
   const [captureProfile, setCaptureProfile] = useState<'public' | 'login'>('public')
   const [captureLimit, setCaptureLimit] = useState<number | ''>(30)
+
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([])
+  const [workflowId, setWorkflowId] = useState('')
+  const [workflowInput, setWorkflowInput] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -432,10 +437,29 @@ function CreateCronDialog({
       setCaptureHandles('all')
       setCaptureProfile('public')
       setCaptureLimit(30)
+      setWorkflowId('')
+      setWorkflowInput('')
       setErr(null)
       setSubmitting(false)
     }
   }, [open])
+
+  // Load the project's workflows so the user can pick one for a 'workflow' job.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void workflowsApi
+      .list(activeProject?.id)
+      .then((r) => {
+        if (!cancelled) setWorkflows(r.items)
+      })
+      .catch(() => {
+        if (!cancelled) setWorkflows([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, activeProject?.id])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -480,6 +504,32 @@ function CreateCronDialog({
           handles,
           captureProfile,
           postLimit: captureLimit || 30,
+        }
+      } else if (actionType === 'workflow') {
+        if (!workflowId) {
+          setErr('Select a workflow to run.')
+          setSubmitting(false)
+          return
+        }
+        let input: Record<string, unknown> | undefined
+        const rawInput = workflowInput.trim()
+        if (rawInput) {
+          try {
+            const parsed = JSON.parse(rawInput)
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+              throw new Error('not an object')
+            }
+            input = parsed as Record<string, unknown>
+          } catch {
+            setErr('Input payload must be a JSON object (node-id → data overrides).')
+            setSubmitting(false)
+            return
+          }
+        }
+        actionConfig = {
+          workflowId,
+          projectId: activeProject?.id || undefined,
+          ...(input ? { input } : {}),
         }
       }
 
@@ -559,8 +609,44 @@ function CreateCronDialog({
                 <option value='message'>Agent Prompt</option>
                 <option value='competitor-discovery'>Competitor Discovery</option>
                 <option value='capture-posts'>Capture Posts</option>
+                <option value='workflow'>Run Workflow</option>
               </select>
             </Field>
+
+            {actionType === 'workflow' && (
+              <>
+                <Field label='Workflow' htmlFor='cron-wf-id' hint='Runs the published version on the schedule below.'>
+                  <select
+                    id='cron-wf-id'
+                    value={workflowId}
+                    onChange={(e) => setWorkflowId(e.target.value)}
+                    className={textInput}
+                  >
+                    <option value=''>Select a workflow…</option>
+                    {workflows.map((wf) => (
+                      <option key={wf.id} value={wf.id} disabled={!wf.hasPublished}>
+                        {wf.name}
+                        {wf.hasPublished ? '' : ' (no published version)'}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field
+                  label='Input (optional)'
+                  htmlFor='cron-wf-input'
+                  hint='JSON object of per-node data overrides, e.g. {"node-1": {"value": "x"}}. Leave blank for none.'
+                >
+                  <textarea
+                    id='cron-wf-input'
+                    value={workflowInput}
+                    onChange={(e) => setWorkflowInput(e.target.value)}
+                    placeholder='{}'
+                    rows={3}
+                    className={`${textInput} h-auto resize-none py-2 font-mono leading-relaxed`}
+                  />
+                </Field>
+              </>
+            )}
 
             {actionType === 'message' && (
               <Field label='Agent Prompt' htmlFor='cron-prompt' hint='The message sent to the agent when the job runs.'>

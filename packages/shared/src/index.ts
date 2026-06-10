@@ -848,10 +848,30 @@ export interface CaptureResultPayload {
    UI changes beyond a new `kind` string + result shape.
    ============================================================ */
 
-export type JobState = 'queued' | 'running' | 'succeeded' | 'failed'
+export type JobState =
+  | 'queued'
+  | 'running'
+  /** A stop was requested; the job is winding down the in-flight unit of work. */
+  | 'stopping'
+  /** The job was cancelled by the user. Partial results are preserved. */
+  | 'stopped'
+  | 'succeeded'
+  | 'failed'
 
 /** Known job kinds. Add new strings here as more background work is introduced. */
-export type JobKind = 'discover-competitors' | 'capture-posts' | 'extract-workspace' | (string & {})
+export type JobKind =
+  | 'discover-competitors'
+  | 'capture-posts'
+  | 'capture-posts-batch'
+  | 'extract-workspace'
+  | (string & {})
+
+/**
+ * Fine-grained sub-phase for chunked jobs, surfaced inside `JobProgress`.
+ * Distinct from the lifecycle `JobState`: a job can be `running` while its
+ * progress `status` is `delaying-between-chunks` (the inter-chunk cooldown).
+ */
+export type JobProgressStatus = 'capturing' | 'delaying-between-chunks'
 
 export interface JobProgress {
   /** Crawler phase, e.g. "discover" or "capture". */
@@ -862,6 +882,20 @@ export interface JobProgress {
   total?: number
   /** Latest human-readable note. */
   note?: string
+  /** Sub-phase for chunked batch jobs (capturing vs. cooling down). */
+  status?: JobProgressStatus
+  /** 1-based index of the chunk currently being processed. */
+  chunkIndex?: number
+  /** Total number of chunks the batch was split into. */
+  totalChunks?: number
+  /** Profiles fully captured so far across all chunks. */
+  profilesCompleted?: number
+  /** Total profiles queued for the batch. */
+  totalProfiles?: number
+  /** Handle of the profile currently being captured (if any). */
+  currentHandle?: string
+  /** Seconds left on the inter-chunk cooldown (only during `delaying-between-chunks`). */
+  delaySecondsRemaining?: number
 }
 
 export interface JobSummary<TResult = unknown> {
@@ -895,6 +929,42 @@ export interface DiscoverJobResult {
 export interface CaptureJobResult {
   competitor: CompetitorSummary
   capturedCount: number
+}
+
+/* -----------------------------------------------------------
+   Batch-capture tuning constants
+   -----------------------------------------------------------
+   Single source of truth for the chunked-capture pacing, shared
+   by the backend orchestrator and the frontend hints. Tune here.
+   ----------------------------------------------------------- */
+
+/** Max profiles captured per chunk before a cooldown delay. */
+export const CAPTURE_CHUNK_SIZE = 8
+/** Inter-chunk cooldown lower bound (2 minutes). */
+export const CAPTURE_CHUNK_DELAY_MIN_MS = 2 * 60_000
+/** Inter-chunk cooldown upper bound (5 minutes). */
+export const CAPTURE_CHUNK_DELAY_MAX_MS = 5 * 60_000
+
+/** Per-competitor outcome inside a batch capture run. */
+export interface BatchCaptureOutcome {
+  handle: string
+  capturedCount: number
+  ok: boolean
+  error?: string
+}
+
+/** Result payload for a `capture-posts-batch` job. */
+export interface BatchCaptureJobResult {
+  /** Profiles queued for the batch. */
+  totalProfiles: number
+  /** Profiles actually processed (may be < total if the run was stopped). */
+  profilesCompleted: number
+  /** Total new posts captured across every processed profile. */
+  capturedCount: number
+  /** True when the run ended early due to a user stop. */
+  stopped: boolean
+  /** Per-competitor breakdown, in processing order. */
+  perCompetitor: BatchCaptureOutcome[]
 }
 
 /** Result payload for an `extract-workspace` job. */

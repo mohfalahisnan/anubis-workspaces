@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { JobSummary } from '@anubis/shared'
-import { dismissJob, listJobs, streamJobs } from '@/api'
+import { cancelJob, dismissJob, listJobs, streamJobs } from '@/api'
 
 /* -----------------------------------------------------------
    useJobs — reusable background-job store
@@ -40,6 +40,8 @@ interface JobsState {
   acknowledge: (id: string) => void
   /** Dismiss a finished job (removes it from the backend + store). */
   dismiss: (id: string) => Promise<void>
+  /** Request a stop for an in-flight job (settles as `stopped`). */
+  stop: (id: string) => Promise<void>
 }
 
 let abortController: AbortController | null = null
@@ -50,7 +52,7 @@ function sortJobs(jobs: Job[]): Job[] {
 }
 
 function isFinished(job: Job): boolean {
-  return job.state === 'succeeded' || job.state === 'failed'
+  return job.state === 'succeeded' || job.state === 'failed' || job.state === 'stopped'
 }
 
 export const useJobs = create<JobsState>((set, get) => ({
@@ -136,6 +138,23 @@ export const useJobs = create<JobsState>((set, get) => ({
       // If dismissal failed (e.g. still running), the next snapshot restores it.
     }
   },
+
+  stop: async (id: string) => {
+    // Optimistic: flip to `stopping` so the UI reacts instantly; the SSE feed
+    // confirms the eventual `stopped` state (and any partial result).
+    set((s) => ({
+      jobs: s.jobs.map((j) =>
+        j.id === id && (j.state === 'queued' || j.state === 'running')
+          ? { ...j, state: 'stopping' as const }
+          : j,
+      ),
+    }))
+    try {
+      await cancelJob(id)
+    } catch {
+      // If the stop failed (already finished, etc.), the next snapshot restores truth.
+    }
+  },
 }))
 
 function upsertJob(jobs: Job[], job: Job): Job[] {
@@ -154,9 +173,11 @@ function mergeJobs(existing: Job[], incoming: Job[]): Job[] {
 
 /* ---------- selectors (importable, stable) ---------- */
 
-/** Jobs that are queued or running. */
+/** Jobs that are queued, running, or winding down after a stop request. */
 export function selectActiveJobs(s: JobsState): Job[] {
-  return s.jobs.filter((j) => j.state === 'queued' || j.state === 'running')
+  return s.jobs.filter(
+    (j) => j.state === 'queued' || j.state === 'running' || j.state === 'stopping',
+  )
 }
 
 /**

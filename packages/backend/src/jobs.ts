@@ -49,6 +49,16 @@ export interface JobContext {
   warn: (message: string) => void
   /** Manually set a progress note/phase (independent of the reporter). */
   setProgress: (progress: JobProgress) => void
+  /** Aborts when the user requests a stop (`cancel`). */
+  signal: AbortSignal
+  /** True once a stop has been requested for this job. */
+  isCancelled: () => boolean
+}
+
+/** Per-job cancellation state, kept off the serialisable summary. */
+interface JobControl {
+  controller: AbortController
+  cancelRequested: boolean
 }
 
 type JobEvent =
@@ -60,6 +70,7 @@ const MAX_FINISHED_JOBS = 50
 
 class JobManager {
   private readonly jobs = new Map<string, JobRecord>()
+  private readonly control = new Map<string, JobControl>()
   private readonly emitter = new EventEmitter()
 
   constructor() {
@@ -78,13 +89,40 @@ class JobManager {
     return record ? toSummary(record) : undefined
   }
 
-  /** Remove a finished job (dismiss). Running jobs cannot be removed. */
+  /** Remove a finished job (dismiss). In-flight jobs cannot be removed. */
   remove(id: string): boolean {
     const record = this.jobs.get(id)
     if (!record) return false
-    if (record.state === 'queued' || record.state === 'running') return false
+    if (isInFlight(record.state)) return false
     this.jobs.delete(id)
+    this.control.delete(id)
     this.emit({ type: 'removed', id })
+    return true
+  }
+
+  /**
+   * Request a stop for a queued/running job. The job's AbortSignal fires so a
+   * cooperative executor can wind down gracefully; the final state becomes
+   * `stopped` (not `failed`) once the executor returns. Already-finished jobs
+   * and jobs that don't observe the signal are unaffected. Returns false if
+   * the job is unknown or already terminal.
+   */
+  cancel(id: string): boolean {
+    const record = this.jobs.get(id)
+    if (!record) return false
+    if (record.state !== 'queued' && record.state !== 'running') return false
+
+    const ctrl = this.control.get(id)
+    if (ctrl) {
+      ctrl.cancelRequested = true
+      ctrl.controller.abort()
+    }
+    // A running job advertises `stopping` while it winds down; a still-queued
+    // job is short-circuited to `stopped` when its executor starts.
+    if (record.state === 'running') {
+      record.state = 'stopping'
+      this.publish(record)
+    }
     return true
   }
 
@@ -114,6 +152,7 @@ class JobManager {
       createdAt: now,
     }
     this.jobs.set(record.id, record as JobRecord)
+    this.control.set(record.id, { controller: new AbortController(), cancelRequested: false })
     this.publish(record)
 
     queueMicrotask(() => void this.execute(record, executor))
@@ -125,6 +164,18 @@ class JobManager {
     record: JobRecord<TResult>,
     executor: (ctx: JobContext) => Promise<TResult>,
   ): Promise<void> {
+    const ctrl = this.control.get(record.id)!
+
+    // Stop requested before the executor even started — don't run at all.
+    if (ctrl.cancelRequested) {
+      record.state = 'stopped'
+      record.finishedAt = Date.now()
+      this.publish(record)
+      this.control.delete(record.id)
+      this.pruneFinished()
+      return
+    }
+
     record.state = 'running'
     record.startedAt = Date.now()
     this.publish(record)
@@ -139,18 +190,26 @@ class JobManager {
         record.progress = { ...record.progress, ...progress }
         this.publish(record)
       },
+      signal: ctrl.controller.signal,
+      isCancelled: () => ctrl.cancelRequested,
     }
 
     try {
       const result = await executor(ctx)
       record.result = result
-      record.state = 'succeeded'
+      // A cooperative executor returns normally even when stopped; honour the
+      // cancellation rather than reporting a (misleading) success.
+      record.state = ctrl.cancelRequested ? 'stopped' : 'succeeded'
     } catch (err) {
-      record.error = err instanceof Error ? err.message : 'Job failed.'
-      record.state = 'failed'
+      // A stop that surfaces as a thrown AbortError is a stop, not a failure.
+      record.state = ctrl.cancelRequested ? 'stopped' : 'failed'
+      if (record.state === 'failed') {
+        record.error = err instanceof Error ? err.message : 'Job failed.'
+      }
     } finally {
       record.finishedAt = Date.now()
       this.publish(record)
+      this.control.delete(record.id)
       this.pruneFinished()
     }
   }
@@ -180,7 +239,7 @@ class JobManager {
   /** Keep memory bounded: drop the oldest finished jobs past the cap. */
   private pruneFinished(): void {
     const finished = [...this.jobs.values()]
-      .filter((j) => j.state === 'succeeded' || j.state === 'failed')
+      .filter((j) => isTerminal(j.state))
       .sort((a, b) => (a.finishedAt ?? 0) - (b.finishedAt ?? 0))
     while (finished.length > MAX_FINISHED_JOBS) {
       const oldest = finished.shift()
@@ -189,6 +248,16 @@ class JobManager {
       this.emit({ type: 'removed', id: oldest.id })
     }
   }
+}
+
+/** A job that is queued, running, or winding down after a stop request. */
+function isInFlight(state: JobState): boolean {
+  return state === 'queued' || state === 'running' || state === 'stopping'
+}
+
+/** A job that has reached a final state and won't change again. */
+function isTerminal(state: JobState): boolean {
+  return state === 'succeeded' || state === 'failed' || state === 'stopped'
 }
 
 function toSummary<TResult>(record: JobRecord<TResult>): JobSummary<TResult> {
@@ -284,6 +353,15 @@ jobRoutes.get('/stream', (c) => {
 jobRoutes.get('/:id', (c) => {
   const job = jobManager.get(c.req.param('id'))
   if (!job) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, job })
+})
+
+// Request a stop for a queued/running job. The job winds down gracefully and
+// settles as `stopped`; work already completed is preserved.
+jobRoutes.post('/:id/cancel', (c) => {
+  const cancelled = jobManager.cancel(c.req.param('id'))
+  if (!cancelled) return c.json({ ok: false, error: 'not_found_or_not_running' }, 404)
+  const job = jobManager.get(c.req.param('id'))
   return c.json({ ok: true, job })
 })
 

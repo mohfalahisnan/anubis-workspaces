@@ -48,6 +48,12 @@ export function useConversationMessages(
   const [chunks, setChunks] = useState(0)
   const [partialChars, setPartialChars] = useState(0)
   const esRef = useRef<EventSource | null>(null)
+  // High-frequency `partial` events are buffered here and flushed at most once
+  // per animation frame, so a fast stream costs one render per frame instead of
+  // one (or three) per chunk.
+  const pendingTextRef = useRef('')
+  const pendingChunksRef = useRef(0)
+  const rafRef = useRef<number | null>(null)
 
   const clearError = useCallback(() => setError(null), [])
 
@@ -78,6 +84,8 @@ export function useConversationMessages(
     setStreaming(null)
     setChunks(0)
     setPartialChars(0)
+    pendingTextRef.current = ''
+    pendingChunksRef.current = 0
 
     const reconcileOptimistic = (items: MessageSummary[]) => {
       setOptimistic((prev) =>
@@ -118,11 +126,21 @@ export function useConversationMessages(
         startedAt: Date.now(),
       })
 
-      es.addEventListener('partial', (raw) => {
-        const data = parseSse<{ deltaText: string }>(raw)
-        if (!data) return
-        setChunks((c) => c + 1)
-        setPartialChars((p) => p + data.deltaText.length)
+      // Apply all buffered partial text in one batched set of state updates.
+      // Must run synchronously before any tool event (and before `done`) so
+      // fragment ordering matches the order events arrived in.
+      const flushPendingText = () => {
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current)
+          rafRef.current = null
+        }
+        const text = pendingTextRef.current
+        const count = pendingChunksRef.current
+        if (count === 0) return
+        pendingTextRef.current = ''
+        pendingChunksRef.current = 0
+        setChunks((c) => c + count)
+        setPartialChars((p) => p + text.length)
         setStreaming((cur) => {
           const next = cur ?? ensureStreaming()
           const last = next.fragments[next.fragments.length - 1]
@@ -131,17 +149,34 @@ export function useConversationMessages(
               ...next,
               fragments: [
                 ...next.fragments.slice(0, -1),
-                { kind: 'text', text: last.text + data.deltaText },
+                { kind: 'text', text: last.text + text },
               ],
             }
           }
-          return { ...next, fragments: [...next.fragments, { kind: 'text', text: data.deltaText }] }
+          return { ...next, fragments: [...next.fragments, { kind: 'text', text }] }
         })
+      }
+
+      const scheduleFlush = () => {
+        if (rafRef.current !== null) return
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null
+          flushPendingText()
+        })
+      }
+
+      es.addEventListener('partial', (raw) => {
+        const data = parseSse<{ deltaText: string }>(raw)
+        if (!data) return
+        pendingTextRef.current += data.deltaText
+        pendingChunksRef.current += 1
+        scheduleFlush()
       })
 
       es.addEventListener('tool_call', (raw) => {
         const data = parseSse<{ callId: string; name: string; args: unknown }>(raw)
         if (!data) return
+        flushPendingText()
         setStreaming((cur) => {
           const next = cur ?? ensureStreaming()
           return {
@@ -158,6 +193,7 @@ export function useConversationMessages(
       es.addEventListener('tool_result', (raw) => {
         const data = parseSse<{ callId: string; name: string; result: unknown; isError?: boolean }>(raw)
         if (!data) return
+        flushPendingText()
         setStreaming((cur) => {
           if (!cur) return cur
           const prev = cur.toolEvents[data.callId]
@@ -196,6 +232,9 @@ export function useConversationMessages(
       })
 
       es.addEventListener('done', () => {
+        // Flush so any rAF scheduled for buffered text is cancelled before the
+        // stream state is reset (the updates below win the same batch anyway).
+        flushPendingText()
         setStreaming(null)
         setChunks(0)
         setPartialChars(0)
@@ -233,6 +272,12 @@ export function useConversationMessages(
 
     return () => {
       cancelled = true
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+      pendingTextRef.current = ''
+      pendingChunksRef.current = 0
       esRef.current?.close()
       esRef.current = null
     }

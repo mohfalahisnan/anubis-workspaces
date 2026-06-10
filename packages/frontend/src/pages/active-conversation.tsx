@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { extractImageReferencesFromUnknown } from '@anubis/shared'
 import {
   GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
@@ -94,7 +94,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const [sendError, setSendError] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
   const [forceStopped, setForceStopped] = useState(false)
-  const [elapsed, setElapsed] = useState(0)
   const [loginFor, setLoginFor] = useState<{ profileId: string; pendingContent: string } | null>(null)
   const [selectionPopup, setSelectionPopup] = useState<
     | {
@@ -312,15 +311,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
     }
   }, [conversationId, conv])
 
-  useEffect(() => {
-    if (!streaming) { setElapsed(0); return }
-    const start = streaming.startedAt
-    const tick = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000))
-    }, 250)
-    return () => clearInterval(tick)
-  }, [streaming])
-
   // Reset forceStopped whenever the SSE flag flips back to false on its own.
   useEffect(() => {
     if (!streaming) setForceStopped(false)
@@ -535,7 +525,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
               conversationId={conversationId ?? ''}
               chunks={chunks}
               tokens={tokens}
-              elapsed={elapsed}
             />
           )}
           {(streamError ?? sendError) && (
@@ -602,11 +591,11 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       )}
 
       <div className='flex flex-shrink-0 items-center justify-center gap-2 px-7 pb-3 pt-[7px] font-mono text-[11px] text-muted-foreground'>
-        {isLive ? (
+        {isLive && streaming ? (
           <>
             <span className='inline-block size-[7px] rounded-full bg-[var(--anubis-gold-hi)] animate-[anubisPulse_1.7s_ease-out_infinite]' />
             <span>
-              Streaming · <span>{chunks}</span> chunks · <span>{(tokens / 1000).toFixed(1)}k</span> tokens · <span>{elapsed}</span>s elapsed
+              Streaming · <span>{chunks}</span> chunks · <span>{(tokens / 1000).toFixed(1)}k</span> tokens · <StreamElapsed startedAt={streaming.startedAt} />s elapsed
             </span>
           </>
         ) : (
@@ -687,7 +676,13 @@ function CollapsibleHookCard({
   )
 }
 
-function RenderedMessage({
+/**
+ * One persisted transcript entry. Memoized so the historical transcript does
+ * not re-render on every streamed chunk: `message` identity is stable between
+ * fetches (the array is only replaced on initial load / `done`), and
+ * `conversationId` is a string — the default shallow compare is sufficient.
+ */
+const RenderedMessage = memo(function RenderedMessage({
   message,
   conversationId,
 }: {
@@ -759,6 +754,24 @@ function RenderedMessage({
       />
     </div>
   )
+})
+
+/**
+ * Leaf component owning the 250 ms "elapsed seconds" ticker. Keeping the
+ * interval state here (instead of at the page level) means the tick only
+ * re-renders this tiny <span>, not the whole transcript.
+ */
+function StreamElapsed({ startedAt }: { startedAt: number }) {
+  const compute = () => Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+  const [elapsed, setElapsed] = useState(compute)
+  useEffect(() => {
+    setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
+    const tick = setInterval(() => {
+      setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
+    }, 250)
+    return () => clearInterval(tick)
+  }, [startedAt])
+  return <span>{elapsed}</span>
 }
 
 /**
@@ -870,13 +883,11 @@ function StreamingMessage({
   conversationId,
   chunks,
   tokens,
-  elapsed,
 }: {
-  live: { fragments: LiveFragment[]; toolEvents: Record<string, ToolEvent> }
+  live: { fragments: LiveFragment[]; toolEvents: Record<string, ToolEvent>; startedAt: number }
   conversationId: string
   chunks: number
   tokens: number
-  elapsed: number
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const toolCount = live.fragments.filter((f) => f.kind === 'tool').length
@@ -902,7 +913,7 @@ function StreamingMessage({
           Anubis
         </span>
         <span className='font-mono text-[11px] text-muted-foreground/70'>
-          · {chunks} chunks · {(tokens / 1000).toFixed(1)}k · {elapsed}s
+          · {chunks} chunks · {(tokens / 1000).toFixed(1)}k · <StreamElapsed startedAt={live.startedAt} />s
           {toolCount > 0 && ` · ${toolCount} tool${toolCount === 1 ? '' : 's'}`}
         </span>
       </button>

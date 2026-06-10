@@ -45,13 +45,35 @@ export class CronService {
   handle(cmd: CronCommand, conversationId: string): string {
     if (cmd.kind === 'create') {
       const now = nowMs()
+      const actionType = cmd.params.actionType ?? 'message'
+
+      // Re-arming an existing cron with the same name + schedule (within the
+      // same conversation) is idempotent: update the existing job rather than
+      // inserting a duplicate. This keeps repeated [CRON_CREATE] emissions from
+      // the agent — or re-running the same scheduling prompt — from piling up.
+      const existing = this.opts.repo
+        .list(conversationId)
+        .find((j) => j.name === cmd.params.name && j.schedule === cmd.params.schedule)
+      if (existing) {
+        const next = this.update(existing.id, {
+          scheduleDescription: cmd.params.scheduleDescription,
+          actionType,
+          actionConfig: cmd.params.actionConfig,
+          ...(cmd.params.message !== undefined ? { prompt: cmd.params.message } : {}),
+          enabled: true,
+        })
+        return next
+          ? `Updated existing cron job "${next.name}" (id=${next.id}) on schedule ${next.schedule}.`
+          : `Created cron job "${cmd.params.name}".`
+      }
+
       const job: CronJob = {
         id: newId(),
         conversationId,
         name: cmd.params.name,
         schedule: cmd.params.schedule,
         scheduleDescription: cmd.params.scheduleDescription,
-        actionType: cmd.params.actionType ?? 'message',
+        actionType,
         actionConfig: cmd.params.actionConfig,
         prompt: cmd.params.message ?? '',
         enabled: true,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BanIcon,
   CheckCircle2Icon,
@@ -14,8 +14,10 @@ import {
 import type {
   BatchCaptureJobResult,
   CaptureJobResult,
+  CompetitorLevel,
   DiscoverJobResult,
   DiscoveredCandidate,
+  ExtractWorkspaceJobResult,
   JobProgress,
   JobSummary,
 } from '@anubis/shared'
@@ -23,6 +25,13 @@ import { createCompetitor, listCompetitors } from '@/api'
 import { useJobs } from '@/lib/use-jobs'
 import { useNavigation } from '@/lib/navigation'
 import { useProject } from '@/lib/use-project'
+import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
+import { LEVEL_COLOR } from '@/lib/competitor-level'
+import {
+  CompetitorLevelFilter,
+  matchesLevelFilter,
+  type LevelFilter,
+} from '@/components/competitor-level-filter'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -388,6 +397,11 @@ function summariseFinished(job: JobSummary): string {
     const n = result?.capturedCount ?? 0
     return n === 0 ? 'No new posts captured.' : `Captured ${n} post${n === 1 ? '' : 's'} — click to view`
   }
+  if (job.kind === 'extract-workspace') {
+    const result = job.result as ExtractWorkspaceJobResult | undefined
+    const n = result?.processedCount ?? 0
+    return n === 0 ? 'No files extracted.' : `Extracted ${n} file${n === 1 ? '' : 's'} — click for details`
+  }
   return 'Completed — click for details'
 }
 
@@ -411,6 +425,8 @@ function JobDetailsModal({
           <BatchCaptureJobDetails job={job} onClose={onClose} />
         ) : job?.kind === 'capture-posts' ? (
           <CaptureJobDetails job={job} onClose={onClose} />
+        ) : job?.kind === 'extract-workspace' ? (
+          <ExtractWorkspaceJobDetails job={job} onClose={onClose} />
         ) : job ? (
           <GenericJobDetails job={job} onClose={onClose} />
         ) : null}
@@ -421,18 +437,63 @@ function JobDetailsModal({
 
 function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
   const { activeProject } = useProject()
+  const { levelFor } = useCompetitorLevels()
   const result = job.result as DiscoverJobResult | undefined
   const candidates = result?.candidates ?? []
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(candidates.map((c) => c.username)))
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  // Out-of-range ('black') candidates are hidden by default; flip to review them.
+  const [showBlack, setShowBlack] = useState(false)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const levelOf = (candidate: DiscoveredCandidate): CompetitorLevel =>
+    levelFor(candidate.followers ?? null)
+
+  // Seed the default selection once the candidates are available: pick the
+  // in-range (non-black) ones so a default "Add" never tracks profiles the
+  // user can't see. Re-seeding is guarded so user toggles aren't clobbered.
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (seeded.current || candidates.length === 0) return
+    seeded.current = true
+    setSelected(new Set(candidates.filter((c) => levelOf(c) !== 'black').map((c) => c.username)))
+  }, [candidates, levelFor])
+
+  const visibleCandidates = useMemo(
+    () =>
+      candidates.filter((candidate) => {
+        const level = levelOf(candidate)
+        // Hide black unless the user opted in or is explicitly filtering to it.
+        if (level === 'black' && !showBlack && levelFilter !== 'black') return false
+        return matchesLevelFilter(level, levelFilter)
+      }),
+    [candidates, levelFilter, showBlack, levelFor],
+  )
+  const visibleSelectedCount = visibleCandidates.filter((c) => selected.has(c.username)).length
 
   function toggle(username: string) {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(username)) next.delete(username)
       else next.add(username)
+      return next
+    })
+  }
+
+  function selectVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const c of visibleCandidates) next.add(c.username)
+      return next
+    })
+  }
+
+  function clearVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const c of visibleCandidates) next.delete(c.username)
       return next
     })
   }
@@ -478,17 +539,47 @@ function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => 
         </DialogDescription>
       </DialogHeader>
 
+      {candidates.length > 0 && (
+        <div className='flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5'>
+          <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+          <div className='flex items-center gap-3 text-[11.5px]'>
+            <label className='inline-flex cursor-pointer items-center gap-1.5 text-muted-foreground'>
+              <input
+                type='checkbox'
+                checked={showBlack}
+                onChange={(e) => setShowBlack(e.target.checked)}
+                className='size-3.5 accent-[var(--anubis-gold)]'
+              />
+              Show out-of-range
+            </label>
+            <button
+              type='button'
+              onClick={visibleSelectedCount === visibleCandidates.length ? clearVisible : selectVisible}
+              disabled={visibleCandidates.length === 0}
+              className='font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40'
+            >
+              {visibleSelectedCount === visibleCandidates.length ? 'Clear shown' : 'Select shown'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className='max-h-[min(60vh,460px)] overflow-y-auto px-3 py-3'>
         {candidates.length === 0 ? (
           <p className='m-4 text-center text-[13px] text-muted-foreground'>
             Nothing came back from this run.
           </p>
+        ) : visibleCandidates.length === 0 ? (
+          <p className='m-4 text-center text-[13px] text-muted-foreground'>
+            No candidates match this filter.
+          </p>
         ) : (
           <ul className='flex flex-col gap-1'>
-            {candidates.map((candidate) => (
+            {visibleCandidates.map((candidate) => (
               <CandidateRow
                 key={candidate.username}
                 candidate={candidate}
+                level={levelOf(candidate)}
                 selected={selected.has(candidate.username)}
                 onToggle={() => toggle(candidate.username)}
               />
@@ -536,10 +627,12 @@ function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => 
 
 function CandidateRow({
   candidate,
+  level,
   selected,
   onToggle,
 }: {
   candidate: DiscoveredCandidate
+  level: CompetitorLevel
   selected: boolean
   onToggle: () => void
 }) {
@@ -579,7 +672,13 @@ function CandidateRow({
             <div className='mt-0.5 line-clamp-1 text-[11px] text-muted-foreground'>{candidate.bio}</div>
           )}
         </div>
-        <span className='shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'>
+        <span className='flex shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums text-muted-foreground'>
+          <span
+            aria-hidden
+            title={level}
+            className='size-2 rounded-full ring-1 ring-black/20'
+            style={{ background: LEVEL_COLOR[level] }}
+          />
           {formatBigNumber(candidate.followers)}
         </span>
       </button>
@@ -700,6 +799,74 @@ function BatchCaptureJobDetails({ job, onClose }: { job: JobSummary; onClose: ()
           className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
         >
           View posts
+        </button>
+      </DialogFooter>
+    </>
+  )
+}
+
+function ExtractWorkspaceJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
+  const { navigate } = useNavigation()
+  const result = job.result as ExtractWorkspaceJobResult | undefined
+  const stats: Array<{ label: string; value: number }> = [
+    { label: 'Files found', value: result?.totalCount ?? 0 },
+    { label: 'Processed', value: result?.processedCount ?? 0 },
+    { label: 'Images (OCR)', value: result?.imageCount ?? 0 },
+    { label: 'Audio/Video', value: result?.mediaCount ?? 0 },
+    { label: 'From cache', value: result?.cachedCount ?? 0 },
+    { label: 'Failed', value: result?.failedCount ?? 0 },
+  ]
+
+  return (
+    <>
+      <DialogHeader className='border-b border-border px-6 py-4'>
+        <DialogTitle>Workspace extraction complete</DialogTitle>
+        <DialogDescription>{job.label}</DialogDescription>
+      </DialogHeader>
+
+      <div className='px-6 py-5'>
+        <div className='grid grid-cols-3 gap-3'>
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              className='rounded-md border border-border bg-background/60 px-3 py-3 text-center'
+            >
+              <p className='font-mono text-[22px] font-semibold tabular-nums text-foreground'>{s.value}</p>
+              <p className='mt-0.5 text-[11px] text-muted-foreground'>{s.label}</p>
+            </div>
+          ))}
+        </div>
+        {job.warnings.length > 0 && (
+          <div className='mt-4'>
+            <p className='mb-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground'>
+              {job.warnings.length} warning{job.warnings.length === 1 ? '' : 's'}
+            </p>
+            <ul className='max-h-[160px] list-disc overflow-y-auto rounded-md border border-border bg-background/60 px-6 py-3 text-left text-[11.5px] text-muted-foreground'>
+              {job.warnings.slice(0, 20).map((w, i) => (
+                <li key={i} className='break-words'>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <DialogFooter className='border-t border-border px-6 py-3'>
+        <button
+          type='button'
+          onClick={onClose}
+          className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+        >
+          Close
+        </button>
+        <button
+          type='button'
+          onClick={() => {
+            onClose()
+            navigate({ page: 'knowledge-base' })
+          }}
+          className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
+        >
+          Open Knowledge Base
         </button>
       </DialogFooter>
     </>

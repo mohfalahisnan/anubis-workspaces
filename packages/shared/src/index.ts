@@ -224,7 +224,7 @@ export interface SkillDetail extends SkillSummary {
   body: string
 }
 
-export type CronActionType = 'message' | 'competitor-discovery' | 'capture-posts'
+export type CronActionType = 'message' | 'competitor-discovery' | 'capture-posts' | 'workflow'
 export type CronCaptureProfile = 'public' | 'login'
 
 export interface CompetitorDiscoveryCronConfig {
@@ -247,9 +247,25 @@ export interface CapturePostsCronConfig {
   postLimit?: number
 }
 
+export interface WorkflowCronConfig {
+  /** Resolve the workflow by id first; falls back to `workflowName` within `projectId` scope. */
+  workflowId?: string
+  /** Friendly name lookup, used when `workflowId` is omitted. */
+  workflowName?: string
+  /** Project scope used to disambiguate a name lookup. */
+  projectId?: string
+  /**
+   * Optional per-node data overrides applied to the published graph on run,
+   * forwarded verbatim to the workflow run path (same shape as the manual
+   * "run workflow" override payload). Keyed by node id.
+   */
+  input?: Record<string, unknown>
+}
+
 export type CronActionConfig =
   | CompetitorDiscoveryCronConfig
   | CapturePostsCronConfig
+  | WorkflowCronConfig
 
 export interface CronJobSummary {
   id: string
@@ -847,6 +863,7 @@ export type JobKind =
   | 'discover-competitors'
   | 'capture-posts'
   | 'capture-posts-batch'
+  | 'extract-workspace'
   | (string & {})
 
 /**
@@ -948,6 +965,22 @@ export interface BatchCaptureJobResult {
   stopped: boolean
   /** Per-competitor breakdown, in processing order. */
   perCompetitor: BatchCaptureOutcome[]
+}
+
+/** Result payload for an `extract-workspace` job. */
+export interface ExtractWorkspaceJobResult {
+  /** Total candidate files discovered (after `.anubisignore` filtering). */
+  totalCount: number
+  /** Files processed without error. */
+  processedCount: number
+  /** Files that returned from the extractor's sidecar cache (skipped re-extraction). */
+  cachedCount: number
+  /** Files that failed extraction (counted, with messages added to job warnings). */
+  failedCount: number
+  /** How many image files were OCR'd. */
+  imageCount: number
+  /** How many audio/video files were transcribed. */
+  mediaCount: number
 }
 
 export interface CapturePreviewPayload {

@@ -44,6 +44,46 @@ function graphHasTrigger(graphJson?: string | null): boolean {
   }
 }
 
+/**
+ * Resolve a workflow by id (preferred) or by name within a project scope.
+ * Returns the matching workflow id, or `null` when nothing matched.
+ */
+function resolveWorkflowId(
+  stack: ConversationStack,
+  opts: { workflowId?: string; workflowName?: string; projectId?: string },
+): string | null {
+  if (opts.workflowId) {
+    return stack.workflows.get(opts.workflowId) ? opts.workflowId : null
+  }
+  const name = opts.workflowName?.trim()
+  if (!name) return null
+  const candidates = stack.workflows.list(opts.projectId)
+  const exact = candidates.find((wf) => wf.name === name)
+  if (exact) return exact.id
+  const ci = candidates.find((wf) => wf.name.toLowerCase() === name.toLowerCase())
+  return ci?.id ?? null
+}
+
+/**
+ * Fire a workflow on behalf of a cron job, reusing the same {@link TriggerManager}
+ * singleton (and therefore the same {@link WorkflowRunManager} execution path)
+ * that armed triggers and manual runs use. Throws on resolution / start failure.
+ */
+export async function runWorkflowCron(
+  stack: ConversationStack,
+  cfg: { workflowId?: string; workflowName?: string; projectId?: string; input?: Record<string, unknown> },
+  payload: unknown,
+): Promise<{ runId: string | null; resolvedWorkflowId: string }> {
+  const resolvedWorkflowId = resolveWorkflowId(stack, cfg)
+  if (!resolvedWorkflowId) {
+    throw new Error(
+      `workflow not found (id=${cfg.workflowId ?? '-'} name=${cfg.workflowName ?? '-'} project=${cfg.projectId ?? '-'})`,
+    )
+  }
+  const result = await getTriggerManager(stack).fireWorkflowCron(resolvedWorkflowId, payload, cfg.input)
+  return { runId: result?.runId ?? null, resolvedWorkflowId }
+}
+
 /** Called once at backend boot to restore armed triggers. */
 export function rearmTriggersOnBoot(stack: ConversationStack): void {
   getTriggerManager(stack).rearmAll()

@@ -3,6 +3,7 @@ import type {
   CompetitorDiscoveryCronConfig,
   CronActionConfig,
   CronActionType,
+  WorkflowCronConfig,
 } from '@anubis/shared'
 
 export interface CronCreateParams {
@@ -45,7 +46,7 @@ function parseKv(body: string): Record<string, string> {
 
 function parseActionType(raw?: string): CronActionType | undefined {
   if (!raw) return undefined
-  if (raw === 'message' || raw === 'competitor-discovery' || raw === 'capture-posts') return raw
+  if (raw === 'message' || raw === 'competitor-discovery' || raw === 'capture-posts' || raw === 'workflow') return raw
   return undefined
 }
 
@@ -55,6 +56,7 @@ function parseActionConfig(raw: string | undefined, actionType: CronActionType |
     const parsed = JSON.parse(raw) as unknown
     if (actionType === 'competitor-discovery' && isCompetitorDiscoveryConfig(parsed)) return parsed
     if (actionType === 'capture-posts' && isCapturePostsConfig(parsed)) return parsed
+    if (actionType === 'workflow' && isWorkflowConfig(parsed)) return parsed
   } catch {
     return undefined
   }
@@ -85,6 +87,19 @@ function isCapturePostsConfig(value: unknown): value is CapturePostsCronConfig {
     isCaptureProfile(v.captureProfile) &&
     (v.postLimit === undefined || (Number.isInteger(v.postLimit) && Number(v.postLimit) > 0))
   )
+}
+
+function isWorkflowConfig(value: unknown): value is WorkflowCronConfig {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  const hasWorkflowId = typeof v.workflowId === 'string' && v.workflowId.trim().length > 0
+  const hasWorkflowName = typeof v.workflowName === 'string' && v.workflowName.trim().length > 0
+  if (!hasWorkflowId && !hasWorkflowName) return false
+  if (v.workflowId !== undefined && typeof v.workflowId !== 'string') return false
+  if (v.workflowName !== undefined && typeof v.workflowName !== 'string') return false
+  if (v.projectId !== undefined && typeof v.projectId !== 'string') return false
+  if (v.input !== undefined && (typeof v.input !== 'object' || v.input === null || Array.isArray(v.input))) return false
+  return true
 }
 
 function pickCreate(kv: Record<string, string>): CronCreateParams | null {

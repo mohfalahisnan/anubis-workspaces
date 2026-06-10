@@ -26,6 +26,15 @@ import {
 } from '@/api'
 import { FindCompetitorsDialog } from './competitor-dialogs'
 import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
+import {
+  PaginationBar,
+  SearchBox,
+  SortControl,
+  paginate,
+  useSorted,
+  type SortOption,
+  type SortState,
+} from '@/components/list-controls'
 import { ViewToggle, type ViewMode } from '@/components/view-toggle'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { levelTint, levelTip, resolveLevel } from '@/lib/competitor-level'
@@ -53,6 +62,34 @@ import {
 
 type Banner = { kind: 'error' | 'success'; message: string }
 
+type CompetitorSortKey = 'handle' | 'followers' | 'avgLikes' | 'postCount' | 'lastRefreshedAt'
+
+const COMPETITOR_SORT_OPTIONS: readonly SortOption<CompetitorSortKey>[] = [
+  { value: 'followers', label: 'Followers' },
+  { value: 'avgLikes', label: 'Avg likes' },
+  { value: 'postCount', label: 'Posts' },
+  { value: 'handle', label: 'Handle' },
+  { value: 'lastRefreshedAt', label: 'Last refresh' },
+]
+
+const COMPETITOR_SORT_ACCESSORS: Record<CompetitorSortKey, (c: CompetitorSummary) => unknown> = {
+  handle: (c) => c.handle.replace(/^@/, '').toLowerCase(),
+  followers: (c) => c.followers,
+  avgLikes: (c) => c.avgLikes,
+  postCount: (c) => c.postCount,
+  lastRefreshedAt: (c) => c.lastRefreshedAt,
+}
+
+function matchesCompetitorQuery(c: CompetitorSummary, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return [c.handle, c.displayName, c.niche, c.bio]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(q)
+}
+
 export function CompetitorsPage() {
   const { activeProject } = useProject()
   const [items, setItems] = useState<CompetitorSummary[] | null>(null)
@@ -65,6 +102,10 @@ export function CompetitorsPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortState<CompetitorSortKey>>({ key: 'followers', dir: 'desc' })
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(24)
   const [view, setView] = useState<ViewMode>('grid')
   const { config: levelsCfg } = useCompetitorLevels()
   const jobs = useJobs((s) => s.jobs)
@@ -104,9 +145,29 @@ export function CompetitorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finishedCaptureCount])
 
-  const visibleItems = items?.filter((c) =>
-    matchesLevelFilter(effectiveLevel(c.level, c.followers, levelsCfg), levelFilter),
+  const filteredItems = useMemo(
+    () =>
+      items?.filter(
+        (c) =>
+          matchesLevelFilter(effectiveLevel(c.level, c.followers, levelsCfg), levelFilter) &&
+          matchesCompetitorQuery(c, query),
+      ),
+    [items, levelFilter, levelsCfg, query],
   )
+
+  const sortedItems = useSorted(filteredItems ?? [], sort, COMPETITOR_SORT_ACCESSORS)
+  const matchCount = filteredItems?.length ?? 0
+  const { slice: visibleItems, page: currentPage } = paginate(sortedItems, page, pageSize)
+
+  // Keep the page in range when filters/sorting shrink the result set.
+  useEffect(() => {
+    if (currentPage !== page) setPage(currentPage)
+  }, [currentPage, page])
+
+  // Reset to the first page whenever the filter inputs change.
+  useEffect(() => {
+    setPage(1)
+  }, [levelFilter, query, sort.key, sort.dir, pageSize, activeProject?.id])
 
   async function refresh() {
     try {
@@ -346,17 +407,28 @@ export function CompetitorsPage() {
         )}
 
         {items && items.length > 0 && (
-          <div className='mt-5 flex flex-wrap items-center gap-x-4 gap-y-2'>
-            <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
-            <ViewToggle view={view} onChange={setView} className='ml-auto' />
+          <div className='mt-5 flex flex-col gap-3'>
+            <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+              <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
+              <ViewToggle view={view} onChange={setView} className='ml-auto' />
+            </div>
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+              <SearchBox
+                value={query}
+                onChange={setQuery}
+                placeholder='Search handle, name, niche, bio…'
+                className='w-full sm:w-[320px]'
+              />
+              <SortControl options={COMPETITOR_SORT_OPTIONS} value={sort} onChange={setSort} className='ml-auto' />
+            </div>
           </div>
         )}
 
         {selectMode && items && items.length > 0 && (
           <BulkSelectBar
             count={selected.size}
-            total={items.length}
-            onSelectAll={() => setSelected(new Set(items.map((c) => c.id)))}
+            total={sortedItems.length}
+            onSelectAll={() => setSelected(new Set(sortedItems.map((c) => c.id)))}
             onClear={() => setSelected(new Set())}
             onCapture={() => void handleBulkCapture()}
             onDelete={() => setBulkConfirm(true)}
@@ -369,13 +441,13 @@ export function CompetitorsPage() {
           <LoadingGrid />
         ) : items.length === 0 ? (
           <EmptyState onAdd={() => setAddOpen(true)} />
-        ) : visibleItems && visibleItems.length === 0 ? (
+        ) : matchCount === 0 ? (
           <div className='mt-10 rounded-md border border-dashed border-border bg-card/50 px-6 py-10 text-center text-[13px] text-muted-foreground'>
-            No competitors match this level filter.
+            No competitors match these filters.
           </div>
         ) : view === 'grid' ? (
           <div className='mt-7 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
-            {visibleItems!.map((c) => (
+            {visibleItems.map((c) => (
               <CompetitorCard
                 key={c.id}
                 competitor={c}
@@ -392,7 +464,7 @@ export function CompetitorsPage() {
           </div>
         ) : (
           <CompetitorTable
-            competitors={visibleItems!}
+            competitors={visibleItems}
             levelsCfg={levelsCfg}
             capturing={capturing}
             onCapture={(c) => void handleCapture(c)}
@@ -401,6 +473,16 @@ export function CompetitorsPage() {
             selectMode={selectMode}
             selected={selected}
             onToggleSelect={toggleSelected}
+          />
+        )}
+
+        {items && items.length > 0 && matchCount > 0 && (
+          <PaginationBar
+            page={currentPage}
+            pageSize={pageSize}
+            total={matchCount}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         )}
 

@@ -2,13 +2,24 @@ import { useCallback, useState } from 'react'
 import {
   FileTextIcon,
   FolderSearchIcon,
+  ImageIcon,
+  Loader2Icon,
   MicIcon,
   ScanTextIcon,
 } from 'lucide-react'
 import { DEFAULT_WHISPER_MODEL, type WhisperModel } from '@anubis/shared'
-import { runOcr, runTranscribe } from '@/api'
+import { extractWorkspace, runOcr, runTranscribe } from '@/api'
 import { cn } from '@/lib/utils'
+import { useProject } from '@/lib/use-project'
 import { IMAGE_FILTERS, MEDIA_FILTERS, isElectron, pickFile } from '@/lib/pick-file'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type Banner = { kind: 'success' | 'error'; message: string }
 type Mode = 'auto' | 'ocr' | 'transcribe'
@@ -39,6 +50,7 @@ function detectMode(path: string): 'ocr' | 'transcribe' | null {
 }
 
 export function ExtractorPage() {
+  const { activeProject } = useProject()
   const [path, setPath] = useState('')
   const [mode, setMode] = useState<Mode>('auto')
   const [language, setLanguage] = useState('')
@@ -47,6 +59,7 @@ export function ExtractorPage() {
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [recent, setRecent] = useState<RecentItem[]>([])
+  const [workspaceOpen, setWorkspaceOpen] = useState(false)
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -137,11 +150,21 @@ export function ExtractorPage() {
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
       <div className='mx-auto w-full max-w-[1080px] px-7 pb-16'>
         <div className='flex flex-col gap-4 pt-7'>
-          <div>
-            <h1 className='text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]'>Extractor</h1>
-            <p className='mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground'>
-              OCR images and transcribe audio/video by driving <code className='font-mono text-foreground/80'>anubis-extractor</code>. Output is cached to <code className='font-mono text-foreground/80'>{'<file>.anubis.txt'}</code> next to the source — the Knowledge Base picks these up on re-index. First transcription with <code className='font-mono'>large-v3</code> may download ~3&nbsp;GB and take a few minutes.
-            </p>
+          <div className='flex items-start justify-between gap-4'>
+            <div>
+              <h1 className='text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]'>Extractor</h1>
+              <p className='mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground'>
+                OCR images and transcribe audio/video by driving <code className='font-mono text-foreground/80'>anubis-extractor</code>. Output is cached to <code className='font-mono text-foreground/80'>{'<file>.anubis.txt'}</code> next to the source — the Knowledge Base picks these up on re-index. First transcription with <code className='font-mono'>large-v3</code> may download ~3&nbsp;GB and take a few minutes.
+              </p>
+            </div>
+            <button
+              type='button'
+              onClick={() => setWorkspaceOpen(true)}
+              className='inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-3.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-card/70'
+            >
+              <FolderSearchIcon className='size-[15px]' strokeWidth={1.8} />
+              Extract Workspace
+            </button>
           </div>
         </div>
 
@@ -295,7 +318,171 @@ export function ExtractorPage() {
           </section>
         )}
       </div>
+
+      <ExtractWorkspaceModal
+        open={workspaceOpen}
+        onClose={() => setWorkspaceOpen(false)}
+        projectId={activeProject?.id}
+        projectName={activeProject?.name}
+      />
     </div>
+  )
+}
+
+/* ===========================================================
+   ExtractWorkspaceModal
+   ===========================================================
+   Picks extraction kinds + cache behaviour, then fires a
+   backend background job. Progress shows in the top-nav
+   progress bar (reuses useJobs / TopNavProgress), so the
+   modal simply closes once the job is enqueued.
+   =========================================================== */
+
+function ExtractWorkspaceModal({
+  open,
+  onClose,
+  projectId,
+  projectName,
+}: {
+  open: boolean
+  onClose: () => void
+  projectId: string | undefined
+  projectName: string | undefined
+}) {
+  const [images, setImages] = useState(true)
+  const [media, setMedia] = useState(true)
+  const [force, setForce] = useState(false)
+  const [whisperModel, setWhisperModel] = useState<WhisperModel>(DEFAULT_WHISPER_MODEL)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleStart() {
+    if (!projectId) {
+      setError('No active project. Pick a project before extracting its workspace.')
+      return
+    }
+    if (!images && !media) {
+      setError('Select at least one of Images or Audio/Videos.')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      await extractWorkspace({
+        projectId,
+        images,
+        media,
+        force,
+        whisperModel: media ? whisperModel : undefined,
+      })
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start workspace extraction.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className='max-w-md bg-card'>
+        <DialogHeader>
+          <DialogTitle>Extract workspace</DialogTitle>
+          <DialogDescription>
+            Scan{projectName ? ` ${projectName}'s` : ' the active project'} workspace and extract
+            text from media. Honors <code className='font-mono'>.anubisignore</code> (skips
+            node_modules, build output, etc.). Runs as a background job — progress shows in the top
+            bar.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className='flex flex-col gap-3 px-1 py-1'>
+          <label className='flex items-start gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-[13px]'>
+            <input
+              type='checkbox'
+              checked={images}
+              onChange={(e) => setImages(e.target.checked)}
+              className='mt-0.5'
+            />
+            <span>
+              <span className='flex items-center gap-1.5 font-medium text-foreground'>
+                <ImageIcon className='size-[14px]' strokeWidth={1.8} /> Extract Images
+              </span>
+              <span className='mt-0.5 block text-[11.5px] text-muted-foreground'>
+                OCR <code className='font-mono'>.jpg .jpeg .png .webp …</code>
+              </span>
+            </span>
+          </label>
+
+          <label className='flex items-start gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-[13px]'>
+            <input
+              type='checkbox'
+              checked={media}
+              onChange={(e) => setMedia(e.target.checked)}
+              className='mt-0.5'
+            />
+            <span className='flex-1'>
+              <span className='flex items-center gap-1.5 font-medium text-foreground'>
+                <MicIcon className='size-[14px]' strokeWidth={1.8} /> Extract Audio/Videos
+              </span>
+              <span className='mt-0.5 block text-[11.5px] text-muted-foreground'>
+                Whisper transcription of <code className='font-mono'>.mp4 .m4a .mp3 .wav …</code>
+              </span>
+              {media && (
+                <span className='mt-2 flex items-center gap-2 text-[12px]'>
+                  <span className='text-muted-foreground'>Whisper model</span>
+                  <select
+                    value={whisperModel}
+                    onClick={(e) => e.preventDefault()}
+                    onChange={(e) => setWhisperModel(e.target.value as WhisperModel)}
+                    className='h-8 rounded-md border border-border bg-background px-2 text-[12px] text-foreground'
+                  >
+                    {WHISPER_MODELS.map((m) => (
+                      <option key={m} value={m}>{m}{m === DEFAULT_WHISPER_MODEL ? ' (default)' : ''}</option>
+                    ))}
+                  </select>
+                </span>
+              )}
+            </span>
+          </label>
+
+          <label className='flex items-center gap-2.5 px-1 text-[13px]'>
+            <input
+              type='checkbox'
+              checked={force}
+              onChange={(e) => setForce(e.target.checked)}
+            />
+            <span className='text-foreground'>Bypass cache</span>
+            <span className='text-[11.5px] text-muted-foreground'>(ignore existing sidecars)</span>
+          </label>
+
+          {error && (
+            <p className='rounded-md border border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] px-3 py-2 text-[12px] text-destructive'>
+              {error}
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <button
+            type='button'
+            onClick={onClose}
+            className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+          >
+            Cancel
+          </button>
+          <button
+            type='button'
+            disabled={submitting || (!images && !media)}
+            onClick={() => void handleStart()}
+            className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:opacity-50'
+          >
+            {submitting ? <Loader2Icon className='size-[15px] animate-spin' /> : <ScanTextIcon className='size-[15px]' strokeWidth={2} />}
+            {submitting ? 'Starting…' : 'Start extraction'}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

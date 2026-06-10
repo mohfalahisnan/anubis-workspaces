@@ -430,7 +430,7 @@ export interface CreateCronJobInput {
   name: string
   schedule: string
   scheduleDescription?: string
-  actionType: 'message' | 'competitor-discovery' | 'capture-posts'
+  actionType: 'message' | 'competitor-discovery' | 'capture-posts' | 'workflow'
   actionConfig?: any
   prompt?: string
   projectId?: string

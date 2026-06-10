@@ -69,6 +69,42 @@ describe('detectCronCommands', () => {
     }])
   })
 
+  it('parses workflow cron jobs with config_json (by name + input)', () => {
+    const text = `[CRON_CREATE]\nname: Nightly pipeline\nschedule: 0 2 * * *\naction_type: workflow\nconfig_json: {"workflowName":"Content pipeline","projectId":"p1","input":{"n1":{"value":"x"}}}\n[/CRON_CREATE]`
+    expect(detectCronCommands(text)).toEqual([{
+      kind: 'create',
+      params: {
+        name: 'Nightly pipeline',
+        schedule: '0 2 * * *',
+        actionType: 'workflow',
+        actionConfig: {
+          workflowName: 'Content pipeline',
+          projectId: 'p1',
+          input: { n1: { value: 'x' } },
+        },
+      },
+    }])
+  })
+
+  it('parses workflow cron jobs by workflowId without input', () => {
+    const text = `[CRON_CREATE]\nname: Run wf\nschedule: 0 3 * * *\naction_type: workflow\nconfig_json: {"workflowId":"wf-123"}\n[/CRON_CREATE]`
+    expect(detectCronCommands(text)).toEqual([{
+      kind: 'create',
+      params: {
+        name: 'Run wf',
+        schedule: '0 3 * * *',
+        actionType: 'workflow',
+        actionConfig: { workflowId: 'wf-123' },
+      },
+    }])
+  })
+
+  it('rejects workflow config that names neither id nor name', () => {
+    const text = `[CRON_CREATE]\nname: Bad wf\nschedule: 0 4 * * *\naction_type: workflow\nconfig_json: {"projectId":"p1"}\n[/CRON_CREATE]`
+    // Invalid config for a non-message action -> command dropped.
+    expect(detectCronCommands(text)).toEqual([])
+  })
+
   it('returns empty for text without commands', () => {
     expect(detectCronCommands('hello world')).toEqual([])
   })

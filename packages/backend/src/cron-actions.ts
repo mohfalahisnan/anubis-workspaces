@@ -14,6 +14,7 @@ import type {
   CapturePostsCronConfig,
   CompetitorDiscoveryCronConfig,
   CronActionConfig,
+  WorkflowCronConfig,
 } from '@anubis/shared'
 import type { ConversationStack, CronJob, CapturedPost } from '@anubis/conversation'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
@@ -66,6 +67,15 @@ export async function runCronActionJob(
         output.result = run.result
         output.summary = run.summary
       }
+    } else if (job.actionType === 'workflow') {
+      const config = asWorkflowConfig(job.actionConfig)
+      if (!config) {
+        output.summary.errors.push('invalid workflow config')
+      } else {
+        const run = await runWorkflowAction(config, job, stack)
+        output.result = run.result
+        output.summary = run.summary
+      }
     } else {
       output.summary.errors.push(`unsupported cron action type: ${job.actionType}`)
     }
@@ -82,6 +92,13 @@ export async function runCronActionJob(
       summaryText = `Found ${output.summary.newCompetitors} new competitor candidates.`
     } else if (job.actionType === 'capture-posts') {
       summaryText = `Captured ${output.summary.postsCaptured} posts.`
+    } else if (job.actionType === 'workflow') {
+      const runId = typeof output.result.runId === 'string' ? output.result.runId : null
+      summaryText = runId
+        ? `Started workflow run ${runId}.`
+        : output.result.skipped === true
+          ? `Workflow already running — skipped this fire.`
+          : `Triggered workflow for job ${job.name}.`
     } else {
       summaryText = `Finished job ${job.name}.`
     }
@@ -103,6 +120,59 @@ function asCapturePostsConfig(config: CronActionConfig | undefined): CapturePost
   if (!config) return null
   if ('handles' in config && 'projectId' in config && 'captureProfile' in config) return config
   return null
+}
+
+function asWorkflowConfig(config: CronActionConfig | undefined): WorkflowCronConfig | null {
+  if (!config) return null
+  if ('workflowId' in config || 'workflowName' in config) return config as WorkflowCronConfig
+  return null
+}
+
+/**
+ * Fire a named/identified workflow through the shared workflow run path
+ * (the same {@link TriggerManager}/{@link WorkflowRunManager} used by armed
+ * triggers and manual runs). Results/errors are surfaced via the cron run
+ * output sidecar + a desktop notification — the lowest-friction existing
+ * mechanism, matching the other cron action types.
+ */
+async function runWorkflowAction(
+  config: WorkflowCronConfig,
+  job: CronJob,
+  stack: ConversationStack,
+): Promise<{ result: Record<string, unknown>; summary: CronRunSummary }> {
+  const summary: CronRunSummary = { newCompetitors: 0, postsCaptured: 0, errors: [] }
+  const projectId = config.projectId ?? job.projectId
+  const { runWorkflowCron } = await import('./workflow.js')
+
+  try {
+    const { runId, resolvedWorkflowId } = await runWorkflowCron(
+      stack,
+      {
+        workflowId: config.workflowId,
+        workflowName: config.workflowName,
+        projectId,
+        input: config.input,
+      },
+      { kind: 'trigger', event: 'cron', jobId: job.id, firedAt: Date.now() },
+    )
+    return {
+      result: {
+        workflowId: resolvedWorkflowId,
+        runId: runId ?? undefined,
+        skipped: runId === null,
+      },
+      summary,
+    }
+  } catch (err) {
+    summary.errors.push(err instanceof Error ? err.message : String(err))
+    return {
+      result: {
+        workflowId: config.workflowId,
+        workflowName: config.workflowName,
+      },
+      summary,
+    }
+  }
 }
 
 async function runCompetitorDiscovery(

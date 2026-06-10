@@ -1,8 +1,8 @@
-import { homedir, tmpdir } from 'node:os'
 import { join, resolve, basename } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { TypedEmitter } from '../../events/stream.js'
 import type { AgentEventMap } from '../../events/stream.js'
+import { getDataDir } from '../data-dir.js'
 import { sendChatGPTPrompt } from '@anubis/research-crawler'
 
 export interface GptWebRunOpts {
@@ -53,16 +53,6 @@ const PROFILE_DIRS = {
 }
 
 const LEGACY_LOGIN_PROFILE_DIR = 'chrome-profile'
-
-function getDataDir(): string {
-  if (process.env.ANUBIS_DATA_DIR) return process.env.ANUBIS_DATA_DIR
-  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
-    return join(process.env.LOCALAPPDATA, 'Anubis', 'anubis')
-  }
-  if (process.env.XDG_DATA_HOME) return join(process.env.XDG_DATA_HOME, 'anubis')
-  const home = homedir()
-  return home ? join(home, '.local', 'share', 'anubis') : join(tmpdir(), 'anubis')
-}
 
 function getAppConfig(): any {
   const path = join(getDataDir(), 'config.json')

@@ -28,18 +28,17 @@ describe('levelFor (default config)', () => {
   it('returns "yellow" above greenMax and up to yellowMax inclusive', () => {
     expect(levelFor(40_001, cfg)).toBe('yellow')
     expect(levelFor(75_000, cfg)).toBe('yellow')
-    expect(levelFor(100_000, cfg)).toBe('yellow')
+    expect(levelFor(1_000_000, cfg)).toBe('yellow')
   })
 
-  it('returns "red" above yellowMax and up to maxActive inclusive', () => {
-    expect(levelFor(100_001, cfg)).toBe('red')
-    expect(levelFor(500_000, cfg)).toBe('red')
-    expect(levelFor(1_000_000, cfg)).toBe('red')
+  it('returns "red" above yellowMax', () => {
+    expect(levelFor(1_000_001, cfg)).toBe('red')
+    expect(levelFor(50_000_000, cfg)).toBe('red')
+    expect(levelFor(660_000_000, cfg)).toBe('red')
   })
 
-  it('returns "black" above maxActive', () => {
-    expect(levelFor(1_000_001, cfg)).toBe('black')
-    expect(levelFor(50_000_000, cfg)).toBe('black')
+  it('returns "black" only above the (effectively unbounded) active ceiling', () => {
+    expect(levelFor(1_000_000_001, cfg)).toBe('black')
   })
 
   it('uses default config when none is supplied', () => {

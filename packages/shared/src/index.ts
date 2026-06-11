@@ -524,8 +524,10 @@ export interface CompetitorLevelsConfig {
 export const DEFAULT_COMPETITOR_LEVELS: CompetitorLevelsConfig = {
   minActive: 10_000,
   greenMax: 40_000,
-  yellowMax: 100_000,
-  maxActive: 1_000_000,
+  yellowMax: 1_000_000,
+  // Effectively unbounded: any account over yellowMax reads as 'red'. The upper
+  // 'black' region only triggers above this ceiling, which no real account hits.
+  maxActive: 1_000_000_000,
 }
 
 export function levelFor(

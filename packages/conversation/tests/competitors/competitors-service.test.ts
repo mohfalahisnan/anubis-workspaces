@@ -78,4 +78,30 @@ describe('CompetitorsService', () => {
     // The deleted handle is reusable
     expect(() => svc.create({ handle: '@linear' })).not.toThrow()
   })
+
+  it('defaults platform/status/favorite and round-trips them', () => {
+    const c = svc.create({ handle: '@baseliner' })
+    expect(c.platform).toBe('instagram')
+    expect(c.status).toBe('active')
+    expect(c.favorite).toBe(false)
+
+    const next = svc.update(c.id, { favorite: true, status: 'paused', platform: 'tiktok' })
+    expect(next.favorite).toBe(true)
+    expect(next.status).toBe('paused')
+    expect(next.platform).toBe('tiktok')
+
+    // omitting them on a later patch preserves stored values
+    const after = svc.update(c.id, { niche: 'Fitness' })
+    expect(after.favorite).toBe(true)
+    expect(after.status).toBe('paused')
+  })
+
+  it('persists baseline fields via setBaseline', () => {
+    const c = svc.create({ handle: '@withbaseline' })
+    svc.setBaseline(c.id, { baselineLikes: 120, baselineSampleSize: 18, baselineUpdatedAt: 1_700_000_000_000 })
+    const got = svc.get(c.id)!
+    expect(got.baselineLikes).toBe(120)
+    expect(got.baselineSampleSize).toBe(18)
+    expect(got.baselineUpdatedAt).toBe(1_700_000_000_000)
+  })
 })

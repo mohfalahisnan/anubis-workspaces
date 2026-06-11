@@ -15,6 +15,12 @@ export interface Competitor {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  platform: string
+  status: 'active' | 'paused' | 'archived'
+  favorite: boolean
+  baselineLikes?: number
+  baselineSampleSize?: number
+  baselineUpdatedAt?: number
   addedAt: number
   updatedAt: number
   deletedAt?: number
@@ -34,6 +40,12 @@ interface Row {
   notes: string | null
   bio: string | null
   level: string | null
+  platform: string
+  status: string
+  favorite: number
+  baseline_likes: number | null
+  baseline_sample_size: number | null
+  baseline_updated_at: number | null
   added_at: number
   updated_at: number
   deleted_at: number | null
@@ -54,6 +66,12 @@ function toCompetitor(r: Row): Competitor {
     notes: r.notes ?? undefined,
     bio: r.bio ?? undefined,
     level: (r.level as CompetitorLevelOverride | null) ?? undefined,
+    platform: r.platform ?? 'instagram',
+    status: (r.status as Competitor['status']) ?? 'active',
+    favorite: Boolean(r.favorite),
+    baselineLikes: r.baseline_likes ?? undefined,
+    baselineSampleSize: r.baseline_sample_size ?? undefined,
+    baselineUpdatedAt: r.baseline_updated_at ?? undefined,
     addedAt: r.added_at,
     updatedAt: r.updated_at,
     deletedAt: r.deleted_at ?? undefined,
@@ -68,10 +86,12 @@ export class CompetitorsRepo {
       INSERT INTO competitors (
         id, handle, project_id, display_name, niche, tint, followers, avg_likes,
         post_count, last_refreshed_at, notes, bio, level,
+        platform, status, favorite, baseline_likes, baseline_sample_size, baseline_updated_at,
         added_at, updated_at, deleted_at
       ) VALUES (
         @id, @handle, @projectId, @displayName, @niche, @tint, @followers, @avgLikes,
         @postCount, @lastRefreshedAt, @notes, @bio, @level,
+        @platform, @status, @favorite, @baselineLikes, @baselineSampleSize, @baselineUpdatedAt,
         @addedAt, @updatedAt, @deletedAt
       )
     `).run({
@@ -88,6 +108,12 @@ export class CompetitorsRepo {
       notes: c.notes ?? null,
       bio: c.bio ?? null,
       level: c.level ?? null,
+      platform: c.platform ?? 'instagram',
+      status: c.status ?? 'active',
+      favorite: c.favorite ? 1 : 0,
+      baselineLikes: c.baselineLikes ?? null,
+      baselineSampleSize: c.baselineSampleSize ?? null,
+      baselineUpdatedAt: c.baselineUpdatedAt ?? null,
       addedAt: c.addedAt,
       updatedAt: c.updatedAt,
       deletedAt: c.deletedAt ?? null,
@@ -133,7 +159,9 @@ export class CompetitorsRepo {
         UPDATE competitors SET
           display_name = ?, niche = ?, tint = ?, followers = ?,
           avg_likes = ?, post_count = ?, last_refreshed_at = ?, notes = ?,
-          bio = ?, level = ?, updated_at = ?
+          bio = ?, level = ?, platform = ?, status = ?, favorite = ?,
+          baseline_likes = ?, baseline_sample_size = ?, baseline_updated_at = ?,
+          updated_at = ?
         WHERE id = ?
       `)
       .run(
@@ -147,6 +175,12 @@ export class CompetitorsRepo {
         next.notes ?? null,
         next.bio ?? null,
         next.level ?? null,
+        next.platform ?? 'instagram',
+        next.status ?? 'active',
+        next.favorite ? 1 : 0,
+        next.baselineLikes ?? null,
+        next.baselineSampleSize ?? null,
+        next.baselineUpdatedAt ?? null,
         next.updatedAt,
         id,
       )

@@ -14,6 +14,9 @@ export interface CreateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  platform?: string
+  status?: 'active' | 'paused' | 'archived'
+  favorite?: boolean
 }
 
 export interface UpdateCompetitorInput {
@@ -26,6 +29,9 @@ export interface UpdateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride | null
+  platform?: string
+  status?: 'active' | 'paused' | 'archived'
+  favorite?: boolean
 }
 
 /**
@@ -99,6 +105,9 @@ export class CompetitorsService {
       notes: input.notes?.trim() || undefined,
       bio: input.bio?.trim() || undefined,
       level: input.level ?? undefined,
+      platform: input.platform ?? 'instagram',
+      status: input.status ?? 'active',
+      favorite: input.favorite ?? false,
       addedAt: now,
       updatedAt: now,
     }
@@ -119,6 +128,9 @@ export class CompetitorsService {
       notes: patch.notes ?? existing.notes,
       bio: patch.bio ?? existing.bio,
       level: 'level' in patch ? (patch.level ?? undefined) : existing.level,
+      platform: patch.platform ?? existing.platform,
+      status: patch.status ?? existing.status,
+      favorite: patch.favorite ?? existing.favorite,
     })
     return next!
   }
@@ -135,6 +147,21 @@ export class CompetitorsService {
    */
   markRefreshedAt(id: string, atMs: number): void {
     this.repo.update(id, { lastRefreshedAt: atMs })
+  }
+
+  /**
+   * Persist a recomputed performance baseline. Owned by the Research flow and
+   * kept off the open update() surface so it can't be spoofed by clients.
+   */
+  setBaseline(
+    id: string,
+    baseline: { baselineLikes: number | null; baselineSampleSize: number; baselineUpdatedAt: number },
+  ): void {
+    this.repo.update(id, {
+      baselineLikes: baseline.baselineLikes ?? undefined,
+      baselineSampleSize: baseline.baselineSampleSize,
+      baselineUpdatedAt: baseline.baselineUpdatedAt,
+    })
   }
 }
 

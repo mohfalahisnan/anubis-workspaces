@@ -1061,3 +1061,71 @@ export interface AgentNotInstalledErrorPayload {
   agent: AgentKind
   message?: string
 }
+
+/* ============================================================
+   Project snapshot — import/export of competitors + captured
+   posts for moving a project's data between installs. See
+   docs/superpowers/specs/2026-06-11-import-export-snapshot-design.md
+   ============================================================ */
+
+export interface SnapshotProjectInfo {
+  id: string
+  name: string
+  emoji?: string
+  color?: string
+  description?: string
+}
+
+export interface SnapshotCompetitor {
+  handle: string
+  displayName?: string
+  niche?: string
+  tint?: string
+  followers?: number
+  avgLikes?: number
+  postCount?: number
+  lastRefreshedAt?: number
+  notes?: string
+  bio?: string
+  level?: CompetitorLevelOverride
+  addedAt?: number
+  updatedAt?: number
+}
+
+export interface SnapshotCapturedPost {
+  competitorHandle: string
+  username: string
+  postUrl: string
+  caption?: string
+  likes?: number
+  comments?: number
+  postedAt?: string
+  mediaKind?: 'image' | 'video' | 'carousel'
+  mediaUrl?: string
+  carouselCount?: number
+  capturedAt?: number
+  raw?: Record<string, unknown>
+}
+
+export interface ProjectSnapshot {
+  kind: 'anubis-project-snapshot'
+  schemaVersion: 1
+  exportedAt: number
+  app: { name: string; version: string }
+  project: SnapshotProjectInfo
+  competitors: SnapshotCompetitor[]
+  capturedPosts: SnapshotCapturedPost[]
+}
+
+export interface ImportSnapshotInput {
+  projectId?: string
+  snapshot: ProjectSnapshot
+}
+
+export interface ImportSnapshotResult {
+  ok: true
+  projectId: string
+  competitors: { created: number; matched: number }
+  posts: { imported: number; skipped: number }
+  warnings: string[]
+}

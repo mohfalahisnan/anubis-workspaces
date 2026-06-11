@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
-import { ZodError } from 'zod'
 import type { ApiHealthResponse } from '@anubis/shared'
+import { toErrorResponse } from './http-errors.js'
 import { researchCrawlerRoutes } from './research-crawler.js'
 import { aiAgentRoutes } from './ai-agent.js'
 import { conversationRoutes } from './conversation.js'
@@ -73,26 +73,13 @@ app.route('/knowledge-base', knowledgeBaseRoutes)
 app.route('/jobs', jobRoutes)
 
 app.onError((error, c) => {
-  if (error instanceof ZodError) {
-    console.warn(`[backend] 400 ${c.req.method} ${c.req.path} — invalid request body`)
-    return c.json({
-      ok: false,
-      error: {
-        code: 'BAD_REQUEST',
-        message: 'Invalid request body.',
-        issues: error.issues,
-      },
-    }, 400)
+  const { status, body } = toErrorResponse(error)
+  if (status >= 500) {
+    console.error(`[backend] ${status} ${c.req.method} ${c.req.path} —`, error)
+  } else {
+    console.warn(`[backend] ${status} ${c.req.method} ${c.req.path}`)
   }
-
-  console.error(`[backend] 500 ${c.req.method} ${c.req.path} —`, error)
-  return c.json({
-    ok: false,
-    error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    },
-  }, 500)
+  return c.json(body, status)
 })
 
 export default app

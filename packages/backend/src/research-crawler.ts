@@ -18,7 +18,12 @@ import {
 } from '@anubis/research-crawler'
 import type { DiscoverJobResult, DiscoveredCandidate } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
-import { withCrawlerProfileDefaults, type CrawlerProfileName } from './chrome-defaults.js'
+import {
+  withCrawlerProfileDefaults,
+  crawlerProfileSchema,
+  inferCaptureProfile,
+  inferDiscoverProfile,
+} from './chrome-defaults.js'
 import { jobManager } from './jobs.js'
 
 /* -----------------------------------------------------------
@@ -30,7 +35,7 @@ import { jobManager } from './jobs.js'
    - profile=flow    → existing CDP scraper.
    - ----------------------------------------------------------- */
 
-const profileSchema = z.enum(['login', 'public', 'flow'])
+const profileSchema = crawlerProfileSchema
 
 const openChromeSchema = z.object({
   url: z.string().url().optional(),
@@ -462,20 +467,4 @@ function mapDiscoveredCandidates(
     profileImageUrl: p.profileImageUrl,
     profileUrl: p.profileUrl,
   }))
-}
-
-function inferCaptureProfile(
-  profile: CrawlerProfileName | undefined,
-  port: number | undefined,
-): CrawlerProfileName {
-  if (profile) return profile
-  return port === 9222 ? 'login' : 'public'
-}
-
-function inferDiscoverProfile(
-  profile: CrawlerProfileName | undefined,
-  port: number | undefined,
-): CrawlerProfileName {
-  if (profile) return profile
-  return port === 9223 ? 'public' : 'login'
 }

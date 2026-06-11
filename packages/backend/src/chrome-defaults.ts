@@ -1,8 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
+import { z } from 'zod'
+import { LOGIN_PROFILE_PORT, PUBLIC_PROFILE_PORT } from '@anubis/research-crawler'
 import type { AppConfig } from '@anubis/conversation'
 
-export type CrawlerProfileName = 'login' | 'public' | 'flow'
+/**
+ * The three Chrome profiles, as one source of truth. `login`/`public` capture
+ * Instagram (headed-authenticated / headless-anonymous); `flow` drives Google
+ * Flow. Every route that accepts a profile validates against this schema rather
+ * than re-declaring the enum, so the set can never drift between routes.
+ */
+export const crawlerProfileSchema = z.enum(['login', 'public', 'flow'])
+export type CrawlerProfileName = z.infer<typeof crawlerProfileSchema>
 
 type ChromeInput = {
   profileDir?: string
@@ -107,4 +116,32 @@ function hasInstagramAuthCookie(profileDir: string): boolean {
     }
   }
   return false
+}
+
+/**
+ * Resolve the profile for an Instagram *capture*. An explicit profile wins;
+ * otherwise the remote-debugging port decides, defaulting to the anonymous
+ * `public` profile. The port comparison uses the crawler's canonical
+ * {@link LOGIN_PROFILE_PORT}, so the backend and crawler cannot disagree on
+ * which port means which profile.
+ */
+export function inferCaptureProfile(
+  profile: CrawlerProfileName | undefined,
+  port: number | undefined,
+): CrawlerProfileName {
+  if (profile) return profile
+  return port === LOGIN_PROFILE_PORT ? 'login' : 'public'
+}
+
+/**
+ * Resolve the profile for competitor *discovery*. Defaults to the logged-in
+ * `login` profile unless the port points at the anonymous `public` one
+ * ({@link PUBLIC_PROFILE_PORT}).
+ */
+export function inferDiscoverProfile(
+  profile: CrawlerProfileName | undefined,
+  port: number | undefined,
+): CrawlerProfileName {
+  if (profile) return profile
+  return port === PUBLIC_PROFILE_PORT ? 'public' : 'login'
 }

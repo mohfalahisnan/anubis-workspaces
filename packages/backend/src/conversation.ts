@@ -3,8 +3,6 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { createReadStream, realpathSync, statSync } from 'node:fs'
 import { extname, isAbsolute, relative, resolve } from 'node:path'
-import { NoCredentialsError } from '@anubis/conversation'
-import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import { getStack } from './services.js'
 
 const CreateBody = z.object({
@@ -80,18 +78,10 @@ conversationRoutes.post('/:id/reset-skills', (c) => {
 
 conversationRoutes.post('/:id/messages', async (c) => {
   const body = SendBody.parse(await c.req.json())
-  try {
-    const r = await getStack().conversation.sendMessage(c.req.param('id'), body as never)
-    return c.json({ ok: true, msgId: r.msgId, messageId: r.messageId }, 202)
-  } catch (e) {
-    if (e instanceof NoCredentialsError) {
-      return c.json(
-        { ok: false, error: { code: NO_CREDENTIALS_ERROR_CODE, profileId: e.profileId, agent: e.agent } },
-        409,
-      )
-    }
-    throw e
-  }
+  // A `NoCredentialsError` from sendMessage propagates to app.onError, which
+  // maps it to the 409 credential-gate response. See http-errors.ts.
+  const r = await getStack().conversation.sendMessage(c.req.param('id'), body as never)
+  return c.json({ ok: true, msgId: r.msgId, messageId: r.messageId }, 202)
 })
 
 conversationRoutes.get('/:id/messages', (c) => {

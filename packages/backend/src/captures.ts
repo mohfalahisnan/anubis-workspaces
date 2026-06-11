@@ -75,6 +75,66 @@ interface PersistedCapture {
 
 export const captureRoutes = new Hono()
 
+/**
+ * POST /captures/competitors/batch — capture a selection of competitors in
+ * human-paced chunks (see capture-batch.ts) inside one background job. Returns
+ * the job id immediately; progress + stop control flow through the job manager.
+ *
+ * NOTE: this static route MUST be registered before the dynamic
+ * `/competitors/:id` route below. Hono resolves overlapping routes by
+ * registration order, so declaring `:id` first makes it swallow
+ * `/competitors/batch` (matching id="batch") and 404 every batch request.
+ */
+captureRoutes.post('/competitors/batch', async (c) => {
+  const stack = getStack()
+  const body = BatchCaptureBody.parse(await c.req.json().catch(() => ({})))
+
+  // Resolve + de-duplicate ids, preserving selection order. Unknown ids are
+  // dropped silently (the selection may have gone stale); if nothing resolves
+  // we 404 rather than spinning up an empty job.
+  const seen = new Set<string>()
+  const targets = body.competitorIds.flatMap((id) => {
+    if (seen.has(id)) return []
+    seen.add(id)
+    const competitor = stack.competitors.get(id)
+    return competitor ? [{ id: competitor.id, handle: competitor.handle }] : []
+  })
+  if (targets.length === 0) return c.json({ ok: false, error: 'not_found' }, 404)
+
+  const projectId = stack.competitors.get(targets[0]!.id)?.projectId
+  const captureOpts: CaptureOptions = {
+    profile: body.profile,
+    headless: body.headless,
+    forceHeadless: body.forceHeadless,
+    maxResponses: body.maxResponses,
+    targetPosts: body.targetPosts,
+    timeoutMs: body.timeoutMs,
+  }
+
+  const job = jobManager.runJob<BatchCaptureJobResult>(
+    {
+      kind: 'capture-posts-batch',
+      label: `Capture · ${targets.length} competitor${targets.length === 1 ? '' : 's'}`,
+      projectId,
+    },
+    (ctx) =>
+      runBatchCapture({
+        competitors: targets,
+        signal: ctx.signal,
+        // Per-profile crawler progress is silenced so the batch orchestrator
+        // owns the job's progress (chunk/profile counters, not scroll counts).
+        captureOne: async (target) => {
+          const persisted = await runCapture(target.id, captureOpts, silentReporter())
+          return { capturedCount: persisted.capturedCount, warnings: persisted.warnings }
+        },
+        reportProgress: ctx.setProgress,
+        reportWarning: ctx.warn,
+      }),
+  )
+
+  return c.json({ ok: true, jobId: job.id })
+})
+
 captureRoutes.post('/competitors/:id', async (c) => {
   const stack = getStack()
   const competitor = stack.competitors.get(c.req.param('id'))
@@ -162,61 +222,6 @@ captureRoutes.post('/competitors/:id', async (c) => {
     capturedCount: persisted.capturedCount,
     warnings: persisted.warnings,
   })
-})
-
-/**
- * POST /captures/competitors/batch — capture a selection of competitors in
- * human-paced chunks (see capture-batch.ts) inside one background job. Returns
- * the job id immediately; progress + stop control flow through the job manager.
- */
-captureRoutes.post('/competitors/batch', async (c) => {
-  const stack = getStack()
-  const body = BatchCaptureBody.parse(await c.req.json().catch(() => ({})))
-
-  // Resolve + de-duplicate ids, preserving selection order. Unknown ids are
-  // dropped silently (the selection may have gone stale); if nothing resolves
-  // we 404 rather than spinning up an empty job.
-  const seen = new Set<string>()
-  const targets = body.competitorIds.flatMap((id) => {
-    if (seen.has(id)) return []
-    seen.add(id)
-    const competitor = stack.competitors.get(id)
-    return competitor ? [{ id: competitor.id, handle: competitor.handle }] : []
-  })
-  if (targets.length === 0) return c.json({ ok: false, error: 'not_found' }, 404)
-
-  const projectId = stack.competitors.get(targets[0]!.id)?.projectId
-  const captureOpts: CaptureOptions = {
-    profile: body.profile,
-    headless: body.headless,
-    forceHeadless: body.forceHeadless,
-    maxResponses: body.maxResponses,
-    targetPosts: body.targetPosts,
-    timeoutMs: body.timeoutMs,
-  }
-
-  const job = jobManager.runJob<BatchCaptureJobResult>(
-    {
-      kind: 'capture-posts-batch',
-      label: `Capture · ${targets.length} competitor${targets.length === 1 ? '' : 's'}`,
-      projectId,
-    },
-    (ctx) =>
-      runBatchCapture({
-        competitors: targets,
-        signal: ctx.signal,
-        // Per-profile crawler progress is silenced so the batch orchestrator
-        // owns the job's progress (chunk/profile counters, not scroll counts).
-        captureOne: async (target) => {
-          const persisted = await runCapture(target.id, captureOpts, silentReporter())
-          return { capturedCount: persisted.capturedCount, warnings: persisted.warnings }
-        },
-        reportProgress: ctx.setProgress,
-        reportWarning: ctx.warn,
-      }),
-  )
-
-  return c.json({ ok: true, jobId: job.id })
 })
 
 /**

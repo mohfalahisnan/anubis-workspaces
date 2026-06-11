@@ -20,6 +20,8 @@ import { TasksPage } from '@/pages/tasks'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
 import { CompetitorsPage } from '@/pages/competitors'
+import { DiscoverCompetitorsPage } from '@/pages/discover-competitors'
+import { CapturePostsPage } from '@/pages/capture-posts'
 import { ProfileEditorPage } from '@/pages/profile-editor'
 import { ProfilesPage } from '@/pages/profiles'
 import { ScheduledPage } from '@/pages/scheduled'
@@ -49,6 +51,8 @@ const BREADCRUMBS: Record<PageKey, string> = {
   'profile-editor': 'Profiles · Edit',
   skills: 'Skills',
   competitors: 'Competitors',
+  'discover-competitors': 'Competitors · Discover',
+  'capture-posts': 'Competitors · Capture',
   scheduled: 'Scheduled jobs',
   settings: 'Settings',
   'workflow-demo': 'Workflow demo',
@@ -226,6 +230,10 @@ function CurrentPage() {
       return <SkillsPage />
     case 'competitors':
       return <CompetitorsPage />
+    case 'discover-competitors':
+      return <DiscoverCompetitorsPage jobId={route.jobId} />
+    case 'capture-posts':
+      return <CapturePostsPage jobId={route.jobId} competitorIds={route.competitorIds} />
     case 'scheduled':
       return <ScheduledPage />
     case 'settings':

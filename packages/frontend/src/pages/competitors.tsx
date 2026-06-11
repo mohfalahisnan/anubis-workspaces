@@ -13,18 +13,16 @@ import {
 } from 'lucide-react'
 
 import type { CompetitorLevelsConfig, CompetitorLevelOverride, CompetitorSummary } from '@anubis/shared'
-import { CAPTURE_CHUNK_SIZE, effectiveLevel } from '@anubis/shared'
+import { effectiveLevel } from '@anubis/shared'
 import { useProject } from '@/lib/use-project'
+import { useNavigation } from '@/lib/navigation'
 
 import {
-  captureCompetitorAsync,
-  captureCompetitorsBatch,
   createCompetitor,
   deleteCompetitor,
   listCompetitors,
   updateCompetitor,
 } from '@/api'
-import { FindCompetitorsDialog } from './competitor-dialogs'
 import { CompetitorLevelFilter, matchesLevelFilter, type LevelFilter } from '@/components/competitor-level-filter'
 import {
   PaginationBar,
@@ -92,12 +90,12 @@ function matchesCompetitorQuery(c: CompetitorSummary, query: string): boolean {
 
 export function CompetitorsPage() {
   const { activeProject } = useProject()
+  const { navigate } = useNavigation()
   const [items, setItems] = useState<CompetitorSummary[] | null>(null)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [busy, setBusy] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<CompetitorSummary | null>(null)
-  const [findOpen, setFindOpen] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
@@ -186,23 +184,10 @@ export function CompetitorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?.id])
 
-  async function handleCapture(c: CompetitorSummary) {
-    // Capture now runs as a background job: enqueue it and let the top-nav
-    // progress bar + completion alert report progress/results. The user can
-    // keep working while the crawler runs.
-    setBanner(null)
-    try {
-      await captureCompetitorAsync(c.id)
-      setBanner({
-        kind: 'success',
-        message: `Capturing ${c.handle} in the background — track it in the top nav.`,
-      })
-    } catch (e) {
-      setBanner({
-        kind: 'error',
-        message: e instanceof Error ? e.message : 'Could not start capture.',
-      })
-    }
+  function handleCapture(c: CompetitorSummary) {
+    // Capture now happens on a dedicated page: open it preseeded with this
+    // handle so the user gets live progress + the captured posts in one place.
+    navigate({ page: 'capture-posts', competitorIds: [c.id] })
   }
 
   async function handleDelete(c: CompetitorSummary) {
@@ -269,28 +254,14 @@ export function CompetitorsPage() {
     }
   }
 
-  async function handleBulkCapture() {
+  function handleBulkCapture() {
     if (selected.size === 0) return
-    setBanner(null)
     // Preserve selection order as shown in the grid/table.
     const order = new Map((items ?? []).map((c, i) => [c.id, i]))
     const ids = [...selected].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0))
-    try {
-      await captureCompetitorsBatch(ids)
-      exitSelectMode()
-      setBanner({
-        kind: 'success',
-        message:
-          ids.length <= CAPTURE_CHUNK_SIZE
-            ? `Capturing ${ids.length} competitor${ids.length === 1 ? '' : 's'} in the background — track it in the top nav.`
-            : `Capturing ${ids.length} competitors in chunks of ${CAPTURE_CHUNK_SIZE} (with short cooldowns between) — track progress and stop anytime in the top nav.`,
-      })
-    } catch (e) {
-      setBanner({
-        kind: 'error',
-        message: e instanceof Error ? e.message : 'Could not start batch capture.',
-      })
-    }
+    exitSelectMode()
+    // Hand off to the dedicated Capture Posts page with the selection preseeded.
+    navigate({ page: 'capture-posts', competitorIds: ids })
   }
 
   async function handleUpdate(
@@ -373,7 +344,16 @@ export function CompetitorsPage() {
             )}
             <button
               type='button'
-              onClick={() => setFindOpen(true)}
+              onClick={() => navigate({ page: 'capture-posts' })}
+              disabled={busy || selectMode || !items || items.length === 0}
+              className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+            >
+              <DownloadCloudIcon className='size-[15px]' strokeWidth={2} />
+              Capture posts
+            </button>
+            <button
+              type='button'
+              onClick={() => navigate({ page: 'discover-competitors' })}
               disabled={busy || selectMode}
               className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
             >
@@ -511,19 +491,6 @@ export function CompetitorsPage() {
         competitor={editing}
         onClose={() => setEditing(null)}
         onSave={(competitor, patch) => void handleUpdate(competitor, patch)}
-      />
-
-      <FindCompetitorsDialog
-        open={findOpen}
-        onClose={() => setFindOpen(false)}
-        onStarted={() => {
-          setFindOpen(false)
-          setBanner({
-            kind: 'success',
-            message:
-              'Discovery is running in the background. You\'ll get an alert with the candidates when it finishes.',
-          })
-        }}
       />
 
       <BulkDeleteDialog

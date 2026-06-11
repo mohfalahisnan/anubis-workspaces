@@ -4,7 +4,6 @@ import {
   CheckCircle2Icon,
   ChevronRightIcon,
   Loader2Icon,
-  PlusIcon,
   SquareIcon,
   TimerIcon,
   XCircleIcon,
@@ -14,24 +13,13 @@ import {
 import type {
   BatchCaptureJobResult,
   CaptureJobResult,
-  CompetitorLevel,
   DiscoverJobResult,
-  DiscoveredCandidate,
   ExtractWorkspaceJobResult,
   JobProgress,
   JobSummary,
 } from '@anubis/shared'
-import { createCompetitor, listCompetitors } from '@/api'
 import { useJobs } from '@/lib/use-jobs'
 import { useNavigation } from '@/lib/navigation'
-import { useProject } from '@/lib/use-project'
-import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
-import { LEVEL_COLOR } from '@/lib/competitor-level'
-import {
-  CompetitorLevelFilter,
-  matchesLevelFilter,
-  type LevelFilter,
-} from '@/components/competitor-level-filter'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -319,6 +307,7 @@ function JobStateIcon({ job }: { job: JobSummary }) {
    =========================================================== */
 
 export function JobCompletionAlerts() {
+  const { navigate } = useNavigation()
   const jobs = useJobs((s) => s.jobs)
   const acknowledged = useJobs((s) => s.acknowledged)
   const acknowledge = useJobs((s) => s.acknowledge)
@@ -348,7 +337,15 @@ export function JobCompletionAlerts() {
             type='button'
             onClick={() => {
               acknowledge(job.id)
-              setDetailsJob(job)
+              // Discovery + capture results now live on dedicated pages; open
+              // the relevant page (carrying the job id) instead of a modal.
+              if (job.kind === 'discover-competitors') {
+                navigate({ page: 'discover-competitors', jobId: job.id })
+              } else if (job.kind === 'capture-posts' || job.kind === 'capture-posts-batch') {
+                navigate({ page: 'capture-posts', jobId: job.id })
+              } else {
+                setDetailsJob(job)
+              }
             }}
             className={cn(
               'pointer-events-auto flex items-start gap-2.5 rounded-lg border bg-card px-3.5 py-3 text-left shadow-lg ring-1 ring-foreground/5 transition-colors',
@@ -419,389 +416,13 @@ function JobDetailsModal({
   return (
     <Dialog open={!!job} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className='max-w-2xl bg-card p-0'>
-        {job?.kind === 'discover-competitors' ? (
-          <DiscoverJobDetails job={job} onClose={onClose} />
-        ) : job?.kind === 'capture-posts-batch' ? (
-          <BatchCaptureJobDetails job={job} onClose={onClose} />
-        ) : job?.kind === 'capture-posts' ? (
-          <CaptureJobDetails job={job} onClose={onClose} />
-        ) : job?.kind === 'extract-workspace' ? (
+        {job?.kind === 'extract-workspace' ? (
           <ExtractWorkspaceJobDetails job={job} onClose={onClose} />
         ) : job ? (
           <GenericJobDetails job={job} onClose={onClose} />
         ) : null}
       </DialogContent>
     </Dialog>
-  )
-}
-
-function DiscoverJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
-  const { activeProject } = useProject()
-  const { levelFor } = useCompetitorLevels()
-  const result = job.result as DiscoverJobResult | undefined
-  const candidates = result?.candidates ?? []
-  const [selected, setSelected] = useState<Set<string>>(() => new Set())
-  const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
-  // Out-of-range ('black') candidates are hidden by default; flip to review them.
-  const [showBlack, setShowBlack] = useState(false)
-  const [adding, setAdding] = useState(false)
-  const [added, setAdded] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const levelOf = (candidate: DiscoveredCandidate): CompetitorLevel =>
-    levelFor(candidate.followers ?? null)
-
-  // Seed the default selection once the candidates are available: pick the
-  // in-range (non-black) ones so a default "Add" never tracks profiles the
-  // user can't see. Re-seeding is guarded so user toggles aren't clobbered.
-  const seeded = useRef(false)
-  useEffect(() => {
-    if (seeded.current || candidates.length === 0) return
-    seeded.current = true
-    setSelected(new Set(candidates.filter((c) => levelOf(c) !== 'black').map((c) => c.username)))
-  }, [candidates, levelFor])
-
-  const visibleCandidates = useMemo(
-    () =>
-      candidates.filter((candidate) => {
-        const level = levelOf(candidate)
-        // Hide black unless the user opted in or is explicitly filtering to it.
-        if (level === 'black' && !showBlack && levelFilter !== 'black') return false
-        return matchesLevelFilter(level, levelFilter)
-      }),
-    [candidates, levelFilter, showBlack, levelFor],
-  )
-  const visibleSelectedCount = visibleCandidates.filter((c) => selected.has(c.username)).length
-
-  function toggle(username: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(username)) next.delete(username)
-      else next.add(username)
-      return next
-    })
-  }
-
-  function selectVisible() {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      for (const c of visibleCandidates) next.add(c.username)
-      return next
-    })
-  }
-
-  function clearVisible() {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      for (const c of visibleCandidates) next.delete(c.username)
-      return next
-    })
-  }
-
-  async function handleAdd() {
-    setAdding(true)
-    setError(null)
-    const picked = candidates.filter((c) => selected.has(c.username))
-    let count = 0
-    const tracked = new Set(
-      (await listCompetitors(activeProject?.id).catch(() => [])).map((c) =>
-        c.handle.replace(/^@/, '').toLowerCase(),
-      ),
-    )
-    for (const candidate of picked) {
-      const key = candidate.username.replace(/^@/, '').toLowerCase()
-      if (tracked.has(key)) continue
-      try {
-        await createCompetitor({
-          handle: candidate.username,
-          displayName: candidate.fullName?.trim() || undefined,
-          followers: candidate.followers,
-          bio: candidate.bio?.trim() || undefined,
-          projectId: activeProject?.id,
-        })
-        count++
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        if (!/already/i.test(msg)) setError(msg)
-      }
-    }
-    setAdded(count)
-    setAdding(false)
-  }
-
-  return (
-    <>
-      <DialogHeader className='border-b border-border px-6 py-4'>
-        <DialogTitle>Discovered competitors</DialogTitle>
-        <DialogDescription>
-          {job.label} — {candidates.length} candidate{candidates.length === 1 ? '' : 's'} found.
-          Pick which to start tracking.
-        </DialogDescription>
-      </DialogHeader>
-
-      {candidates.length > 0 && (
-        <div className='flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5'>
-          <CompetitorLevelFilter value={levelFilter} onChange={setLevelFilter} />
-          <div className='flex items-center gap-3 text-[11.5px]'>
-            <label className='inline-flex cursor-pointer items-center gap-1.5 text-muted-foreground'>
-              <input
-                type='checkbox'
-                checked={showBlack}
-                onChange={(e) => setShowBlack(e.target.checked)}
-                className='size-3.5 accent-[var(--anubis-gold)]'
-              />
-              Show out-of-range
-            </label>
-            <button
-              type='button'
-              onClick={visibleSelectedCount === visibleCandidates.length ? clearVisible : selectVisible}
-              disabled={visibleCandidates.length === 0}
-              className='font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40'
-            >
-              {visibleSelectedCount === visibleCandidates.length ? 'Clear shown' : 'Select shown'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className='max-h-[min(60vh,460px)] overflow-y-auto px-3 py-3'>
-        {candidates.length === 0 ? (
-          <p className='m-4 text-center text-[13px] text-muted-foreground'>
-            Nothing came back from this run.
-          </p>
-        ) : visibleCandidates.length === 0 ? (
-          <p className='m-4 text-center text-[13px] text-muted-foreground'>
-            No candidates match this filter.
-          </p>
-        ) : (
-          <ul className='flex flex-col gap-1'>
-            {visibleCandidates.map((candidate) => (
-              <CandidateRow
-                key={candidate.username}
-                candidate={candidate}
-                level={levelOf(candidate)}
-                selected={selected.has(candidate.username)}
-                onToggle={() => toggle(candidate.username)}
-              />
-            ))}
-          </ul>
-        )}
-        {error && (
-          <p className='m-2 rounded-md border border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] px-3 py-2 text-[12px] text-destructive'>
-            {error}
-          </p>
-        )}
-        {added !== null && (
-          <p className='m-2 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3 py-2 text-[12px] text-foreground'>
-            Added {added} new competitor{added === 1 ? '' : 's'}.
-          </p>
-        )}
-      </div>
-
-      <DialogFooter className='border-t border-border px-6 py-3'>
-        <button
-          type='button'
-          onClick={onClose}
-          className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
-        >
-          Close
-        </button>
-        <button
-          type='button'
-          disabled={adding || selected.size === 0 || candidates.length === 0}
-          onClick={() => void handleAdd()}
-          className={cn(
-            'inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13.5px] font-semibold transition-colors',
-            adding || selected.size === 0 || candidates.length === 0
-              ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-50'
-              : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
-          )}
-        >
-          <PlusIcon className='size-[15px]' strokeWidth={2.4} />
-          {adding ? 'Adding…' : `Add ${selected.size > 0 ? selected.size : ''}`}
-        </button>
-      </DialogFooter>
-    </>
-  )
-}
-
-function CandidateRow({
-  candidate,
-  level,
-  selected,
-  onToggle,
-}: {
-  candidate: DiscoveredCandidate
-  level: CompetitorLevel
-  selected: boolean
-  onToggle: () => void
-}) {
-  return (
-    <li>
-      <button
-        type='button'
-        onClick={onToggle}
-        className={cn(
-          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors',
-          selected
-            ? 'bg-[color-mix(in_oklab,var(--anubis-gold)_10%,transparent)]'
-            : 'hover:bg-muted',
-        )}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors',
-            selected
-              ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]'
-              : 'border-border bg-background',
-          )}
-        >
-          {selected && (
-            <svg viewBox='0 0 24 24' className='size-3' fill='none' stroke='currentColor' strokeWidth={3.5} strokeLinecap='round' strokeLinejoin='round'>
-              <path d='M20 6L9 17l-5-5' />
-            </svg>
-          )}
-        </span>
-        <div className='min-w-0 flex-1'>
-          <div className='truncate font-mono text-[12.5px] text-foreground'>@{candidate.username}</div>
-          {candidate.fullName && (
-            <div className='truncate text-[11.5px] text-muted-foreground'>{candidate.fullName}</div>
-          )}
-          {candidate.bio && (
-            <div className='mt-0.5 line-clamp-1 text-[11px] text-muted-foreground'>{candidate.bio}</div>
-          )}
-        </div>
-        <span className='flex shrink-0 items-center gap-2 font-mono text-[11px] tabular-nums text-muted-foreground'>
-          <span
-            aria-hidden
-            title={level}
-            className='size-2 rounded-full ring-1 ring-black/20'
-            style={{ background: LEVEL_COLOR[level] }}
-          />
-          {formatBigNumber(candidate.followers)}
-        </span>
-      </button>
-    </li>
-  )
-}
-
-function CaptureJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
-  const { navigate } = useNavigation()
-  const result = job.result as CaptureJobResult | undefined
-  const count = result?.capturedCount ?? 0
-
-  return (
-    <>
-      <DialogHeader className='border-b border-border px-6 py-4'>
-        <DialogTitle>Capture complete</DialogTitle>
-        <DialogDescription>{job.label}</DialogDescription>
-      </DialogHeader>
-
-      <div className='px-6 py-6 text-center'>
-        <p className='font-mono text-[40px] font-semibold tabular-nums text-foreground'>{count}</p>
-        <p className='mt-1 text-[13px] text-muted-foreground'>
-          new post{count === 1 ? '' : 's'} captured
-          {result?.competitor?.handle ? ` from ${result.competitor.handle}` : ''}.
-        </p>
-        {job.warnings.length > 0 && (
-          <ul className='mx-auto mt-4 max-w-sm list-disc rounded-md border border-border bg-background/60 px-6 py-3 text-left text-[11.5px] text-muted-foreground'>
-            {job.warnings.slice(0, 4).map((w, i) => (
-              <li key={i}>{w}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <DialogFooter className='border-t border-border px-6 py-3'>
-        <button
-          type='button'
-          onClick={onClose}
-          className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
-        >
-          Close
-        </button>
-        <button
-          type='button'
-          onClick={() => {
-            onClose()
-            navigate({ page: 'content' })
-          }}
-          className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
-        >
-          View posts
-        </button>
-      </DialogFooter>
-    </>
-  )
-}
-
-function BatchCaptureJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
-  const { navigate } = useNavigation()
-  const result = job.result as BatchCaptureJobResult | undefined
-  const done = result?.profilesCompleted ?? 0
-  const total = result?.totalProfiles ?? 0
-  const posts = result?.capturedCount ?? 0
-  const stopped = job.state === 'stopped' || result?.stopped
-  const per = result?.perCompetitor ?? []
-  const failed = per.filter((p) => !p.ok)
-
-  return (
-    <>
-      <DialogHeader className='border-b border-border px-6 py-4'>
-        <DialogTitle>{stopped ? 'Capture stopped' : 'Batch capture complete'}</DialogTitle>
-        <DialogDescription>
-          {job.label}
-          {stopped ? ' — stopped early; everything captured so far was kept.' : ''}
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className='px-6 py-5'>
-        <div className='flex items-center justify-center gap-8'>
-          <Stat value={`${done}/${total}`} label='profiles processed' />
-          <Stat value={String(posts)} label={`post${posts === 1 ? '' : 's'} captured`} />
-          {failed.length > 0 && <Stat value={String(failed.length)} label='failed' tone='warn' />}
-        </div>
-
-        {per.length > 0 && (
-          <ul className='mx-auto mt-5 max-h-[min(40vh,300px)] max-w-md divide-y divide-border overflow-y-auto rounded-md border border-border bg-background/60'>
-            {per.map((p, i) => (
-              <li key={`${p.handle}-${i}`} className='flex items-center gap-2 px-3 py-1.5 text-[12px]'>
-                {p.ok ? (
-                  <CheckCircle2Icon className='size-3.5 shrink-0 text-[var(--anubis-success)]' />
-                ) : (
-                  <XCircleIcon className='size-3.5 shrink-0 text-destructive' />
-                )}
-                <span className='min-w-0 flex-1 truncate font-mono text-foreground'>{p.handle}</span>
-                <span className='shrink-0 tabular-nums text-muted-foreground'>
-                  {p.ok ? `${p.capturedCount} post${p.capturedCount === 1 ? '' : 's'}` : 'failed'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <DialogFooter className='border-t border-border px-6 py-3'>
-        <button
-          type='button'
-          onClick={onClose}
-          className='inline-flex h-9 items-center rounded-md px-3.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
-        >
-          Close
-        </button>
-        <button
-          type='button'
-          onClick={() => {
-            onClose()
-            navigate({ page: 'content' })
-          }}
-          className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-4 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)]'
-        >
-          View posts
-        </button>
-      </DialogFooter>
-    </>
   )
 }
 
@@ -873,22 +494,6 @@ function ExtractWorkspaceJobDetails({ job, onClose }: { job: JobSummary; onClose
   )
 }
 
-function Stat({ value, label, tone }: { value: string; label: string; tone?: 'warn' }) {
-  return (
-    <div className='text-center'>
-      <p
-        className={cn(
-          'font-mono text-[32px] font-semibold tabular-nums',
-          tone === 'warn' ? 'text-destructive' : 'text-foreground',
-        )}
-      >
-        {value}
-      </p>
-      <p className='mt-0.5 text-[12px] text-muted-foreground'>{label}</p>
-    </div>
-  )
-}
-
 function GenericJobDetails({ job, onClose }: { job: JobSummary; onClose: () => void }) {
   return (
     <>
@@ -918,11 +523,4 @@ function GenericJobDetails({ job, onClose }: { job: JobSummary; onClose: () => v
       </DialogFooter>
     </>
   )
-}
-
-function formatBigNumber(n: number | undefined): string {
-  if (n === undefined || n === null) return '—'
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return n.toLocaleString()
 }

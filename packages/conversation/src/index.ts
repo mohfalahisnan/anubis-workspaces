@@ -15,6 +15,9 @@ import { CronJobsRepo } from './db/repositories/cron-jobs-repo.js'
 import { CompetitorsRepo } from './db/repositories/competitors-repo.js'
 import { CompetitorsService } from './competitors/competitors-service.js'
 import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+import { ResearchSessionsRepo } from './db/repositories/research-sessions-repo.js'
+import { ResearchCandidatesRepo } from './db/repositories/research-candidates-repo.js'
+import { ResearchService } from './research/research-service.js'
 import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 import { TasksRepo } from './db/repositories/tasks-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
@@ -46,6 +49,7 @@ export interface ConversationStack {
   profiles: ProfileService
   competitors: CompetitorsService
   capturedPosts: CapturedPostsRepo
+  research: ResearchService
   contentItems: ContentItemsRepo
   tasks: TasksRepo
   workflows: WorkflowsRepo
@@ -100,6 +104,12 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   }
   const competitors = new CompetitorsService(new CompetitorsRepo(db))
   const capturedPosts = new CapturedPostsRepo(db)
+  const research = new ResearchService({
+    competitors,
+    capturedPosts,
+    sessions: new ResearchSessionsRepo(db),
+    candidates: new ResearchCandidatesRepo(db),
+  })
   const contentItems = new ContentItemsRepo(db)
   const tasks = new TasksRepo(db)
   const workflowsRepo = new WorkflowsRepo(db)
@@ -151,7 +161,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   const stack: ConversationStack = {
-    conversation, profiles, competitors, capturedPosts, contentItems, tasks,
+    conversation, profiles, competitors, capturedPosts, research, contentItems, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,
@@ -184,6 +194,9 @@ export type { CronJob } from './db/repositories/cron-jobs-repo.js'
 export type { Competitor } from './db/repositories/competitors-repo.js'
 export type { CapturedPost, ListPostsOpts } from './db/repositories/captured-posts-repo.js'
 export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
+export type { ResearchSession } from './db/repositories/research-sessions-repo.js'
+export type { ResearchCandidate, ListCandidatesOpts } from './db/repositories/research-candidates-repo.js'
+export { ResearchService } from './research/research-service.js'
 export type { ContentItem, ListContentItemsOpts, UpdateContentItemPatch } from './db/repositories/content-items-repo.js'
 export { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 export type { Task, ListTasksOpts, UpdateTaskPatch } from './db/repositories/tasks-repo.js'

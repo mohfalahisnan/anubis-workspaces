@@ -63,6 +63,8 @@ export interface ConversationStack {
   agentHomeRoot: string
   /** Registry that owns the (profileId, agent) → ProfileHome handle. */
   profileHomes: ProfileHomeRegistry
+  /** Run a function inside a single better-sqlite3 transaction (atomic, synchronous). */
+  transaction<T>(fn: () => T): T
   shutdown(): Promise<void>
 }
 
@@ -158,6 +160,9 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     projects: projectsRepo,
     agentHomeRoot,
     profileHomes,
+    transaction<T>(fn: () => T): T {
+      return db.transaction(fn)()
+    },
     async shutdown() {
       cron.shutdown()
       await tm.shutdown()

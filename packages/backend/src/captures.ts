@@ -16,6 +16,7 @@ import { withCrawlerProfileDefaults, crawlerProfileSchema } from './chrome-defau
 import { HttpError } from './http-errors.js'
 import { jobManager, type ProgressReporter } from './jobs.js'
 import { runBatchCapture } from './capture-batch.js'
+import { getBatchCandidates } from './capture-candidates.js'
 
 type PostOwner = {
   handle?: string
@@ -133,6 +134,20 @@ captureRoutes.post('/competitors/batch', async (c) => {
   )
 
   return c.json({ ok: true, jobId: job.id })
+})
+
+/**
+ * GET /captures/competitors/batch/:jobId/candidates — the captured posts a
+ * batch run has surfaced so far (streamed per-profile, served from the live
+ * store). The store lives as long as the job record, so a finished-but-not-
+ * dismissed job still serves its full set here.
+ */
+captureRoutes.get('/competitors/batch/:jobId/candidates', (c) => {
+  const jobId = c.req.param('jobId')
+  const job = jobManager.get(jobId)
+  if (!job) return c.json({ ok: false, error: 'not_found' }, 404)
+  const running = job.state === 'queued' || job.state === 'running' || job.state === 'stopping'
+  return c.json({ ok: true, candidates: getBatchCandidates(jobId), running })
 })
 
 captureRoutes.post('/competitors/:id', async (c) => {

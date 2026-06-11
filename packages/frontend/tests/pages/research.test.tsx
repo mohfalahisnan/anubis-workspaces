@@ -97,6 +97,21 @@ describe('<ResearchPage>', () => {
     expect(await screen.findByText(/validated 1 candidate/i)).toBeInTheDocument()
   })
 
+  it('captures with the headed login Chrome profile', async () => {
+    mocks.captureCompetitorsBatch.mockResolvedValue({ jobId: 'job-1' })
+
+    render(<ResearchPage />)
+    await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Capture' }))
+    await userEvent.click(screen.getByRole('button', { name: /capture all/i }))
+
+    await waitFor(() => expect(mocks.captureCompetitorsBatch).toHaveBeenCalledTimes(1))
+    const [ids, opts] = mocks.captureCompetitorsBatch.mock.calls[0]
+    expect(ids).toEqual(['c1'])
+    expect(opts).toMatchObject({ profile: 'login', headless: false, targetPosts: 20 })
+  })
+
   it('passes the favorite-only and age controls through to the run', async () => {
     mocks.createResearchSession.mockResolvedValue({ session, candidates: [] })
 

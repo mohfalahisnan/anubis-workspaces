@@ -162,8 +162,10 @@ export function ResearchPage() {
     setCapturing(true)
     setBanner(null)
     try {
-      await captureCompetitorsBatch(ids, { targetPosts: maxPostsPerProfile })
-      setBanner({ kind: 'success', message: `Capturing ${ids.length} competitor(s) — watch the top progress bar, then run research.` })
+      // Use the headed `login` Chrome profile — it holds the signed-in Instagram
+      // session the crawler needs. (Public/headless capture isn't authenticated.)
+      await captureCompetitorsBatch(ids, { profile: 'login', headless: false, targetPosts: maxPostsPerProfile })
+      setBanner({ kind: 'success', message: `Capturing ${ids.length} competitor(s) in the login Chrome window — watch the top progress bar, then run research.` })
     } catch (e) {
       setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Capture failed to start.' })
     } finally {

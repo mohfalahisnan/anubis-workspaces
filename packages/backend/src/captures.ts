@@ -614,20 +614,11 @@ function refreshCompetitorPostStats(competitorId: string) {
   const stack = getStack()
   const competitor = stack.competitors.get(competitorId)
   if (!competitor) return
-
-  const posts = stack.capturedPosts.list({
-    competitorId,
-    limit: 500,
-    orderBy: 'recent',
-  })
-  const avgLikesSummary = calculateAvgLikesSummary(
-    competitor.handle.replace(/^@/, ''),
-    posts.map(capturedPostToPostData),
-  )
-  stack.competitors.update(competitorId, {
-    postCount: posts.length,
-    ...(avgLikesSummary ? { avgLikes: avgLikesSummary.avgLikes } : {}),
-  })
+  // postCount reflects the posts actually saved to Content; avgLikes is owned
+  // by capture (refreshCompetitorStats) and is intentionally NOT recomputed
+  // from the saved subset, which is a curated selection rather than a sample.
+  const count = stack.capturedPosts.countForCompetitor(competitorId)
+  stack.competitors.update(competitorId, { postCount: count })
 }
 
 function deriveDisplayName(

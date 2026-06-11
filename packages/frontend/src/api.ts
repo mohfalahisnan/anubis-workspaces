@@ -539,6 +539,16 @@ export async function updateResearchCandidate(
   return r.candidate
 }
 
+export async function validateSessionNiche(
+  sessionId: string,
+): Promise<{ updated: number; candidates: ResearchCandidateSummary[] }> {
+  const r = await api<{ ok: true; updated: number; candidates: ResearchCandidateSummary[] }>(
+    `/research/sessions/${encodeURIComponent(sessionId)}/validate-niche`,
+    { method: 'POST', body: JSON.stringify({}) },
+  )
+  return { updated: r.updated, candidates: r.candidates }
+}
+
 // Re-exported so pages can build a controls object without importing from @anubis/shared directly.
 export type { ResearchControls }
 

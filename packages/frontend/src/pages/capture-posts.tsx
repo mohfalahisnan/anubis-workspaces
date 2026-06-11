@@ -9,7 +9,7 @@ import type {
 } from '@anubis/shared'
 import { CAPTURE_CHUNK_SIZE } from '@anubis/shared'
 
-import { captureCompetitorsBatch, listCompetitors, listPosts } from '@/api'
+import { captureCompetitorsBatch, listCompetitors, listBatchCandidates, importCapturedPosts } from '@/api'
 import { useNavigation } from '@/lib/navigation'
 import { useProject } from '@/lib/use-project'
 import { useJobs } from '@/lib/use-jobs'
@@ -408,64 +408,108 @@ export function CapturePostsPage({
   )
 }
 
-/* ---------- Results ---------- */
+/* ---------- Results: poll candidates, select, save ---------- */
 
 function CaptureResults({ job }: { job: JobSummary }) {
-  const { activeProject } = useProject()
-  const [posts, setPosts] = useState<CapturedPostSummary[] | null>(null)
+  const [candidates, setCandidates] = useState<CapturedPostSummary[] | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortState<PostSortKey>>({ key: 'recent', dir: 'desc' })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
 
   const running = job.state === 'queued' || job.state === 'running' || job.state === 'stopping'
-  // Posts persisted at/after the run started belong to this capture. A small
-  // skew absorbs clock jitter between the job clock and the persisted rows.
-  const since = (job.startedAt ?? job.createdAt) - 5_000
-  // Re-fetch as profiles complete (drives the realtime stream) and on the final
-  // state transition. While running we also poll on a light interval, so even a
-  // single-profile job (no chunk counters) surfaces its posts promptly.
-  const profilesCompleted = job.progress.profilesCompleted
 
+  // Poll the per-job candidate store: live while running, plus a final read on
+  // the state transition so the completed set lands even if polling stopped.
   useEffect(() => {
     let active = true
-    const fetchPosts = () => {
-      listPosts({ projectId: activeProject?.id || undefined, orderBy: 'recent', limit: 300 })
-        .then((rows) => {
-          if (!active) return
-          setPosts(rows.filter((p) => p.capturedAt >= since))
-        })
-        .catch(() => {
-          if (active && posts === null) setPosts([])
-        })
+    const fetchCandidates = () => {
+      listBatchCandidates(job.id)
+        .then((r) => { if (active) setCandidates(r.candidates) })
+        .catch(() => { if (active && candidates === null) setCandidates([]) })
     }
-    fetchPosts()
-    const timer = running ? setInterval(fetchPosts, 5_000) : null
+    fetchCandidates()
+    const timer = running ? setInterval(fetchCandidates, 4_000) : null
     return () => {
       active = false
       if (timer) clearInterval(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.id, job.state, profilesCompleted, activeProject?.id])
+  }, [job.id, job.state])
+
+  // Drop selections whose candidate is no longer present (defensive).
+  useEffect(() => {
+    if (!candidates) return
+    const ids = new Set(candidates.map((p) => p.id))
+    setSelected((prev) => new Set([...prev].filter((id) => ids.has(id))))
+  }, [candidates])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = posts ?? []
+    const list = candidates ?? []
     if (!q) return list
     return list.filter((p) =>
       [p.username, p.competitorHandle, p.caption].filter(Boolean).join(' ').toLowerCase().includes(q),
     )
-  }, [posts, query])
+  }, [candidates, query])
   const visible = useSorted(filtered, sort, POST_SORT_ACCESSORS)
 
-  const total = posts?.length ?? 0
+  const total = candidates?.length ?? 0
+  const count = selected.size
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    if (count === 0 || saving || !candidates) return
+    setSaving(true)
+    setSaveError(null)
+    setSavedNote(null)
+    const picked = candidates.filter((p) => selected.has(p.id))
+    try {
+      const result = await importCapturedPosts({ posts: picked.map(candidateToImportInput) })
+      setSelected(new Set())
+      setSavedNote(`Saved ${result.importedCount} post${result.importedCount === 1 ? '' : 's'} to Content.`)
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Could not save selected posts.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className='flex flex-col gap-3 rounded-md border border-border bg-card'>
       <div className='flex flex-col gap-3 border-b border-border px-4 py-3'>
         <div className='flex items-center justify-between gap-2'>
           <h2 className='text-[15px] font-semibold tracking-[-0.01em]'>
-            {total} post{total === 1 ? '' : 's'} captured
+            {total} candidate{total === 1 ? '' : 's'}
             {running && <span className='ml-2 text-[12px] font-normal text-muted-foreground'>· streaming…</span>}
           </h2>
+          <div className='flex items-center gap-2 text-[12px]'>
+            <button
+              type='button'
+              onClick={() => setSelected(new Set(visible.map((p) => p.id)))}
+              className='text-[var(--anubis-gold)] hover:underline'
+            >
+              Select all
+            </button>
+            <span className='text-muted-foreground'>·</span>
+            <button
+              type='button'
+              onClick={() => setSelected(new Set())}
+              className='text-muted-foreground hover:text-foreground hover:underline'
+            >
+              Clear
+            </button>
+          </div>
         </div>
         <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
           <SearchBox
@@ -479,7 +523,7 @@ function CaptureResults({ job }: { job: JobSummary }) {
       </div>
 
       <div className='max-h-[min(64vh,620px)] overflow-y-auto p-3'>
-        {posts === null ? (
+        {candidates === null ? (
           <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className='aspect-square animate-pulse rounded-md border border-border bg-background/60' />
@@ -488,31 +532,94 @@ function CaptureResults({ job }: { job: JobSummary }) {
         ) : visible.length === 0 ? (
           <p className='m-4 text-center text-[13px] text-muted-foreground'>
             {running
-              ? 'No posts persisted yet — they appear here as each profile finishes.'
+              ? 'No candidates yet — they appear here as each profile finishes.'
               : 'No posts were captured for this run.'}
           </p>
         ) : (
           <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
             {visible.map((post) => (
-              <PostTile key={post.id} post={post} />
+              <PostTile key={post.id} post={post} selected={selected.has(post.id)} onToggle={() => toggle(post.id)} />
             ))}
           </div>
         )}
+      </div>
+
+      <div className='flex flex-col gap-2 border-t border-border px-4 py-3'>
+        {saveError && (
+          <p className='rounded-md border border-[color-mix(in_oklab,var(--destructive)_40%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] px-3 py-2 text-[12.5px] text-destructive'>
+            {saveError}
+          </p>
+        )}
+        {savedNote && (
+          <p className='rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3 py-2 text-[12.5px] text-foreground'>
+            {savedNote}
+          </p>
+        )}
+        <button
+          type='button'
+          onClick={() => void handleSave()}
+          disabled={count === 0 || saving}
+          className={cn(
+            'inline-flex h-10 items-center justify-center gap-1.5 self-end rounded-md px-4 text-[13.5px] font-semibold transition-colors',
+            count === 0 || saving
+              ? 'cursor-not-allowed bg-[var(--anubis-gold)] text-[#0B0C0F] opacity-50'
+              : 'bg-[var(--anubis-gold)] text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]',
+          )}
+        >
+          <DownloadCloudIcon className='size-[15px]' strokeWidth={2.2} />
+          {saving ? 'Saving…' : `Save ${count > 0 ? count : ''} to Content`}
+        </button>
       </div>
     </div>
   )
 }
 
-function PostTile({ post }: { post: CapturedPostSummary }) {
+function PostTile({
+  post,
+  selected,
+  onToggle,
+}: {
+  post: CapturedPostSummary
+  selected: boolean
+  onToggle: () => void
+}) {
   const [failed, setFailed] = useState(false)
   const showImage = !!post.mediaUrl && !failed
   return (
-    <a
-      href={post.postUrl}
-      target='_blank'
-      rel='noreferrer'
-      className='group relative flex flex-col overflow-hidden rounded-md border border-border bg-background/40 transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_30%,var(--border))]'
+    <button
+      type='button'
+      data-testid={`candidate-${post.id}`}
+      onClick={onToggle}
+      className={cn(
+        'group relative flex flex-col overflow-hidden rounded-md border bg-background/40 text-left transition-colors',
+        selected
+          ? 'border-[var(--anubis-gold)] ring-1 ring-[var(--anubis-gold)]'
+          : 'border-border hover:border-[color-mix(in_oklab,var(--anubis-gold)_30%,var(--border))]',
+      )}
     >
+      <span
+        aria-hidden
+        className={cn(
+          'absolute left-1.5 top-1.5 z-10 inline-flex size-[18px] items-center justify-center rounded-[5px] border',
+          selected ? 'border-[var(--anubis-gold)] bg-[var(--anubis-gold)] text-[#0B0C0F]' : 'border-border bg-black/55',
+        )}
+      >
+        {selected && (
+          <svg viewBox='0 0 24 24' className='size-3' fill='none' stroke='currentColor' strokeWidth={3.5} strokeLinecap='round' strokeLinejoin='round'>
+            <path d='M20 6L9 17l-5-5' />
+          </svg>
+        )}
+      </span>
+      <a
+        href={post.postUrl}
+        target='_blank'
+        rel='noreferrer'
+        onClick={(e) => e.stopPropagation()}
+        className='absolute right-1.5 top-1.5 z-10 inline-flex items-center gap-1 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100'
+      >
+        <ExternalLinkIcon className='size-3' strokeWidth={2} />
+        Open
+      </a>
       <div className='relative aspect-square w-full overflow-hidden bg-muted'>
         {showImage ? (
           <img
@@ -523,14 +630,8 @@ function PostTile({ post }: { post: CapturedPostSummary }) {
             className='h-full w-full object-cover transition-transform group-hover:scale-[1.03]'
           />
         ) : (
-          <div className='flex h-full w-full items-center justify-center text-[11px] text-muted-foreground'>
-            No preview
-          </div>
+          <div className='flex h-full w-full items-center justify-center text-[11px] text-muted-foreground'>No preview</div>
         )}
-        <span className='absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100'>
-          <ExternalLinkIcon className='size-3' strokeWidth={2} />
-          Open
-        </span>
       </div>
       <div className='flex flex-col gap-1 p-2'>
         <span className='truncate font-mono text-[11.5px] text-foreground'>
@@ -550,8 +651,26 @@ function PostTile({ post }: { post: CapturedPostSummary }) {
           </span>
         </div>
       </div>
-    </a>
+    </button>
   )
+}
+
+/** Map a captured-post candidate to the `/posts/import` input shape. */
+function candidateToImportInput(post: CapturedPostSummary) {
+  return {
+    id: post.id,
+    competitorId: post.competitorId,
+    username: post.username,
+    postUrl: post.postUrl,
+    caption: post.caption,
+    likes: post.likes,
+    comments: post.comments,
+    postedAt: post.postedAt,
+    mediaKind: post.mediaKind,
+    mediaUrl: post.mediaUrl,
+    carouselCount: post.carouselCount,
+    capturedAt: post.capturedAt,
+  }
 }
 
 function dedupeCompetitors(items: CompetitorSummary[]): CompetitorSummary[] {

@@ -570,6 +570,20 @@ export async function captureCompetitorsBatch(
   return { jobId: r.jobId }
 }
 
+/**
+ * Captured posts a batch run has surfaced so far (streamed per-profile while
+ * the job runs; the finished job's full set afterward). The Capture Posts
+ * results panel polls this and lets the user select which to save to Content.
+ */
+export async function listBatchCandidates(
+  jobId: string,
+): Promise<{ candidates: CapturedPostSummary[]; running: boolean }> {
+  const r = await api<{ ok: true; candidates: CapturedPostSummary[]; running: boolean }>(
+    `/captures/competitors/batch/${encodeURIComponent(jobId)}/candidates`,
+  )
+  return { candidates: r.candidates, running: r.running }
+}
+
 export async function captureCompetitorPreview(
   id: string,
   options: CaptureOptions = {},

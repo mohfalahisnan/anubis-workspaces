@@ -4,6 +4,7 @@ import {
   ExternalLinkIcon,
   PlayIcon,
   RefreshCwIcon,
+  SparklesIcon,
   StarIcon,
 } from 'lucide-react'
 
@@ -22,6 +23,7 @@ import {
   listCompetitors,
   updateCompetitor,
   updateResearchCandidate,
+  validateSessionNiche,
 } from '@/api'
 import { CandidateLevelBadge } from '@/components/research/candidate-level-badge'
 import {
@@ -68,6 +70,7 @@ export function ResearchPage() {
   const [competitors, setCompetitors] = useState<CompetitorSummary[] | null>(null)
   const [banner, setBanner] = useState<Banner | null>(null)
   const [running, setRunning] = useState(false)
+  const [validatingNiche, setValidatingNiche] = useState(false)
   const [session, setSession] = useState<ResearchSessionSummary | null>(null)
   const [candidates, setCandidates] = useState<ResearchCandidateSummary[]>([])
   const [detail, setDetail] = useState<ResearchCandidateSummary | null>(null)
@@ -126,6 +129,22 @@ export function ResearchPage() {
       setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Research run failed.' })
     } finally {
       setRunning(false)
+    }
+  }
+
+  async function runNicheValidation() {
+    if (!session) return
+    setValidatingNiche(true)
+    setBanner(null)
+    try {
+      const { updated, candidates: changed } = await validateSessionNiche(session.id)
+      const byId = new Map(changed.map((c) => [c.id, c] as const))
+      setCandidates((prev) => prev.map((c) => byId.get(c.id) ?? c))
+      setBanner({ kind: 'success', message: `Validated ${updated} candidate(s) against your niche.` })
+    } catch (e) {
+      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Niche validation failed.' })
+    } finally {
+      setValidatingNiche(false)
     }
   }
 
@@ -297,7 +316,16 @@ export function ResearchPage() {
           title='Content candidates'
           subtitle={session ? `${visibleCandidates.length} shown of ${candidates.length}` : 'Run research to populate'}
         >
-          <div className='mb-3 flex flex-wrap gap-2'>
+          <div className='mb-3 flex flex-wrap items-center gap-2'>
+            <button
+              type='button'
+              onClick={() => void runNicheValidation()}
+              disabled={!session || validatingNiche}
+              className='inline-flex h-8 items-center gap-1.5 rounded-md border border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] bg-card px-2.5 text-[12px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              <SparklesIcon className='size-[14px]' strokeWidth={2} />
+              {validatingNiche ? 'Validating…' : 'Validate niche (AI)'}
+            </button>
             <SegmentedFilter
               options={[
                 { value: 'all', label: 'All' },

@@ -21,6 +21,7 @@ import { taskRoutes } from './tasks.js'
 import { extractorRoutes } from './extractor.js'
 import { knowledgeBaseRoutes } from './knowledge-base.js'
 import { jobRoutes } from './jobs.js'
+import { snapshotRoutes } from './snapshot.js'
 
 const app = new Hono()
 
@@ -71,6 +72,7 @@ app.route('/tasks', taskRoutes)
 app.route('/extractor', extractorRoutes)
 app.route('/knowledge-base', knowledgeBaseRoutes)
 app.route('/jobs', jobRoutes)
+app.route('/snapshot', snapshotRoutes)
 
 app.onError((error, c) => {
   const { status, body } = toErrorResponse(error)

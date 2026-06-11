@@ -10,7 +10,7 @@ import {
   type StandardCrawlerOutput,
 } from '@anubis/research-crawler'
 import type { CapturedPost } from '@anubis/conversation'
-import type { BatchCaptureJobResult, CaptureJobResult } from '@anubis/shared'
+import type { BatchCaptureJobResult, CaptureJobResult, CapturedPostSummary } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults, crawlerProfileSchema } from './chrome-defaults.js'
 import { HttpError } from './http-errors.js'
@@ -229,11 +229,16 @@ captureRoutes.post('/competitors/:id', async (c) => {
  * Shared by the synchronous route and the background job executor; throws
  * on crawler failure so the job manager records the error.
  */
-async function runCapture(
+/**
+ * Run the crawler for one competitor and return the validated output.
+ * Shared by the (legacy) persisting path and the stats-only refresh path.
+ * Throws on a crawler-level failure so callers/jobs record the error.
+ */
+async function crawlCompetitorPosts(
   competitorId: string,
   body: CaptureOptions,
   reporter: ProgressReporter,
-): Promise<PersistedCapture> {
+): Promise<{ result: StandardCrawlerOutput; targetPosts: number }> {
   const stack = getStack()
   const competitor = stack.competitors.get(competitorId)
   if (!competitor) throw new Error('Competitor not found.')
@@ -254,11 +259,32 @@ async function runCapture(
     reporter,
   }, selectedProfile, cfg, getDataDir()))
 
-  if (!result.ok) {
-    throw new Error(result.error?.message ?? 'Capture failed.')
-  }
+  if (!result.ok) throw new Error(result.error?.message ?? 'Capture failed.')
+  return { result, targetPosts }
+}
 
+async function runCapture(
+  competitorId: string,
+  body: CaptureOptions,
+  reporter: ProgressReporter,
+): Promise<PersistedCapture> {
+  const { result, targetPosts } = await crawlCompetitorPosts(competitorId, body, reporter)
   return persistCaptureResult(competitorId, result, targetPosts)
+}
+
+/**
+ * Capture one competitor, refresh its profile stats (bio/displayName/followers/
+ * avgLikes) WITHOUT persisting posts, and return the candidate posts for the
+ * caller to surface for selection.
+ */
+async function captureAndRefreshStats(
+  competitorId: string,
+  body: CaptureOptions,
+  reporter: ProgressReporter,
+): Promise<{ candidates: CapturedPostSummary[]; warnings: string[] }> {
+  const { result, targetPosts } = await crawlCompetitorPosts(competitorId, body, reporter)
+  const refreshed = refreshCompetitorStats(competitorId, result, targetPosts)
+  return { candidates: refreshed.candidates, warnings: refreshed.warnings }
 }
 
 /** Persist captured posts + refresh competitor stats; returns the saved view. */
@@ -303,6 +329,62 @@ function persistCaptureResult(
     capturedCount: posts.length,
     warnings: result.meta.warnings,
   }
+}
+
+interface StatsRefresh {
+  competitor: NonNullable<ReturnType<ReturnType<typeof getStack>['competitors']['get']>>
+  candidates: CapturedPostSummary[]
+  warnings: string[]
+}
+
+/**
+ * Refresh a competitor's profile stats from a crawl result and return the
+ * captured posts as candidates — WITHOUT persisting any post. Capture now owns
+ * `avgLikes` (computed from the full crawl); `postCount` is left untouched and
+ * only changes when the user saves selected posts via `/posts/import`.
+ */
+function refreshCompetitorStats(
+  competitorId: string,
+  result: StandardCrawlerOutput,
+  targetPosts: number,
+): StatsRefresh {
+  const stack = getStack()
+  const competitor = stack.competitors.get(competitorId)
+  if (!competitor) throw new Error('Competitor not found.')
+  const usernameNoAt = competitor.handle.replace(/^@/, '')
+
+  const now = Date.now()
+  const posts: CapturedPost[] = uniqueCapturedPosts(result.output.posts
+    .filter((p) => Boolean(p.postUrl))
+    .slice(0, targetPosts)
+    .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now, competitor.projectId)))
+
+  const profileEntry =
+    result.output.profiles.find((p) => p.username === usernameNoAt) ??
+    result.output.profiles[0]
+  const avgLikesEntry =
+    result.meta.avgLikes?.perProfile.find((entry) => entry.username === usernameNoAt) ??
+    result.meta.avgLikes?.perProfile[0]
+  const avgLikesSummary =
+    avgLikesEntry ?? calculateAvgLikesSummary(usernameNoAt, posts.map(capturedPostToPostData))
+
+  stack.competitors.update(competitor.id, {
+    displayName: deriveDisplayName(competitor.displayName, profileEntry),
+    bio: deriveBio(competitor.bio, profileEntry),
+    followers: profileEntry?.followers,
+    avgLikes: avgLikesSummary?.avgLikes ?? profileEntry?.avgLikes,
+  })
+  stack.competitors.markRefreshedAt(competitor.id, now)
+
+  const owner = stack.competitors.get(competitor.id)!
+  // Strip `raw` (the full scraped blob) from candidates — the import mapper
+  // never sends it and it would bloat the streamed/aggregated payload.
+  const candidates: CapturedPostSummary[] = posts.map((post) => {
+    const { raw: _raw, ...rest } = post
+    return enrichPostForOwner(rest, owner) as CapturedPostSummary
+  })
+
+  return { competitor: owner, candidates, warnings: result.meta.warnings }
 }
 
 /** GET /posts — flat captured-post feed for the Content page. */
@@ -557,3 +639,6 @@ function enrichPostForOwner(
     competitorLevel: owner?.level,
   }
 }
+
+/** Internal helpers exposed for unit tests only. Not part of the HTTP surface. */
+export const __testing = { refreshCompetitorStats }

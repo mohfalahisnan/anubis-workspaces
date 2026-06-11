@@ -39,6 +39,10 @@ const session: ResearchSessionSummary = {
   createdAt: 0, updatedAt: 0,
 }
 
+async function gotoCandidates() {
+  await userEvent.click(screen.getByRole('tab', { name: /candidates/i }))
+}
+
 describe('<ResearchPage>', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((m) => m.mockReset())
@@ -51,6 +55,7 @@ describe('<ResearchPage>', () => {
     render(<ResearchPage />)
     await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
 
+    await gotoCandidates()
     await userEvent.click(screen.getByRole('button', { name: /run research/i }))
 
     await waitFor(() => expect(mocks.createResearchSession).toHaveBeenCalledTimes(1))
@@ -64,6 +69,7 @@ describe('<ResearchPage>', () => {
     mocks.updateResearchCandidate.mockResolvedValue(candidate({ nicheAligned: true, validationStatus: 'valid' }))
 
     render(<ResearchPage />)
+    await gotoCandidates()
     await userEvent.click(screen.getByRole('button', { name: /run research/i }))
     await screen.findByText('20.0×')
 
@@ -81,6 +87,7 @@ describe('<ResearchPage>', () => {
     })
 
     render(<ResearchPage />)
+    await gotoCandidates()
     await userEvent.click(screen.getByRole('button', { name: /run research/i }))
     await screen.findByText('20.0×')
 
@@ -96,6 +103,7 @@ describe('<ResearchPage>', () => {
     render(<ResearchPage />)
     await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
 
+    await gotoCandidates()
     await userEvent.click(screen.getByLabelText(/favorite competitors only/i))
     await userEvent.click(screen.getByRole('button', { name: /run research/i }))
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   CheckIcon,
   CheckSquareIcon,
@@ -8,6 +8,7 @@ import {
   RefreshCwIcon,
   SearchIcon,
   Trash2Icon,
+  UploadCloudIcon,
   UserRoundIcon,
   XIcon,
 } from 'lucide-react'
@@ -20,6 +21,8 @@ import { useNavigation } from '@/lib/navigation'
 import {
   createCompetitor,
   deleteCompetitor,
+  exportProjectSnapshot,
+  importProjectSnapshot,
   listCompetitors,
   updateCompetitor,
 } from '@/api'
@@ -183,6 +186,65 @@ export function CompetitorsPage() {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?.id])
+
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleExport() {
+    setBusy(true)
+    setBanner(null)
+    try {
+      const snapshot = await exportProjectSnapshot(activeProject?.id || undefined)
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const slug = (activeProject?.name || 'project')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `anubis-${slug || 'project'}-${date}.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setBanner({
+        kind: 'success',
+        message: `Exported ${snapshot.competitors.length} competitor(s) and ${snapshot.capturedPosts.length} post(s).`,
+      })
+    } catch (e) {
+      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Export failed.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setBusy(true)
+    setBanner(null)
+    try {
+      const text = await file.text()
+      const snapshot = JSON.parse(text)
+      if (!snapshot || snapshot.kind !== 'anubis-project-snapshot') {
+        throw new Error('Not an Anubis project snapshot file.')
+      }
+      const result = await importProjectSnapshot({
+        projectId: activeProject?.id || undefined,
+        snapshot,
+      })
+      await refresh()
+      const parts = [
+        `${result.competitors.created} new competitor(s), ${result.competitors.matched} matched`,
+        `${result.posts.imported} post(s) imported, ${result.posts.skipped} skipped`,
+      ]
+      if (result.warnings.length) parts.push(result.warnings.join(' '))
+      setBanner({ kind: 'success', message: `Import complete — ${parts.join('; ')}.` })
+    } catch (e) {
+      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Import failed.' })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   function handleCapture(c: CompetitorSummary) {
     // Capture now happens on a dedicated page: open it preseeded with this
@@ -351,6 +413,35 @@ export function CompetitorsPage() {
               <DownloadCloudIcon className='size-[15px]' strokeWidth={2} />
               Capture posts
             </button>
+            <button
+              type='button'
+              onClick={handleExport}
+              disabled={busy || selectMode}
+              className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+            >
+              <DownloadCloudIcon className='size-[15px]' strokeWidth={2} />
+              Export
+            </button>
+            <button
+              type='button'
+              onClick={() => importInputRef.current?.click()}
+              disabled={busy || selectMode}
+              className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13.5px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+            >
+              <UploadCloudIcon className='size-[15px]' strokeWidth={2} />
+              Import
+            </button>
+            <input
+              ref={importInputRef}
+              type='file'
+              accept='application/json,.json'
+              className='hidden'
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = '' // allow re-importing the same file
+                if (file) void handleImportFile(file)
+              }}
+            />
             <button
               type='button'
               onClick={() => navigate({ page: 'discover-competitors' })}

@@ -63,6 +63,16 @@ import {
   type ProjectSnapshot,
   type ImportSnapshotInput,
   type ImportSnapshotResult,
+  type CreateResearchSessionInput,
+  type ResearchControls,
+  type ResearchSessionSummary,
+  type ResearchSessionListResponse,
+  type ResearchCandidateSummary,
+  type ResearchCandidateListResponse,
+  type UpdateResearchCandidateInput,
+  type CandidateDecision,
+  type CandidateLevel,
+  type CandidateValidationStatus,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -477,6 +487,60 @@ export async function updateCompetitor(
   )
   return r.competitor
 }
+
+/* ---------- Research Phase ---------- */
+
+export async function createResearchSession(
+  input: CreateResearchSessionInput,
+): Promise<{ session: ResearchSessionSummary; candidates: ResearchCandidateSummary[] }> {
+  const r = await api<{ ok: true; session: ResearchSessionSummary; candidates: ResearchCandidateSummary[] }>(
+    '/research/sessions',
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+  return { session: r.session, candidates: r.candidates }
+}
+
+export async function listResearchSessions(projectId?: string): Promise<ResearchSessionSummary[]> {
+  const path = projectId
+    ? `/research/sessions?projectId=${encodeURIComponent(projectId)}`
+    : '/research/sessions'
+  const r = await api<ResearchSessionListResponse>(path)
+  return r.items
+}
+
+export async function listSessionCandidates(sessionId: string): Promise<ResearchCandidateSummary[]> {
+  const r = await api<ResearchCandidateListResponse>(
+    `/research/sessions/${encodeURIComponent(sessionId)}/candidates`,
+  )
+  return r.items
+}
+
+export async function listResearchCandidates(
+  opts: { projectId?: string; validation?: CandidateValidationStatus; level?: CandidateLevel; decision?: CandidateDecision } = {},
+): Promise<ResearchCandidateSummary[]> {
+  const params = new URLSearchParams()
+  if (opts.projectId) params.set('projectId', opts.projectId)
+  if (opts.validation) params.set('validation', opts.validation)
+  if (opts.level) params.set('level', opts.level)
+  if (opts.decision) params.set('decision', opts.decision)
+  const qs = params.toString()
+  const r = await api<ResearchCandidateListResponse>(`/research/candidates${qs ? `?${qs}` : ''}`)
+  return r.items
+}
+
+export async function updateResearchCandidate(
+  id: string,
+  patch: UpdateResearchCandidateInput,
+): Promise<ResearchCandidateSummary> {
+  const r = await api<{ ok: true; candidate: ResearchCandidateSummary }>(
+    `/research/candidates/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  )
+  return r.candidate
+}
+
+// Re-exported so pages can build a controls object without importing from @anubis/shared directly.
+export type { ResearchControls }
 
 export async function deleteCompetitor(id: string): Promise<void> {
   await api<{ ok: true }>(`/competitors/${encodeURIComponent(id)}`, {

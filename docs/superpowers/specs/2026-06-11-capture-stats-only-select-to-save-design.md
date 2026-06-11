@@ -110,10 +110,12 @@ profile stats while still returning candidates (response shape unchanged:
   because the executor runs on the next microtask.
 - `GET /captures/competitors/batch/:jobId/candidates` →
   `{ ok: true, candidates: CapturedPostSummary[], running: boolean }`. Serves the
-  store while running; falls back to `job.result.candidates` once finished.
-  (4-segment GET path — no route-ordering conflict with the POST routes.)
+  store. (4-segment GET path — no route-ordering conflict with the POST routes.)
 - Store entries are pruned when the job is removed, via
-  `jobManager.onChange` (drop on `{ type: 'removed' }`).
+  `jobManager.onChange` (drop on `{ type: 'removed' }`). Because the store lives
+  exactly as long as the job record, a finished-but-not-dismissed job still
+  serves its full candidate set — so the job **result** carries only counts, not
+  the posts (no redundant copy).
 
 **5. `BatchCaptureJobResult` (shared)**
 
@@ -124,8 +126,9 @@ interface BatchCaptureJobResult {
   candidateCount: number          // was capturedCount
   stopped: boolean
   perCompetitor: BatchCaptureOutcome[]  // .candidateCount
-  candidates: CapturedPostSummary[]     // new: aggregated, for restore-on-return
 }
+// The candidate posts themselves are served by the store endpoint, not the
+// result — the store outlives nothing the job needs.
 ```
 
 Update `top-nav-progress.tsx` (reads `BatchCaptureJobResult`/`CaptureJobResult`).
@@ -138,9 +141,8 @@ recompute). `delete` already uses an inline count and is unaffected.
 ### Frontend (`capture-posts.tsx` → `CaptureResults`)
 
 - Stop reading `GET /posts`. Source candidates from the live endpoint
-  (`GET .../batch/:jobId/candidates`), polled every ~3–5s while the job runs;
-  on completion read `job.result.candidates` (fallback for a returning user
-  whose store was pruned).
+  (`GET .../batch/:jobId/candidates`), polled every ~4s while the job runs and
+  once more on the finished transition (the store still holds them).
 - Render candidates in the existing post-tile grid **with selection** (checkbox
   per tile, select-all/clear, running selected count).
 - A **"Save N to Content"** button calls `importCapturedPosts` with the selected
@@ -156,7 +158,7 @@ Batch run (per competitor, streamed):
     → return candidates (NOT persisted)
     → append candidates to store[jobId]            ──► GET .../batch/:jobId/candidates (poll)
   ...all competitors...
-    → runBatchCapture aggregates → job.result.candidates (on completion)
+    → runBatchCapture aggregates counts → job.result (candidateCount, perCompetitor)
 
 User selects candidates → POST /posts/import
     → upsert selected posts into captured_posts

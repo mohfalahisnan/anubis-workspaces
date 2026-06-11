@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   updateResearchCandidate: vi.fn(),
   updateCompetitor: vi.fn(),
   captureCompetitorsBatch: vi.fn(),
+  validateSessionNiche: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/api', () => ({
   updateResearchCandidate: mocks.updateResearchCandidate,
   updateCompetitor: mocks.updateCompetitor,
   captureCompetitorsBatch: mocks.captureCompetitorsBatch,
+  validateSessionNiche: mocks.validateSessionNiche,
 }))
 
 vi.mock('@/lib/use-project', () => ({
@@ -69,6 +71,23 @@ describe('<ResearchPage>', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^aligned$/i }))
 
     await waitFor(() => expect(mocks.updateResearchCandidate).toHaveBeenCalledWith('r1', { nicheAligned: true }))
+  })
+
+  it('runs the AI niche pass and merges the updated verdicts', async () => {
+    mocks.createResearchSession.mockResolvedValue({ session, candidates: [candidate({})] })
+    mocks.validateSessionNiche.mockResolvedValue({
+      updated: 1,
+      candidates: [candidate({ nicheAligned: true, validationStatus: 'valid' })],
+    })
+
+    render(<ResearchPage />)
+    await userEvent.click(screen.getByRole('button', { name: /run research/i }))
+    await screen.findByText('20.0×')
+
+    await userEvent.click(screen.getByRole('button', { name: /validate niche/i }))
+
+    await waitFor(() => expect(mocks.validateSessionNiche).toHaveBeenCalledWith('s1'))
+    expect(await screen.findByText(/validated 1 candidate/i)).toBeInTheDocument()
   })
 
   it('passes the favorite-only and age controls through to the run', async () => {

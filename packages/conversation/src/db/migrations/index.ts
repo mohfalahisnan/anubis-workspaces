@@ -98,4 +98,5 @@ export const MIGRATIONS: Migration[] = [
   load(21, '021_tasks.sql'),
   load(22, '022_cron_job_actions.sql'),
   load(23, '023_competitor_research_fields.sql'),
+  load(24, '024_research_tables.sql'),
 ]

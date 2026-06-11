@@ -309,6 +309,8 @@ export interface UpdateCronJobInput {
   enabled?: boolean
 }
 
+export type CompetitorStatus = 'active' | 'paused' | 'archived'
+
 export interface CompetitorSummary {
   id: string
   handle: string
@@ -323,6 +325,12 @@ export interface CompetitorSummary {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  platform?: string
+  status?: CompetitorStatus
+  favorite?: boolean
+  baselineLikes?: number
+  baselineSampleSize?: number
+  baselineUpdatedAt?: number
   addedAt: number
   updatedAt: number
 }
@@ -338,6 +346,9 @@ export interface CreateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride
+  platform?: string
+  status?: CompetitorStatus
+  favorite?: boolean
 }
 
 export interface UpdateCompetitorInput {
@@ -350,6 +361,9 @@ export interface UpdateCompetitorInput {
   notes?: string
   bio?: string
   level?: CompetitorLevelOverride | null
+  platform?: string
+  status?: CompetitorStatus
+  favorite?: boolean
 }
 
 export interface UpdateCapturedPostInput {
@@ -1239,3 +1253,81 @@ export interface ImportSnapshotResult {
   posts: { imported: number; skipped: number }
   warnings: string[]
 }
+
+/* ============================================================
+   Research Phase — sessions & candidates
+   ============================================================ */
+
+export interface ResearchControls {
+  competitorIds?: string[]
+  favoriteOnly?: boolean
+  platform?: string
+  niche?: string
+  dateFrom?: string            // ISO; inclusive lower bound on postedAt
+  dateTo?: string              // ISO; inclusive upper bound on postedAt
+  maxPostsPerProfile?: number  // default 20 (also the baseline sample window)
+  maxContentAgeDays?: number   // default 7
+}
+
+export type ResearchSessionStatus = 'scoring' | 'validating' | 'done' | 'error'
+
+export interface ResearchSessionCounts {
+  candidates: number
+  valid: number
+  green: number
+  yellow: number
+  neutral: number
+}
+
+export interface ResearchSessionSummary {
+  id: string
+  projectId?: string
+  controls: ResearchControls
+  status: ResearchSessionStatus
+  counts: ResearchSessionCounts
+  error?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type CandidateDecision = 'none' | 'selected' | 'rejected' | 'saved'
+
+export interface ResearchCandidateSummary {
+  id: string
+  projectId?: string
+  sessionId: string
+  competitorId: string
+  competitorHandle?: string
+  competitorLevel: CompetitorLevel
+  postId: string
+  platform?: string
+  postUrl?: string
+  postedAt?: string
+  caption?: string
+  mediaKind?: 'image' | 'video' | 'carousel'
+  likes?: number
+  baselineLikes?: number
+  score?: number
+  candidateLevel: CandidateLevel
+  nicheAligned?: boolean
+  nicheReason?: string
+  validationStatus: CandidateValidationStatus
+  validationFailures: CandidateValidationRule[]
+  decision: CandidateDecision
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CreateResearchSessionInput {
+  projectId?: string
+  controls?: ResearchControls
+}
+
+export interface UpdateResearchCandidateInput {
+  decision?: CandidateDecision
+  nicheAligned?: boolean | null
+  nicheReason?: string | null
+}
+
+export type ResearchSessionListResponse = ListResponse<ResearchSessionSummary>
+export type ResearchCandidateListResponse = ListResponse<ResearchCandidateSummary>

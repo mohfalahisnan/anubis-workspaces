@@ -701,6 +701,56 @@ export function medianLikes(values: number[]): number | null {
   return Math.round(median)
 }
 
+/* ============================================================
+   Candidate validation (Research Phase)
+   ============================================================ */
+
+export type CandidateValidationStatus = 'valid' | 'invalid' | 'pending'
+export type CandidateValidationRule = 'recency' | 'niche' | 'score' | 'source'
+
+export interface CandidateValidationArgs {
+  postedAt?: string
+  baselineLikes?: number | null
+  score?: number | null
+  competitorActive: boolean
+  /** true = aligned, false = not aligned, null/undefined = not yet judged. */
+  nicheAligned?: boolean | null
+  maxContentAgeDays: number
+  nowMs: number
+}
+
+export interface CandidateValidationResult {
+  status: CandidateValidationStatus
+  failures: CandidateValidationRule[]
+}
+
+/**
+ * A candidate is valid only if recency, score, source, and niche all pass.
+ * Niche being unresolved (null) yields 'pending' — unless a hard rule already
+ * failed, in which case the candidate is 'invalid'.
+ */
+export function evaluateCandidateValidation(args: CandidateValidationArgs): CandidateValidationResult {
+  const failures: CandidateValidationRule[] = []
+
+  const postedMs = args.postedAt ? Date.parse(args.postedAt) : NaN
+  const maxAgeMs = args.maxContentAgeDays * 24 * 60 * 60 * 1000
+  const recencyOk = Number.isFinite(postedMs) && postedMs >= args.nowMs - maxAgeMs
+  if (!recencyOk) failures.push('recency')
+
+  const scoreOk =
+    args.baselineLikes != null && args.baselineLikes > 0 &&
+    args.score != null && Number.isFinite(args.score) && args.score > 0
+  if (!scoreOk) failures.push('score')
+
+  if (!args.competitorActive) failures.push('source')
+
+  if (args.nicheAligned === false) failures.push('niche')
+
+  if (failures.length > 0) return { status: 'invalid', failures }
+  if (args.nicheAligned == null) return { status: 'pending', failures: [] }
+  return { status: 'valid', failures: [] }
+}
+
 export interface DiscoveredCandidate {
   username: string
   fullName?: string

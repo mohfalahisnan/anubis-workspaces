@@ -643,6 +643,64 @@ export function isValidLevelMultipliers(cfg: LevelMultipliersConfig): boolean {
   return isValidBand(cfg.green) && isValidBand(cfg.yellow) && isValidBand(cfg.red)
 }
 
+/* ============================================================
+   Candidate scoring (Research Phase)
+   ============================================================
+   score = postLikes / competitorBaselineLikes. The candidate level
+   depends on the competitor's level band — see getCandidateLevel.
+   ============================================================ */
+
+export type CandidateLevel = 'green' | 'yellow' | 'neutral'
+
+/** post likes ÷ baseline likes; null when either is missing/non-finite or baseline <= 0. */
+export function scoreFor(
+  postLikes: number | null | undefined,
+  baselineLikes: number | null | undefined,
+): number | null {
+  if (postLikes == null || baselineLikes == null) return null
+  if (!Number.isFinite(postLikes) || !Number.isFinite(baselineLikes)) return null
+  if (baselineLikes <= 0) return null
+  return postLikes / baselineLikes
+}
+
+/**
+ * Candidate level from a multiplier score and the owning competitor's level.
+ * Thresholds rise with competitor size; red competitors can never yield 'green'
+ * (massive distribution = inspiration signal, not direct validation).
+ */
+export function getCandidateLevel(score: number, competitorLevel: CompetitorLevel): CandidateLevel {
+  if (competitorLevel === 'green') {
+    if (score >= 10) return 'green'
+    if (score >= 5) return 'yellow'
+    return 'neutral'
+  }
+  if (competitorLevel === 'yellow') {
+    if (score >= 20) return 'green'
+    if (score >= 10) return 'yellow'
+    return 'neutral'
+  }
+  if (competitorLevel === 'red') {
+    if (score >= 20) return 'yellow'
+    return 'neutral'
+  }
+  return 'neutral'
+}
+
+/**
+ * Median of like counts, rounded. Non-finite/negative values are dropped.
+ * The viral-resistant baseline ("typical" likes) for a competitor. Returns null
+ * for an empty input (no average fallback is possible without samples).
+ */
+export function medianLikes(values: number[]): number | null {
+  const clean = values
+    .filter((v) => typeof v === 'number' && Number.isFinite(v) && v >= 0)
+    .sort((a, b) => a - b)
+  if (clean.length === 0) return null
+  const mid = Math.floor(clean.length / 2)
+  const median = clean.length % 2 === 1 ? clean[mid]! : (clean[mid - 1]! + clean[mid]!) / 2
+  return Math.round(median)
+}
+
 export interface DiscoveredCandidate {
   username: string
   fullName?: string

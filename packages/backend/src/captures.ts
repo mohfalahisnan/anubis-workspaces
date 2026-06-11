@@ -225,19 +225,16 @@ captureRoutes.post('/competitors/:id', async (c) => {
     })
   }
 
-  // Preview: build candidate posts without persisting.
+  // Preview: refresh the competitor's profile stats (bio/followers/avgLikes)
+  // and return the captured posts as candidates WITHOUT persisting them.
   if (body.preview) {
-    const now = Date.now()
-    const posts = uniqueCapturedPosts(result.output.posts
-      .filter((p) => Boolean(p.postUrl))
-      .slice(0, targetPosts)
-      .map((p) => postDataToCapturedPost(competitor.id, usernameNoAt, p, now, competitor.projectId)))
+    const refreshed = refreshCompetitorStats(competitor.id, result, targetPosts)
     return c.json({
       ok: true,
-      competitor,
-      posts: posts.map((post) => enrichPostForOwner(post, competitor)),
-      candidateCount: posts.length,
-      warnings: result.meta.warnings,
+      competitor: refreshed.competitor,
+      posts: refreshed.candidates,
+      candidateCount: refreshed.candidates.length,
+      warnings: refreshed.warnings,
     })
   }
 

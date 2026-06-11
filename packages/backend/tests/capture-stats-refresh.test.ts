@@ -61,4 +61,16 @@ describe('refreshCompetitorStats', () => {
     expect(stack.capturedPosts.countForCompetitor(competitor.id)).toBe(0)
     expect(updated.postCount).toBe(0)
   })
+
+  it('captureAndRefreshStats path keeps zero persisted posts (preview parity)', async () => {
+    const { __testing } = await import('../src/captures.js')
+    const { getStack } = await import('../src/services.js')
+    const stack = getStack()
+    const competitor = stack.competitors.create({ handle: '@previewme', projectId: 'default' })
+
+    const refreshed = __testing.refreshCompetitorStats(competitor.id, fakeResult('previewme'), 12)
+    expect(refreshed.candidates).toHaveLength(2)
+    expect(stack.competitors.get(competitor.id)!.avgLikes).toBe(110)
+    expect(stack.capturedPosts.countForCompetitor(competitor.id)).toBe(0)
+  })
 })

@@ -15,6 +15,9 @@ const CreateBody = z.object({
   notes: z.string().optional(),
   bio: z.string().optional(),
   level: z.enum(['black', 'green', 'yellow', 'red']).optional(),
+  platform: z.string().min(1).optional(),
+  status: z.enum(['active', 'paused', 'archived']).optional(),
+  favorite: z.boolean().optional(),
 }).strict()
 
 const UpdateBody = z.object({
@@ -27,6 +30,9 @@ const UpdateBody = z.object({
   notes: z.string().optional(),
   bio: z.string().optional(),
   level: z.enum(['black', 'green', 'yellow', 'red']).nullable().optional(),
+  platform: z.string().min(1).optional(),
+  status: z.enum(['active', 'paused', 'archived']).optional(),
+  favorite: z.boolean().optional(),
 }).strict()
 
 export const competitorRoutes = new Hono()

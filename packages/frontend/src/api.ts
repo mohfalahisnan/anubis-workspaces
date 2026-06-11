@@ -60,6 +60,9 @@ import {
   type WhisperModel,
   type JobSummary,
   type JobListResponse,
+  type ProjectSnapshot,
+  type ImportSnapshotInput,
+  type ImportSnapshotResult,
 } from '@anubis/shared'
 
 /* ------------------------------------------------------------
@@ -1428,5 +1431,24 @@ export async function extractWorkspace(input: {
     body: JSON.stringify(input),
   })
   return { jobId: r.jobId }
+}
+
+/* ---------- project snapshot import/export ---------- */
+
+export async function exportProjectSnapshot(projectId?: string): Promise<ProjectSnapshot> {
+  const path = projectId
+    ? `/snapshot/export?projectId=${encodeURIComponent(projectId)}`
+    : '/snapshot/export'
+  const r = await api<{ ok: true; snapshot: ProjectSnapshot }>(path)
+  return r.snapshot
+}
+
+export async function importProjectSnapshot(
+  input: ImportSnapshotInput,
+): Promise<ImportSnapshotResult> {
+  return api<ImportSnapshotResult>('/snapshot/import', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 

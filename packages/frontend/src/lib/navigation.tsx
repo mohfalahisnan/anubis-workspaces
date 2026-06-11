@@ -18,6 +18,7 @@ export type Route =
   | { page: 'profile-editor'; profileId: string }
   | { page: 'skills' }
   | { page: 'competitors' }
+  | { page: 'research' }
   | { page: 'discover-competitors'; jobId?: string }
   | { page: 'capture-posts'; jobId?: string; competitorIds?: string[] }
   | { page: 'scheduled' }

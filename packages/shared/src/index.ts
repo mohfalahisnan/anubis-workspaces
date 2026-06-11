@@ -109,6 +109,18 @@ export function isImageReferenceSource(value: string): boolean {
   return EMBEDDED_IMAGE_RE.test(trimmed) || IMAGE_EXT_RE.test(trimmed)
 }
 
+/**
+ * Whether a bare, unlabelled string should be treated as an image reference.
+ * Requires the trimmed value to be a single token (no internal whitespace) so
+ * that multi-token free text — `ls -la` output, prose sentences — that merely
+ * ends in an image extension is not mistaken for an image path.
+ */
+function isBareImagePathString(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || /\s/.test(trimmed)) return false
+  return isImageReferenceSource(trimmed)
+}
+
 export function imageFilenameFromSource(value: string): string {
   const trimmed = value.trim()
   if (trimmed.startsWith('data:image/')) return 'generated image'
@@ -144,7 +156,11 @@ export function extractImageReferencesFromUnknown(value: unknown): MessageImageR
   const visit = (node: unknown, depth: number) => {
     if (depth > 8 || node == null) return
     if (typeof node === 'string') {
-      add({ src: node, source: 'tool' })
+      // A free-text string (tool stdout, prose) is only an image source when
+      // the whole value is a single path/URL token. Reject multi-token lines
+      // like `ls -la` output that merely end in an image extension. Structured
+      // fields (path/src/...) keep their own handling below.
+      if (isBareImagePathString(node)) add({ src: node, source: 'tool' })
       return
     }
     if (Array.isArray(node)) {
@@ -948,7 +964,8 @@ export const CAPTURE_CHUNK_DELAY_MAX_MS = 5 * 60_000
 /** Per-competitor outcome inside a batch capture run. */
 export interface BatchCaptureOutcome {
   handle: string
-  capturedCount: number
+  /** Candidate posts surfaced for this competitor (not yet saved). */
+  candidateCount: number
   ok: boolean
   error?: string
 }
@@ -959,8 +976,8 @@ export interface BatchCaptureJobResult {
   totalProfiles: number
   /** Profiles actually processed (may be < total if the run was stopped). */
   profilesCompleted: number
-  /** Total new posts captured across every processed profile. */
-  capturedCount: number
+  /** Total candidate posts surfaced across every processed profile. */
+  candidateCount: number
   /** True when the run ended early due to a user stop. */
   stopped: boolean
   /** Per-competitor breakdown, in processing order. */

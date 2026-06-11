@@ -98,7 +98,7 @@ describe('runBatchCapture', () => {
       signal: new AbortController().signal,
       captureOne: async (t) => {
         order.push(t.id)
-        return { capturedCount: 2 }
+        return { candidateCount: 2 }
       },
       reportProgress: (p) => progress.push(p),
       reportWarning: () => {},
@@ -113,7 +113,7 @@ describe('runBatchCapture', () => {
     expect(res).toMatchObject({
       totalProfiles: 5,
       profilesCompleted: 5,
-      capturedCount: 10,
+      candidateCount: 10,
       stopped: false,
     })
     expect(res.perCompetitor).toHaveLength(5)
@@ -131,7 +131,7 @@ describe('runBatchCapture', () => {
     await runBatchCapture({
       competitors: targets(5), // 3 chunks → 2 cooldowns
       signal: new AbortController().signal,
-      captureOne: async () => ({ capturedCount: 0 }),
+      captureOne: async () => ({ candidateCount: 0 }),
       reportProgress: (p) => progress.push(p),
       reportWarning: () => {},
       sleep: async (ms) => {
@@ -161,7 +161,7 @@ describe('runBatchCapture', () => {
         order.push(t.id)
         // Abort mid-way through the 2nd profile; it should still finish.
         if (t.id === 'id-1') ac.abort()
-        return { capturedCount: 1 }
+        return { candidateCount: 1 }
       },
       reportProgress: () => {},
       reportWarning: () => {},
@@ -174,7 +174,7 @@ describe('runBatchCapture', () => {
     // The in-flight profile finished; no later chunk was started; no cooldown ran.
     expect(order).toEqual(['id-0', 'id-1'])
     expect(res.profilesCompleted).toBe(2)
-    expect(res.capturedCount).toBe(2)
+    expect(res.candidateCount).toBe(2)
     expect(res.stopped).toBe(true)
     expect(res.perCompetitor).toHaveLength(2)
   })
@@ -188,7 +188,7 @@ describe('runBatchCapture', () => {
       signal: ac.signal,
       captureOne: async (t) => {
         order.push(t.id)
-        return { capturedCount: 1 }
+        return { candidateCount: 1 }
       },
       reportProgress: () => {},
       reportWarning: () => {},
@@ -212,7 +212,7 @@ describe('runBatchCapture', () => {
       signal: new AbortController().signal,
       captureOne: async (t) => {
         if (t.id === 'id-1') throw new Error('crawler boom')
-        return { capturedCount: 4 }
+        return { candidateCount: 4 }
       },
       reportProgress: () => {},
       reportWarning: (m) => warnings.push(m),
@@ -223,7 +223,7 @@ describe('runBatchCapture', () => {
     })
 
     expect(res.profilesCompleted).toBe(3)
-    expect(res.capturedCount).toBe(8)
+    expect(res.candidateCount).toBe(8)
     expect(res.perCompetitor.find((o) => o.handle === '@user1')).toMatchObject({ ok: false })
     expect(warnings.some((w) => w.includes('crawler boom'))).toBe(true)
   })

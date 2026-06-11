@@ -79,7 +79,7 @@ export interface RunBatchCaptureDeps {
   /** Capture a single competitor's posts. Throwing marks that profile failed. */
   captureOne: (
     target: BatchCaptureTarget,
-  ) => Promise<{ capturedCount: number; warnings?: string[] }>
+  ) => Promise<{ candidateCount: number; warnings?: string[] }>
   /** Push a JobProgress patch (merged into the job's progress). */
   reportProgress: (progress: JobProgress) => void
   /** Record a non-fatal warning. */
@@ -120,7 +120,7 @@ export async function runBatchCapture(deps: RunBatchCaptureDeps): Promise<BatchC
   const totalProfiles = competitors.length
   const perCompetitor: BatchCaptureOutcome[] = []
   let profilesCompleted = 0
-  let capturedCount = 0
+  let candidateCount = 0
 
   reportProgress({
     phase: 'capture',
@@ -156,13 +156,13 @@ export async function runBatchCapture(deps: RunBatchCaptureDeps): Promise<BatchC
 
       try {
         const res = await captureOne(target)
-        capturedCount += res.capturedCount
+        candidateCount += res.candidateCount
         for (const w of res.warnings ?? []) reportWarning(w)
-        perCompetitor.push({ handle: target.handle, capturedCount: res.capturedCount, ok: true })
+        perCompetitor.push({ handle: target.handle, candidateCount: res.candidateCount, ok: true })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         reportWarning(`${target.handle}: ${message}`)
-        perCompetitor.push({ handle: target.handle, capturedCount: 0, ok: false, error: message })
+        perCompetitor.push({ handle: target.handle, candidateCount: 0, ok: false, error: message })
       }
 
       profilesCompleted++
@@ -194,7 +194,7 @@ export async function runBatchCapture(deps: RunBatchCaptureDeps): Promise<BatchC
   return {
     totalProfiles,
     profilesCompleted,
-    capturedCount,
+    candidateCount,
     stopped: signal.aborted,
     perCompetitor,
   }

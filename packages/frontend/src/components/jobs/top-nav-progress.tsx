@@ -379,9 +379,9 @@ function summariseFinished(job: JobSummary): string {
     const result = job.result as BatchCaptureJobResult | undefined
     const done = result?.profilesCompleted ?? 0
     const total = result?.totalProfiles ?? 0
-    const posts = result?.capturedCount ?? 0
+    const posts = result?.candidateCount ?? 0
     const prefix = job.state === 'stopped' ? `Stopped — ${done}/${total} profiles` : `${done} profiles`
-    return `${prefix} · ${posts} post${posts === 1 ? '' : 's'} captured`
+    return `${prefix} · ${posts} candidate${posts === 1 ? '' : 's'}`
   }
   if (job.state === 'stopped') return 'Stopped — partial results kept.'
   if (job.kind === 'discover-competitors') {

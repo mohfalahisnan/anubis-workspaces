@@ -16,7 +16,7 @@ import { withCrawlerProfileDefaults, crawlerProfileSchema } from './chrome-defau
 import { HttpError } from './http-errors.js'
 import { jobManager, type ProgressReporter } from './jobs.js'
 import { runBatchCapture } from './capture-batch.js'
-import { getBatchCandidates } from './capture-candidates.js'
+import { appendBatchCandidates, getBatchCandidates } from './capture-candidates.js'
 
 type PostOwner = {
   handle?: string
@@ -112,6 +112,9 @@ captureRoutes.post('/competitors/batch', async (c) => {
     timeoutMs: body.timeoutMs,
   }
 
+  // The executor runs on the next microtask, after `jobId` is assigned below,
+  // so candidates can be streamed into the per-job store keyed by this id.
+  let jobId = ''
   const job = jobManager.runJob<BatchCaptureJobResult>(
     {
       kind: 'capture-posts-batch',
@@ -125,13 +128,21 @@ captureRoutes.post('/competitors/batch', async (c) => {
         // Per-profile crawler progress is silenced so the batch orchestrator
         // owns the job's progress (chunk/profile counters, not scroll counts).
         captureOne: async (target) => {
-          const persisted = await runCapture(target.id, captureOpts, silentReporter())
-          return { capturedCount: persisted.capturedCount, warnings: persisted.warnings }
+          const { candidates, warnings } = await captureAndRefreshStats(
+            target.id,
+            captureOpts,
+            silentReporter(),
+          )
+          // Stream the actual posts into the per-job store; report only the
+          // count up to the orchestrator (the result payload carries counts).
+          appendBatchCandidates(jobId, candidates)
+          return { candidateCount: candidates.length, warnings }
         },
         reportProgress: ctx.setProgress,
         reportWarning: ctx.warn,
       }),
   )
+  jobId = job.id
 
   return c.json({ ok: true, jobId: job.id })
 })

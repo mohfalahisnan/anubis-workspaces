@@ -64,7 +64,7 @@ export function Sidebar() {
   )
 }
 
-function itemRoute(item: NavItem): Route {
+export function itemRoute(item: NavItem): Route {
   switch (item.page) {
     case 'home':
       return { page: 'home' }
@@ -82,6 +82,8 @@ function itemRoute(item: NavItem): Route {
       return { page: 'skills' }
     case 'competitors':
       return { page: 'competitors' }
+    case 'research':
+      return { page: 'research' }
     case 'scheduled':
       return { page: 'scheduled' }
     case 'workflow-demo':

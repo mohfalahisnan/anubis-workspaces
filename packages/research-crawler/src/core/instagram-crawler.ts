@@ -86,6 +86,10 @@ export async function captureInstagramData(input: CaptureInstagramInput): Promis
   if (!port) port = explicitProfile ? defaultPortFor(explicitProfile) : DEFAULT_PUBLIC_REMOTE_DEBUGGING_PORT
 
   const launchResult = await launchChrome({
+    // Launch on a blank tab, not instagram.com — capture opens/navigates its own
+    // profile tab. Without this, Chrome leaves a stray instagram.com home tab that
+    // looks like the crawler "opened the home page, not the profile" and stalls.
+    url: 'about:blank',
     remoteDebuggingPort: port,
     profile,
     ...(input.profileDir ? { profileDir: input.profileDir } : {}),

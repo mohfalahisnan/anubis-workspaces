@@ -11,47 +11,41 @@ function posts(likesList: number[]): PostData[] {
   }))
 }
 
-test('dominant-cluster mean ignores viral and minor high-engagement outliers', () => {
-  // 7 posts in 100-200, 3 at 500, 2 at 3200 -> dominant cluster is the 100-200 group
-  const summary = calculateAvgLikesSummary('nasa', posts([100, 120, 140, 150, 160, 180, 200, 500, 500, 500, 3200, 3200]))
-  assert.ok(summary)
-  assert.equal(summary.avgLikes, 150)
-  assert.equal(summary.avgLikesRangeLow, 100)
-  assert.equal(summary.avgLikesRangeHigh, 200)
-  assert.equal(summary.avgLikesSampleSize, 12)
-  assert.equal(summary.avgLikesCentralSampleSize, 7)
-  assert.equal(summary.method, 'modal_cluster_mean')
-})
-
-test('dominant-cluster mean follows the most common like band', () => {
-  const summary = calculateAvgLikesSummary('x', posts([230, 210, 804, 302, 203, 240]))
-  assert.equal(summary?.avgLikes, 221)
-  assert.equal(summary?.avgLikesRangeLow, 203)
-  assert.equal(summary?.avgLikesRangeHigh, 240)
-  assert.equal(summary?.avgLikesCentralSampleSize, 4)
-})
-
-test('single smooth cluster falls back to the mean of all posts', () => {
+test('avgLikes is the plain mean of all like counts (rounded)', () => {
+  // mean([100,110,120,130,140]) = 120
   const summary = calculateAvgLikesSummary('x', posts([100, 110, 120, 130, 140]))
-  assert.equal(summary?.avgLikes, 120)
-  assert.equal(summary?.avgLikesCentralSampleSize, 5)
+  assert.ok(summary)
+  assert.equal(summary.avgLikes, 120)
+  assert.equal(summary.avgLikesRangeLow, 100)
+  assert.equal(summary.avgLikesRangeHigh, 140)
+  assert.equal(summary.avgLikesSampleSize, 5)
+  assert.equal(summary.avgLikesCentralSampleSize, 5)
+  assert.equal(summary.method, 'simple_mean')
 })
 
-test('rejects a single viral outlier', () => {
+test('viral posts ARE included in the mean (no outlier suppression)', () => {
+  // mean([100,110,120,5000]) = 1332.5 -> 1333
   const summary = calculateAvgLikesSummary('x', posts([100, 110, 120, 5000]))
-  assert.equal(summary?.avgLikes, 110)
-  assert.equal(summary?.avgLikesCentralSampleSize, 3)
+  assert.equal(summary?.avgLikes, 1333)
+  assert.equal(summary?.avgLikesRangeLow, 100)
+  assert.equal(summary?.avgLikesRangeHigh, 5000)
 })
 
-test('tie on cluster size prefers the lower (typical) cluster', () => {
-  const summary = calculateAvgLikesSummary('x', posts([10, 12, 1000, 1100]))
-  assert.equal(summary?.avgLikes, 11)
+test('rounds to the nearest integer', () => {
+  // mean([230,210,804,302,203,240]) = 331.5 -> 332
+  const summary = calculateAvgLikesSummary('x', posts([230, 210, 804, 302, 203, 240]))
+  assert.equal(summary?.avgLikes, 332)
 })
 
-test('values exactly 2x apart stay in the same cluster', () => {
-  const summary = calculateAvgLikesSummary('x', posts([100, 150, 200]))
+test('ignores non-numeric / negative like counts', () => {
+  const summary = calculateAvgLikesSummary('x', [
+    { platform: 'instagram', postUrl: 'p1', likes: 100 },
+    { platform: 'instagram', postUrl: 'p2', likes: -5 },
+    { platform: 'instagram', postUrl: 'p3' },
+    { platform: 'instagram', postUrl: 'p4', likes: 200 },
+  ])
   assert.equal(summary?.avgLikes, 150)
-  assert.equal(summary?.avgLikesCentralSampleSize, 3)
+  assert.equal(summary?.avgLikesSampleSize, 2)
 })
 
 test('returns null when no likes are present', () => {
@@ -60,5 +54,11 @@ test('returns null when no likes are present', () => {
 
 test('flags low_sample confidence below minPosts', () => {
   const summary = calculateAvgLikesSummary('x', posts([100, 200]), 20)
+  assert.equal(summary?.avgLikes, 150)
   assert.equal(summary?.avgLikesConfidence, 'low_sample')
+})
+
+test('flags ok confidence at or above minPosts', () => {
+  const summary = calculateAvgLikesSummary('x', posts([100, 200]), 2)
+  assert.equal(summary?.avgLikesConfidence, 'ok')
 })

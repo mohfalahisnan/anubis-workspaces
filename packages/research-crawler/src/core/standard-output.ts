@@ -43,7 +43,7 @@ export type ProfileData = {
   avgLikesRangeLow?: number
   avgLikesRangeHigh?: number
   avgLikesSampleSize?: number
-  avgLikesMethod?: 'modal_cluster_mean'
+  avgLikesMethod?: 'simple_mean'
   avgLikesConfidence?: 'ok' | 'low_sample'
   collectedAt?: string
   sourceResponseUrl?: string
@@ -138,7 +138,7 @@ export type StandardCrawlerOutput = {
       finishedAt?: string
     }
     avgLikes?: {
-      method: 'modal_cluster_mean'
+      method: 'simple_mean'
       minPosts: number
       perProfile: Array<{
         username: string
@@ -148,7 +148,7 @@ export type StandardCrawlerOutput = {
         avgLikesSampleSize: number
         avgLikesCentralSampleSize: number
         avgLikesConfidence: 'ok' | 'low_sample'
-        method: 'modal_cluster_mean'
+        method: 'simple_mean'
       }>
     }
     loginAuthenticated?: boolean
@@ -322,7 +322,7 @@ function buildAvgLikesMeta(
 
   if (perProfile.length === 0) return undefined
   return {
-    method: 'modal_cluster_mean',
+    method: 'simple_mean',
     minPosts,
     perProfile,
   }

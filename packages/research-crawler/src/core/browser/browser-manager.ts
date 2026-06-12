@@ -14,6 +14,8 @@ export type BrowserManagerOptions = {
   connect?: ConnectFn
   /** Max tabs that may be active inside withTab() at once (default 4). */
   maxConcurrentTabs?: number
+  /** Per-command timeout for tabs created by this manager (ms; 0/undefined = none). */
+  commandTimeoutMs?: number
 }
 
 export type WithTabOptions = {
@@ -73,7 +75,7 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
       tabId: `tab-${++tabSeq}`, targetId, sessionId, url, state: 'open', queue: createCommandQueue(),
     }
     registry.add(record)
-    return createTab({ record, connection, onClose })
+    return createTab({ record, connection, onClose, commandTimeoutMs: options.commandTimeoutMs })
   }
 
   const attachTo = async (targetId: string): Promise<string> => {

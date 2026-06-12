@@ -46,6 +46,19 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
   const browserWsUrl = await getBrowserWebSocketUrl(chromeOrigin, fetchImpl)
   const connection = await connect(browserWsUrl)
 
+  connection.on('Target.targetDestroyed', (params) => {
+    const targetId = (params as { targetId?: string })?.targetId
+    if (!targetId) return
+    const record = registry.getByTargetId(targetId)
+    if (record) registry.remove(record.tabId)
+  })
+  connection.on('Target.detachedFromTarget', (params) => {
+    const sessionId = (params as { sessionId?: string })?.sessionId
+    if (!sessionId) return
+    const record = registry.getBySessionId(sessionId)
+    if (record) registry.remove(record.tabId)
+  })
+
   let tabSeq = 0
 
   const onClose = async (tabId: string): Promise<void> => {

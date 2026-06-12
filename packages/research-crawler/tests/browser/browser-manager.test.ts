@@ -107,3 +107,19 @@ test('commands on different tabs interleave (cross-tab parallelism)', async () =
   assert.equal(order.length, 2)
   assert.notEqual(order[0], order[1])
 })
+
+test('default maxConcurrentTabs allows a full burst of 8 tabs at once', async () => {
+  let active = 0
+  let peak = 0
+  const manager = await createBrowserManager({
+    chromeOrigin: 'http://127.0.0.1:9222',
+    fetchImpl: fakeFetch(),
+    connect: async () => scriptedConnection(),
+    // maxConcurrentTabs intentionally omitted → exercises the default
+  })
+  await Promise.all(Array.from({ length: 8 }, () =>
+    manager.withTab({ url: 'https://example.com/' }, async () => {
+      active++; peak = Math.max(peak, active); await delay(5); active--
+    })))
+  assert.equal(peak, 8)
+})

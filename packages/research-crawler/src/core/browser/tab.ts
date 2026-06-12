@@ -22,11 +22,13 @@ export type CreateTabArgs = {
   connection: CdpConnection
   /** Closes the underlying target and removes the tab from the registry. */
   onClose: (tabId: string) => Promise<void>
+  /** Reject a single CDP command after this many ms (0/undefined = no timeout). */
+  commandTimeoutMs?: number
 }
 
-export function createTab({ record, connection, onClose }: CreateTabArgs): Tab {
+export function createTab({ record, connection, onClose, commandTimeoutMs }: CreateTabArgs): Tab {
   const send = <T = unknown>(method: string, params: Record<string, unknown> = {}) =>
-    record.queue.run(() => connection.send<T>(method, params, record.sessionId))
+    record.queue.run(() => withTimeout(connection.send<T>(method, params, record.sessionId), commandTimeoutMs, method))
 
   return {
     get tabId() { return record.tabId },
@@ -82,4 +84,15 @@ export function createTab({ record, connection, onClose }: CreateTabArgs): Tab {
       record.state = 'closed'
     },
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number | undefined, label: string): Promise<T> {
+  if (!ms || ms <= 0) return promise
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`CDP command timed out after ${ms}ms: ${label}`)), ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
 }

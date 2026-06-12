@@ -1,4 +1,5 @@
 import { type CdpSession } from "../chrome/cdp-session.js";
+import type { BrowserManager, ConnectFn } from "../browser/browser-manager.js";
 import { resolveChatGPTTarget } from "../chrome/chrome-connector.js";
 import { withCdpCaptureSession } from "../chrome/cdp-capture-session.js";
 import { captureChatGPTNetworkResponses, createCdpDebugCollector, type CdpDebugCollector } from "../network/network-listener.js";
@@ -120,7 +121,8 @@ export type ChatGPTCdpCaptureService = {
 
 export type ChatGPTCdpCaptureServiceOptions = {
   fetchImpl?: typeof fetch;
-  connectSession?: (webSocketDebuggerUrl: string) => Promise<CdpSession>;
+  connect?: ConnectFn;
+  getManager?: (args: { chromeOrigin: string; fetchImpl?: typeof fetch; connect?: ConnectFn }) => Promise<BrowserManager>;
 };
 
 export function createChatGPTCdpCaptureService(
@@ -144,7 +146,8 @@ export function createChatGPTCdpCaptureService(
           openNewTab: Boolean(input.openNewTab),
           keepTabOpen: Boolean(input.keepTabOpen),
           fetchImpl: options.fetchImpl,
-          connectSession: options.connectSession,
+          ...(options.connect ? { connect: options.connect } : {}),
+          ...(options.getManager ? { getManager: options.getManager } : {}),
           resolveTarget: ({ chromeOrigin, fetchImpl }) =>
             resolveChatGPTTarget({ chromeOrigin, fetchImpl, allowAnyPage: true }),
           noSocketMessage: "Open ChatGPT in the browser started from Browser Intelligence."
@@ -258,7 +261,8 @@ export function createChatGPTCdpCaptureService(
           openNewTab: Boolean(input.openNewTab),
           keepTabOpen: Boolean(input.keepTabOpen),
           fetchImpl: options.fetchImpl,
-          connectSession: options.connectSession,
+          ...(options.connect ? { connect: options.connect } : {}),
+          ...(options.getManager ? { getManager: options.getManager } : {}),
           resolveTarget: ({ chromeOrigin, fetchImpl }) =>
             resolveChatGPTTarget({ chromeOrigin, fetchImpl, allowAnyPage: true }),
           noSocketMessage: "Open ChatGPT in the browser started from Browser Intelligence."
@@ -380,7 +384,8 @@ export function createChatGPTCdpCaptureService(
           openNewTab: Boolean(input.openNewTab),
           keepTabOpen: Boolean(input.keepTabOpen),
           fetchImpl: options.fetchImpl,
-          connectSession: options.connectSession,
+          ...(options.connect ? { connect: options.connect } : {}),
+          ...(options.getManager ? { getManager: options.getManager } : {}),
           resolveTarget: ({ chromeOrigin, fetchImpl }) =>
             resolveChatGPTTarget({ chromeOrigin, fetchImpl, allowAnyPage: true }),
           noSocketMessage: "Open ChatGPT in the browser started from Browser Intelligence."

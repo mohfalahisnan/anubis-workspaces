@@ -2,23 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createChatGPTCdpCaptureService } from '../src/core/services/chatgpt-cdp-capture.service.js'
 import type { CdpSession } from '../src/core/chrome/cdp-session.js'
-
-function jsonResponse(ok: boolean, status: number, body: unknown) {
-  return { ok, status, json: async () => body }
-}
-
-function mockFetch(routes: Record<string, () => unknown>): { impl: typeof fetch; calls: string[] } {
-  const calls: string[] = []
-  const impl = (async (input: unknown, init?: { method?: string }) => {
-    const url = new URL(String(input))
-    const key = url.pathname.startsWith('/json/close') ? '/json/close' : url.pathname
-    calls.push(`${init?.method ?? 'GET'} ${key}`)
-    const handler = routes[key]
-    if (!handler) throw new Error(`unexpected fetch ${key}`)
-    return handler() as unknown as Response
-  }) as unknown as typeof fetch
-  return { impl, calls }
-}
+import { fakeGetManager } from './browser/fake-browser.js'
 
 function mockSession(listeners: Record<string, (params: unknown) => void>): CdpSession {
   return {
@@ -195,18 +179,9 @@ function mockPromptSession(listeners: Record<string, (params: unknown) => void>)
   }
 }
 
-const newTabTarget = { id: 'NT', type: 'page', url: 'https://chatgpt.com/', webSocketDebuggerUrl: 'ws://nt' }
-
 test('ChatGPT capture service successfully gets conversation list', async () => {
-  const { impl, calls } = mockFetch({
-    '/json/new': () => jsonResponse(true, 200, newTabTarget),
-    '/json/close': () => jsonResponse(true, 200, {})
-  })
   const listeners: Record<string, (params: unknown) => void> = {}
-  const service = createChatGPTCdpCaptureService({
-    fetchImpl: impl,
-    connectSession: async () => mockSession(listeners)
-  })
+  const service = createChatGPTCdpCaptureService({ getManager: fakeGetManager(mockSession(listeners)) })
 
   const result = await service.capture({
     url: 'https://chatgpt.com/',
@@ -217,8 +192,6 @@ test('ChatGPT capture service successfully gets conversation list', async () => 
   })
 
   assert.equal(result.ok, true)
-  assert.ok(calls.includes('PUT /json/new'))
-  assert.ok(calls.includes('GET /json/close'))
   if (result.ok) {
     assert.equal(result.conversations.length, 1)
     assert.equal(result.conversations[0].id, 'chat-1')
@@ -227,15 +200,8 @@ test('ChatGPT capture service successfully gets conversation list', async () => 
 })
 
 test('ChatGPT capture service successfully gets conversation details', async () => {
-  const { impl, calls } = mockFetch({
-    '/json/new': () => jsonResponse(true, 200, newTabTarget),
-    '/json/close': () => jsonResponse(true, 200, {})
-  })
   const listeners: Record<string, (params: unknown) => void> = {}
-  const service = createChatGPTCdpCaptureService({
-    fetchImpl: impl,
-    connectSession: async () => mockDetailsSession(listeners)
-  })
+  const service = createChatGPTCdpCaptureService({ getManager: fakeGetManager(mockDetailsSession(listeners)) })
 
   const result = await service.captureDetails({
     conversationId: 'chat-1',
@@ -245,8 +211,6 @@ test('ChatGPT capture service successfully gets conversation details', async () 
   })
 
   assert.equal(result.ok, true)
-  assert.ok(calls.includes('PUT /json/new'))
-  assert.ok(calls.includes('GET /json/close'))
   if (result.ok) {
     assert.equal(result.messages.length, 2)
     assert.equal(result.messages[0].role, 'user')
@@ -264,15 +228,8 @@ test('ChatGPT capture service successfully gets conversation details', async () 
 })
 
 test('ChatGPT capture service successfully sends a prompt', async () => {
-  const { impl, calls } = mockFetch({
-    '/json/new': () => jsonResponse(true, 200, newTabTarget),
-    '/json/close': () => jsonResponse(true, 200, {})
-  })
   const listeners: Record<string, (params: unknown) => void> = {}
-  const service = createChatGPTCdpCaptureService({
-    fetchImpl: impl,
-    connectSession: async () => mockPromptSession(listeners)
-  })
+  const service = createChatGPTCdpCaptureService({ getManager: fakeGetManager(mockPromptSession(listeners)) })
 
   const deltas: string[] = []
   const result = await service.sendPrompt({
@@ -284,8 +241,6 @@ test('ChatGPT capture service successfully sends a prompt', async () => {
   })
 
   assert.equal(result.ok, true)
-  assert.ok(calls.includes('PUT /json/new'))
-  assert.ok(calls.includes('GET /json/close'))
   if (result.ok) {
     assert.equal(result.conversationId, 'new-chat-uuid')
     assert.equal(result.messages.length, 2)

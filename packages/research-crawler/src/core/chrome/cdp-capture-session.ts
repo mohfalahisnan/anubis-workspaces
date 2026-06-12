@@ -1,27 +1,16 @@
-import { connectCdpSession, type CdpSession } from "./cdp-session.js";
-import {
-  closeChromeTab,
-  normalizeChromeOrigin,
-  openChromeTab,
-  type ChromeTarget,
-} from "./chrome-connector.js";
+import { normalizeChromeOrigin, type ChromeTarget } from "./chrome-connector.js";
+import { createLegacySession } from "../browser/legacy-session-adapter.js";
+import { browserRegistry } from "../browser/browser-registry.js";
+import type { BrowserManager, ConnectFn } from "../browser/browser-manager.js";
+import type { Tab } from "../browser/tab.js";
+import type { CdpSession } from "./cdp-session.js";
 
 /**
  * Shared lifecycle scaffolding for every CDP capture flow (Instagram, ChatGPT,
- * Qwen, future platforms). Owns the parts that genuinely repeat across
- * every service:
- *
- *  - chromeOrigin normalisation (and reporting "input invalid" if it throws)
- *  - "open a new tab" vs "reuse an existing tab" target resolution
- *  - the `webSocketDebuggerUrl` presence check
- *  - CDP session connect
- *  - try / finally cleanup: close the session, close the opened tab unless
- *    the caller asked to keep it
- *
- * Each platform service still owns its platform-specific capture logic and its
- * own error-code union (e.g. `INSTAGRAM_TAB_NOT_FOUND` vs
- * `CHATGPT_TAB_NOT_FOUND`); this helper returns a small discriminated result
- * the caller maps onto its own error envelope.
+ * Qwen). Runs over the multiplexed BrowserManager: it acquires a Tab (a fresh
+ * one for openNewTab, or an attach to the target resolveTarget returns) and
+ * hands the body a legacy CdpSession bound to that tab. Closes the tab in a
+ * finally unless keepTabOpen.
  */
 
 export type ResolveCdpTargetFn = (args: {
@@ -29,34 +18,33 @@ export type ResolveCdpTargetFn = (args: {
   fetchImpl?: typeof fetch;
 }) => Promise<ChromeTarget>;
 
+export type GetManagerFn = (args: {
+  chromeOrigin: string;
+  fetchImpl?: typeof fetch;
+  connect?: ConnectFn;
+}) => Promise<BrowserManager>;
+
 export type CdpCaptureSessionOptions = {
   chromeOrigin: string | undefined;
-  /**
-   * The URL the capture wants the tab on. When `openNewTab` is true this is
-   * the URL of the freshly opened tab. When `openNewTab` is false this may
-   * still be set so the caller can react to it (Instagram passes it to its
-   * `resolveTarget` reuse logic; ChatGPT only uses it for the
-   * `Page.navigate` call inside `body`).
-   */
   navigateUrl: string | undefined;
-  /** Resolves an existing tab when `openNewTab` is false. */
-  resolveTarget: ResolveTargetFn;
+  resolveTarget: ResolveCdpTargetFn;
   openNewTab: boolean;
   keepTabOpen: boolean;
   fetchImpl?: typeof fetch;
-  connectSession?: (url: string) => Promise<CdpSession>;
+  /** Browser-level connection factory, forwarded to the manager (tests/Flow injection). */
+  connect?: ConnectFn;
+  /** Resolve the BrowserManager for this origin. Defaults to the shared browserRegistry. */
+  getManager?: GetManagerFn;
   /** Caller-supplied message shown when the tab is found but has no CDP socket. */
   noSocketMessage: string;
 };
-
-type ResolveTargetFn = ResolveCdpTargetFn;
 
 export type CdpCaptureSessionContext = {
   chromeOrigin: string;
   navigateUrl: string | undefined;
   session: CdpSession;
   target: ChromeTarget;
-  /** Present only when `openNewTab` was true. */
+  /** Present only when openNewTab was true. */
   openedTabId: string | undefined;
 };
 
@@ -64,13 +52,8 @@ export type CdpCaptureSessionFailure =
   | { ok: false; reason: "invalid-input"; message: string }
   | { ok: false; reason: "tab-not-found"; message: string };
 
-/**
- * Open a CDP session against the configured Chrome instance, hand it to
- * `body`, and clean up no matter how `body` returns. The success value of
- * `body` is propagated as-is; thrown errors propagate too (so the caller can
- * map them onto its own `*_CDP_CAPTURE_FAILED` envelope inside its own
- * try/catch).
- */
+const defaultGetManager: GetManagerFn = (args) => browserRegistry.get(args);
+
 export async function withCdpCaptureSession<T>(
   opts: CdpCaptureSessionOptions,
   body: (ctx: CdpCaptureSessionContext) => Promise<T>,
@@ -79,28 +62,33 @@ export async function withCdpCaptureSession<T>(
   try {
     chromeOrigin = normalizeChromeOrigin(opts.chromeOrigin);
   } catch (error) {
-    return {
-      ok: false,
-      reason: "invalid-input",
-      message: error instanceof Error ? error.message : "Chrome origin is invalid.",
-    };
+    return { ok: false, reason: "invalid-input", message: error instanceof Error ? error.message : "Chrome origin is invalid." };
   }
 
+  let manager: BrowserManager;
+  try {
+    manager = await (opts.getManager ?? defaultGetManager)({
+      chromeOrigin,
+      ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+      ...(opts.connect ? { connect: opts.connect } : {}),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: "tab-not-found", message: `Browser connection is not reachable at ${chromeOrigin}: ${detail}` };
+  }
+
+  let tab: Tab;
   let target: ChromeTarget;
   let openedTabId: string | undefined;
   try {
     if (opts.openNewTab && opts.navigateUrl) {
-      target = await openChromeTab({
-        chromeOrigin,
-        fetchImpl: opts.fetchImpl,
-        url: opts.navigateUrl,
-      });
-      openedTabId = target.id;
+      tab = await manager.newTab(opts.navigateUrl);
+      openedTabId = tab.targetId;
+      target = { id: tab.targetId, type: "page", url: opts.navigateUrl, webSocketDebuggerUrl: "" };
     } else {
-      target = await opts.resolveTarget({
-        chromeOrigin,
-        fetchImpl: opts.fetchImpl,
-      });
+      const resolved = await opts.resolveTarget({ chromeOrigin, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) });
+      tab = await manager.attach(resolved);
+      target = resolved;
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -113,29 +101,11 @@ export async function withCdpCaptureSession<T>(
     };
   }
 
-  if (!target.webSocketDebuggerUrl) {
-    if (openedTabId) {
-      await closeChromeTab({ chromeOrigin, fetchImpl: opts.fetchImpl, targetId: openedTabId });
-    }
-    return { ok: false, reason: "tab-not-found", message: opts.noSocketMessage };
-  }
-
-  const connect = opts.connectSession ?? connectCdpSession;
-  let session: CdpSession | null = null;
+  const session = createLegacySession(tab);
   try {
-    session = await connect(target.webSocketDebuggerUrl);
-    const result = await body({
-      chromeOrigin,
-      navigateUrl: opts.navigateUrl,
-      session,
-      target,
-      openedTabId,
-    });
+    const result = await body({ chromeOrigin, navigateUrl: opts.navigateUrl, session, target, openedTabId });
     return { ok: true, result };
   } finally {
-    session?.close();
-    if (openedTabId && !opts.keepTabOpen) {
-      await closeChromeTab({ chromeOrigin, fetchImpl: opts.fetchImpl, targetId: openedTabId });
-    }
+    if (!opts.keepTabOpen) await tab.close();
   }
 }

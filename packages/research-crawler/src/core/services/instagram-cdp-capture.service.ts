@@ -1,4 +1,5 @@
-import { type CdpSession } from "../chrome/cdp-session.js";
+import type { CdpSession } from "../chrome/cdp-session.js";
+import type { BrowserManager, ConnectFn } from "../browser/browser-manager.js";
 import { resolveInstagramTarget } from "../chrome/chrome-connector.js";
 import { withCdpCaptureSession } from "../chrome/cdp-capture-session.js";
 import {
@@ -64,7 +65,8 @@ export type InstagramCdpCaptureService = {
 
 export type InstagramCdpCaptureServiceOptions = {
   fetchImpl?: typeof fetch;
-  connectSession?: (webSocketDebuggerUrl: string) => Promise<CdpSession>;
+  connect?: ConnectFn;
+  getManager?: (args: { chromeOrigin: string; fetchImpl?: typeof fetch; connect?: ConnectFn }) => Promise<BrowserManager>;
 };
 
 export function createInstagramCdpCaptureService(
@@ -115,7 +117,8 @@ export function createInstagramCdpCaptureService(
           openNewTab: Boolean(input.openNewTab),
           keepTabOpen: Boolean(input.keepTabOpen),
           fetchImpl: options.fetchImpl,
-          connectSession: options.connectSession,
+          ...(options.connect ? { connect: options.connect } : {}),
+          ...(options.getManager ? { getManager: options.getManager } : {}),
           resolveTarget: ({ chromeOrigin, fetchImpl }) =>
             resolveInstagramTarget({ chromeOrigin, fetchImpl, allowAnyPage }),
           noSocketMessage: "Open Instagram in the browser started from Browser Intelligence."

@@ -14,6 +14,8 @@ export type BrowserManagerOptions = {
   connect?: ConnectFn
   /** Max tabs that may be active inside withTab() at once (default 4). */
   maxConcurrentTabs?: number
+  /** Per-command timeout for tabs created by this manager (ms; 0/undefined = none). */
+  commandTimeoutMs?: number
 }
 
 export type WithTabOptions = {
@@ -29,6 +31,7 @@ export type BrowserManager = {
   readonly chromeOrigin: string
   newTab(url: string): Promise<Tab>
   attachExisting(predicate: (target: ChromeTarget) => boolean): Promise<Tab>
+  attach(target: ChromeTarget): Promise<Tab>
   withTab<T>(options: WithTabOptions, fn: (tab: Tab) => Promise<T>): Promise<T>
   listTabs(): TabRecord[]
   isOpen(): boolean
@@ -45,6 +48,19 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
   const browserWsUrl = await getBrowserWebSocketUrl(chromeOrigin, fetchImpl)
   const connection = await connect(browserWsUrl)
 
+  connection.on('Target.targetDestroyed', (params) => {
+    const targetId = (params as { targetId?: string })?.targetId
+    if (!targetId) return
+    const record = registry.getByTargetId(targetId)
+    if (record) registry.remove(record.tabId)
+  })
+  connection.on('Target.detachedFromTarget', (params) => {
+    const sessionId = (params as { sessionId?: string })?.sessionId
+    if (!sessionId) return
+    const record = registry.getBySessionId(sessionId)
+    if (record) registry.remove(record.tabId)
+  })
+
   let tabSeq = 0
 
   const onClose = async (tabId: string): Promise<void> => {
@@ -59,7 +75,7 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
       tabId: `tab-${++tabSeq}`, targetId, sessionId, url, state: 'open', queue: createCommandQueue(),
     }
     registry.add(record)
-    return createTab({ record, connection, onClose })
+    return createTab({ record, connection, onClose, commandTimeoutMs: options.commandTimeoutMs })
   }
 
   const attachTo = async (targetId: string): Promise<string> => {
@@ -82,6 +98,11 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
       const targets = await listChromeTargets({ chromeOrigin, fetchImpl })
       const target = targets.find((t) => t.type === 'page' && predicate(t))
       if (!target) throw new Error('No matching Chrome page target was found to attach to.')
+      const sessionId = await attachTo(target.id)
+      return register(target.id, sessionId, target.url)
+    },
+
+    async attach(target) {
       const sessionId = await attachTo(target.id)
       return register(target.id, sessionId, target.url)
     },

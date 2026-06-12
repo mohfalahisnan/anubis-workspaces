@@ -137,6 +137,8 @@ captureRoutes.post('/competitors/batch', async (c) => {
       // Bring Chrome up once for the whole run so the parallel captures reuse
       // a single instance instead of racing to spawn/kill it.
       const launched = await launchChrome(withCrawlerProfileDefaults({
+        // Blank tab, not instagram.com — each capture opens its own profile tab.
+        url: 'about:blank',
         profile: selectedProfile,
         chromePath: cfg.chromePath,
         headless: captureOpts.headless,

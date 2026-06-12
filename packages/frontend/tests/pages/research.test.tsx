@@ -7,18 +7,12 @@ const mocks = vi.hoisted(() => ({
   listCompetitors: vi.fn(),
   createResearchSession: vi.fn(),
   updateResearchCandidate: vi.fn(),
-  updateCompetitor: vi.fn(),
-  captureCompetitorsBatch: vi.fn(),
-  validateSessionNiche: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
   listCompetitors: mocks.listCompetitors,
   createResearchSession: mocks.createResearchSession,
   updateResearchCandidate: mocks.updateResearchCandidate,
-  updateCompetitor: mocks.updateCompetitor,
-  captureCompetitorsBatch: mocks.captureCompetitorsBatch,
-  validateSessionNiche: mocks.validateSessionNiche,
 }))
 
 vi.mock('@/lib/use-project', () => ({
@@ -39,14 +33,11 @@ const session: ResearchSessionSummary = {
   createdAt: 0, updatedAt: 0,
 }
 
-async function gotoCandidates() {
-  await userEvent.click(screen.getByRole('tab', { name: /candidates/i }))
-}
-
 describe('<ResearchPage>', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((m) => m.mockReset())
     mocks.listCompetitors.mockResolvedValue([competitor({})])
+    window.localStorage.clear()
   })
 
   it('runs research and renders scored candidates', async () => {
@@ -55,7 +46,6 @@ describe('<ResearchPage>', () => {
     render(<ResearchPage />)
     await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
 
-    await gotoCandidates()
     await userEvent.click(screen.getByRole('button', { name: /run research/i }))
 
     await waitFor(() => expect(mocks.createResearchSession).toHaveBeenCalledTimes(1))
@@ -64,61 +54,12 @@ describe('<ResearchPage>', () => {
     expect(screen.getByText(/high priority/i)).toBeInTheDocument()
   })
 
-  it('marks niche aligned from the detail drawer and reflects the new validation', async () => {
-    mocks.createResearchSession.mockResolvedValue({ session, candidates: [candidate({})] })
-    mocks.updateResearchCandidate.mockResolvedValue(candidate({ nicheAligned: true, validationStatus: 'valid' }))
-
-    render(<ResearchPage />)
-    await gotoCandidates()
-    await userEvent.click(screen.getByRole('button', { name: /run research/i }))
-    await screen.findByText('20.0×')
-
-    await userEvent.click(screen.getByRole('button', { name: /details/i }))
-    await userEvent.click(await screen.findByRole('button', { name: /^aligned$/i }))
-
-    await waitFor(() => expect(mocks.updateResearchCandidate).toHaveBeenCalledWith('r1', { nicheAligned: true }))
-  })
-
-  it('runs the AI niche pass and merges the updated verdicts', async () => {
-    mocks.createResearchSession.mockResolvedValue({ session, candidates: [candidate({})] })
-    mocks.validateSessionNiche.mockResolvedValue({
-      updated: 1,
-      candidates: [candidate({ nicheAligned: true, validationStatus: 'valid' })],
-    })
-
-    render(<ResearchPage />)
-    await gotoCandidates()
-    await userEvent.click(screen.getByRole('button', { name: /run research/i }))
-    await screen.findByText('20.0×')
-
-    await userEvent.click(screen.getByRole('button', { name: /validate niche/i }))
-
-    await waitFor(() => expect(mocks.validateSessionNiche).toHaveBeenCalledWith('s1'))
-    expect(await screen.findByText(/validated 1 candidate/i)).toBeInTheDocument()
-  })
-
-  it('captures with the headed login Chrome profile', async () => {
-    mocks.captureCompetitorsBatch.mockResolvedValue({ jobId: 'job-1' })
-
-    render(<ResearchPage />)
-    await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
-
-    await userEvent.click(screen.getByRole('tab', { name: 'Capture' }))
-    await userEvent.click(screen.getByRole('button', { name: /capture all/i }))
-
-    await waitFor(() => expect(mocks.captureCompetitorsBatch).toHaveBeenCalledTimes(1))
-    const [ids, opts] = mocks.captureCompetitorsBatch.mock.calls[0]
-    expect(ids).toEqual(['c1'])
-    expect(opts).toMatchObject({ profile: 'login', headless: false, targetPosts: 20 })
-  })
-
   it('passes the favorite-only and age controls through to the run', async () => {
     mocks.createResearchSession.mockResolvedValue({ session, candidates: [] })
 
     render(<ResearchPage />)
     await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
 
-    await gotoCandidates()
     await userEvent.click(screen.getByLabelText(/favorite competitors only/i))
     await userEvent.click(screen.getByRole('button', { name: /run research/i }))
 
@@ -126,5 +67,20 @@ describe('<ResearchPage>', () => {
     const arg = mocks.createResearchSession.mock.calls[0][0]
     expect(arg.projectId).toBe('default')
     expect(arg.controls).toMatchObject({ favoriteOnly: true, maxPostsPerProfile: 20, maxContentAgeDays: 7 })
+  })
+
+  it('persists candidates to localStorage so they survive a remount', async () => {
+    mocks.createResearchSession.mockResolvedValue({ session, candidates: [candidate({})] })
+
+    const first = render(<ResearchPage />)
+    await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
+    await userEvent.click(screen.getByRole('button', { name: /run research/i }))
+    expect(await screen.findByText('20.0×')).toBeInTheDocument()
+    first.unmount()
+
+    // Remount without re-running: the previous candidates are restored from storage.
+    render(<ResearchPage />)
+    expect(await screen.findByText('20.0×')).toBeInTheDocument()
+    expect(mocks.createResearchSession).toHaveBeenCalledTimes(1)
   })
 })

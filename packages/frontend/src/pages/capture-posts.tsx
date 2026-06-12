@@ -78,6 +78,23 @@ const POST_SORT_ACCESSORS: Record<PostSortKey, (p: CapturedPostSummary) => unkno
   comments: (p) => p.comments,
 }
 
+/** localStorage key for the per-project competitor selection so it survives
+ *  navigating away and back. */
+function captureSelectionKey(projectId: string | undefined): string {
+  return `anubis:capture-selection:${projectId ?? 'default'}`
+}
+
+function loadCaptureSelection(projectId: string | undefined): string[] {
+  try {
+    const raw = window.localStorage.getItem(captureSelectionKey(projectId))
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export function CapturePostsPage({
   jobId,
   competitorIds,
@@ -128,8 +145,16 @@ export function CapturePostsPage({
         // Keep any preseeded selection that still resolves to a tracked id.
         setSelected((prev) => {
           const ids = new Set(unique.map((c) => c.id))
-          const next = new Set([...prev].filter((id) => ids.has(id)))
-          // No preselection? Default to previously-refreshed handles, matching
+          // Prefer an explicit route preselection, then the current in-memory
+          // selection, then a persisted one from a previous visit.
+          const base =
+            competitorIds && competitorIds.length > 0
+              ? competitorIds
+              : prev.size > 0
+                ? [...prev]
+                : loadCaptureSelection(activeProject?.id)
+          const next = new Set(base.filter((id) => ids.has(id)))
+          // Still nothing? Default to previously-refreshed handles, matching
           // the "update what I've already pulled" common case.
           if (next.size === 0 && (!competitorIds || competitorIds.length === 0)) {
             for (const c of unique) if (c.lastRefreshedAt) next.add(c.id)
@@ -145,6 +170,15 @@ export function CapturePostsPage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProject?.id])
+
+  // Persist the competitor selection so it survives navigating away and back.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(captureSelectionKey(activeProject?.id), JSON.stringify([...selected]))
+    } catch {
+      // Best-effort persistence; ignore quota/serialization errors.
+    }
+  }, [activeProject?.id, selected])
 
   const levelOf = (c: CompetitorSummary): CompetitorLevel => resolveLevel(c.followers, c.level, levelsConfig)
   const visibleItems = (items ?? []).filter((c) => levelFilter === 'all' || levelOf(c) === levelFilter)

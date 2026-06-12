@@ -45,3 +45,24 @@ export type {
   FlowGenerateRatio,
   FlowGenerateVariations,
 } from './core/flow/flow-generate.js'
+
+// Browser-control layer (multiplexed CDP). See docs/superpowers/specs/2026-06-12-research-crawler-browser-manager-design.md
+export { connectCdpConnection } from './core/browser/cdp-connection.js'
+export type { CdpConnection, CdpEventHandler } from './core/browser/cdp-connection.js'
+export { createBrowserManager } from './core/browser/browser-manager.js'
+export type {
+  BrowserManager,
+  BrowserManagerOptions,
+  WithTabOptions,
+  ConnectFn,
+} from './core/browser/browser-manager.js'
+export { createBrowserRegistry, browserRegistry } from './core/browser/browser-registry.js'
+export type { BrowserRegistry } from './core/browser/browser-registry.js'
+export type { Tab } from './core/browser/tab.js'
+export type { TabRecord, TabRegistry, TabState } from './core/browser/tab-registry.js'
+export { createTabRegistry } from './core/browser/tab-registry.js'
+export { createCommandQueue } from './core/browser/command-queue.js'
+export type { CommandQueue } from './core/browser/command-queue.js'
+export { createSemaphore } from './core/browser/semaphore.js'
+export type { Semaphore } from './core/browser/semaphore.js'
+export { createLegacySession } from './core/browser/legacy-session-adapter.js'

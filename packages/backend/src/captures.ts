@@ -4,6 +4,8 @@ import { z } from 'zod'
 import {
   calculateAvgLikesSummary,
   captureInstagramData,
+  launchChrome,
+  killChrome,
   silentReporter,
   type PostData,
   type ProfileData,
@@ -52,6 +54,9 @@ const CaptureBody = z.object({
 }).strict()
 
 type CaptureOptions = z.infer<typeof CaptureBody>
+
+/** Internal capture options: CaptureOptions plus batch-only Chrome reuse flag. */
+type InternalCaptureOptions = CaptureOptions & { keepChromeOpen?: boolean }
 
 /**
  * Batch capture body. "Select all" stays unbounded from the user's side — the
@@ -121,26 +126,44 @@ captureRoutes.post('/competitors/batch', async (c) => {
       label: `Capture · ${targets.length} competitor${targets.length === 1 ? '' : 's'}`,
       projectId,
     },
-    (ctx) =>
-      runBatchCapture({
-        competitors: targets,
-        signal: ctx.signal,
-        // Per-profile crawler progress is silenced so the batch orchestrator
-        // owns the job's progress (chunk/profile counters, not scroll counts).
-        captureOne: async (target) => {
-          const { candidates, warnings } = await captureAndRefreshStats(
-            target.id,
-            captureOpts,
-            silentReporter(),
-          )
-          // Stream the actual posts into the per-job store; report only the
-          // count up to the orchestrator (the result payload carries counts).
-          appendBatchCandidates(jobId, candidates)
-          return { candidateCount: candidates.length, warnings }
-        },
-        reportProgress: ctx.setProgress,
-        reportWarning: ctx.warn,
-      }),
+    async (ctx) => {
+      const cfg = getStack().appConfig.get()
+      const selectedProfile = captureOpts.profile ?? 'public'
+      // Bring Chrome up once for the whole run so the parallel captures reuse
+      // a single instance instead of racing to spawn/kill it.
+      const launched = await launchChrome(withCrawlerProfileDefaults({
+        profile: selectedProfile,
+        chromePath: cfg.chromePath,
+        headless: captureOpts.headless,
+        forceHeadless: captureOpts.forceHeadless,
+      }, selectedProfile, cfg, getDataDir()))
+      try {
+        return await runBatchCapture({
+          competitors: targets,
+          signal: ctx.signal,
+          // Per-profile crawler progress is silenced so the batch orchestrator
+          // owns the job's progress (chunk/profile counters, not scroll counts).
+          captureOne: async (target) => {
+            const { candidates, warnings } = await captureAndRefreshStats(
+              target.id,
+              { ...captureOpts, keepChromeOpen: true },
+              silentReporter(),
+            )
+            // Stream the actual posts into the per-job store; report only the
+            // count up to the orchestrator (the result payload carries counts).
+            appendBatchCandidates(jobId, candidates)
+            return { candidateCount: candidates.length, warnings }
+          },
+          reportProgress: ctx.setProgress,
+          reportWarning: ctx.warn,
+        })
+      } finally {
+        // Only tear down Chrome if this run spawned it; leave a pre-existing one.
+        if (!launched.reused) {
+          await killChrome(launched.remoteDebuggingPort).catch(() => {})
+        }
+      }
+    },
   )
   jobId = job.id
 
@@ -259,7 +282,7 @@ captureRoutes.post('/competitors/:id', async (c) => {
  */
 async function crawlCompetitorPosts(
   competitorId: string,
-  body: CaptureOptions,
+  body: InternalCaptureOptions,
   reporter: ProgressReporter,
 ): Promise<{ result: StandardCrawlerOutput; targetPosts: number }> {
   const stack = getStack()
@@ -279,6 +302,7 @@ async function crawlCompetitorPosts(
     forceHeadless: body.forceHeadless,
     maxResponses: targetPosts,
     timeoutMs: body.timeoutMs ?? 90_000,
+    ...(body.keepChromeOpen ? { keepChromeOpen: true } : {}),
     reporter,
   }, selectedProfile, cfg, getDataDir()))
 
@@ -302,7 +326,7 @@ async function runCapture(
  */
 async function captureAndRefreshStats(
   competitorId: string,
-  body: CaptureOptions,
+  body: InternalCaptureOptions,
   reporter: ProgressReporter,
 ): Promise<{ candidates: CapturedPostSummary[]; warnings: string[] }> {
   const { result, targetPosts } = await crawlCompetitorPosts(competitorId, body, reporter)

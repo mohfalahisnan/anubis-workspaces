@@ -29,6 +29,7 @@ export type BrowserManager = {
   readonly chromeOrigin: string
   newTab(url: string): Promise<Tab>
   attachExisting(predicate: (target: ChromeTarget) => boolean): Promise<Tab>
+  attach(target: ChromeTarget): Promise<Tab>
   withTab<T>(options: WithTabOptions, fn: (tab: Tab) => Promise<T>): Promise<T>
   listTabs(): TabRecord[]
   isOpen(): boolean
@@ -82,6 +83,11 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
       const targets = await listChromeTargets({ chromeOrigin, fetchImpl })
       const target = targets.find((t) => t.type === 'page' && predicate(t))
       if (!target) throw new Error('No matching Chrome page target was found to attach to.')
+      const sessionId = await attachTo(target.id)
+      return register(target.id, sessionId, target.url)
+    },
+
+    async attach(target) {
       const sessionId = await attachTo(target.id)
       return register(target.id, sessionId, target.url)
     },

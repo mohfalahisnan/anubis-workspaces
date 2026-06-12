@@ -66,3 +66,8 @@ export type { CommandQueue } from './core/browser/command-queue.js'
 export { createSemaphore } from './core/browser/semaphore.js'
 export type { Semaphore } from './core/browser/semaphore.js'
 export { createLegacySession } from './core/browser/legacy-session-adapter.js'
+export { launchBrowserManager, closeBrowserManager } from './core/browser/browser-lifecycle.js'
+export type {
+  LaunchBrowserManagerOptions,
+  CloseBrowserManagerOptions,
+} from './core/browser/browser-lifecycle.js'

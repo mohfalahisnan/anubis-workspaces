@@ -48,6 +48,13 @@ export type CaptureNetworkResponsesOptions = {
   navigateUrl?: string;
   scrollIntervalMs?: number;
   initialDelayMs?: number;
+  /**
+   * If no matching response has arrived within this window (after the initial
+   * delay), give up instead of scrolling fruitlessly until `timeoutMs`. A real
+   * profile returns its JSON within a few seconds; zero responses past this
+   * window means a login wall / empty / blocked page. Default 9000ms.
+   */
+  noDataGraceMs?: number;
   debug?: CdpDebugCollector;
   onCaptured?: (captured: CapturedNetworkResponse[]) => void;
   shouldStop?: (captured: CapturedNetworkResponse[]) => boolean | Promise<boolean>;
@@ -122,10 +129,19 @@ export async function captureInstagramNetworkResponses(
     await delay(options.timeoutMs);
   } else {
     const deadline = Date.now() + options.timeoutMs;
+    const noDataGraceMs = Math.max(0, Math.floor(options.noDataGraceMs ?? 9000));
     if (initialDelayMs > 0) await delay(initialDelayMs);
+    const loopStart = Date.now();
     let lastCheckedLength = -1;
     while (Date.now() < deadline) {
       await Promise.allSettled([...pendingReads]);
+      // Early bail: a real profile returns matching JSON within seconds. Zero
+      // responses past the grace window means a login wall / empty / blocked
+      // page — stop instead of scrolling fruitlessly to the full timeout.
+      if (captured.length === 0 && Date.now() - loopStart >= noDataGraceMs) {
+        cdpDebug(options.debug, "no-data bail: no matching responses within", noDataGraceMs, "ms");
+        break;
+      }
       if (captured.length !== lastCheckedLength) {
         lastCheckedLength = captured.length;
         if (await options.shouldStop(captured)) break;

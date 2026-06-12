@@ -55,8 +55,13 @@ const CaptureBody = z.object({
 
 type CaptureOptions = z.infer<typeof CaptureBody>
 
-/** Internal capture options: CaptureOptions plus batch-only Chrome reuse flag. */
-type InternalCaptureOptions = CaptureOptions & { keepChromeOpen?: boolean }
+/**
+ * Internal capture options: CaptureOptions plus batch-only flags.
+ * - `keepChromeOpen`: the batch owns Chrome's lifetime, so each capture must not kill it.
+ * - `openNewTab`: parallel captures each need their OWN tab. Without this they take the
+ *   reuse path and collide on one shared tab, so only the race winner gets data.
+ */
+type InternalCaptureOptions = CaptureOptions & { keepChromeOpen?: boolean; openNewTab?: boolean }
 
 /**
  * Batch capture body. "Select all" stays unbounded from the user's side — the
@@ -146,7 +151,7 @@ captureRoutes.post('/competitors/batch', async (c) => {
           captureOne: async (target) => {
             const { candidates, warnings } = await captureAndRefreshStats(
               target.id,
-              { ...captureOpts, keepChromeOpen: true },
+              { ...captureOpts, keepChromeOpen: true, openNewTab: true },
               silentReporter(),
             )
             // Stream the actual posts into the per-job store; report only the
@@ -303,6 +308,7 @@ async function crawlCompetitorPosts(
     maxResponses: targetPosts,
     timeoutMs: body.timeoutMs ?? 90_000,
     ...(body.keepChromeOpen ? { keepChromeOpen: true } : {}),
+    ...(body.openNewTab ? { openNewTab: true } : {}),
     reporter,
   }, selectedProfile, cfg, getDataDir()))
 

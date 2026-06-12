@@ -1,6 +1,6 @@
 {
   "name": "anubis-workspaces",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "private": true,
   "description": "Anubis desktop app.",
   "license": "MIT",

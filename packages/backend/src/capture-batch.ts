@@ -139,21 +139,24 @@ export async function runBatchCapture(deps: RunBatchCaptureDeps): Promise<BatchC
     if (signal.aborted) break
     const chunkTargets = chunks[ci]!
 
-    for (const target of chunkTargets) {
-      if (signal.aborted) break
+    // Burst start: no single "current" profile — the whole chunk runs at once.
+    reportProgress({
+      status: 'capturing',
+      chunkIndex: ci + 1,
+      totalChunks: chunks.length,
+      profilesCompleted,
+      totalProfiles,
+      current: profilesCompleted,
+      total: totalProfiles,
+      currentHandle: undefined,
+      delaySecondsRemaining: undefined,
+    })
 
-      reportProgress({
-        status: 'capturing',
-        chunkIndex: ci + 1,
-        totalChunks: chunks.length,
-        profilesCompleted,
-        totalProfiles,
-        current: profilesCompleted,
-        total: totalProfiles,
-        currentHandle: target.handle,
-        delaySecondsRemaining: undefined,
-      })
-
+    // Capture the whole chunk in parallel. Each capture's failure is isolated
+    // (caught here, recorded, never rejects the burst). Counter mutations are
+    // safe: Node is single-threaded, so each `++`/`push` runs atomically between
+    // awaits.
+    await Promise.all(chunkTargets.map(async (target) => {
       try {
         const res = await captureOne(target)
         candidateCount += res.candidateCount
@@ -172,7 +175,7 @@ export async function runBatchCapture(deps: RunBatchCaptureDeps): Promise<BatchC
         total: totalProfiles,
         currentHandle: undefined,
       })
-    }
+    }))
 
     const isLastChunk = ci === chunks.length - 1
     if (!isLastChunk && !signal.aborted) {

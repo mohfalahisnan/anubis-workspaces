@@ -1080,10 +1080,11 @@ export interface CaptureJobResult {
 
 /** Max profiles captured per chunk before a cooldown delay. */
 export const CAPTURE_CHUNK_SIZE = 8
-/** Inter-chunk cooldown lower bound (2 minutes). */
-export const CAPTURE_CHUNK_DELAY_MIN_MS = 2 * 60_000
-/** Inter-chunk cooldown upper bound (5 minutes). */
-export const CAPTURE_CHUNK_DELAY_MAX_MS = 5 * 60_000
+/** Inter-chunk cooldown lower bound (20 seconds). Chunks now capture in
+ *  parallel bursts, so the cooldown is the only pacing between bursts. */
+export const CAPTURE_CHUNK_DELAY_MIN_MS = 20_000
+/** Inter-chunk cooldown upper bound (40 seconds). */
+export const CAPTURE_CHUNK_DELAY_MAX_MS = 40_000
 
 /** Per-competitor outcome inside a batch capture run. */
 export interface BatchCaptureOutcome {

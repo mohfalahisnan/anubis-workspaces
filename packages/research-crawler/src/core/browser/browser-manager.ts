@@ -12,7 +12,7 @@ export type BrowserManagerOptions = {
   fetchImpl?: typeof fetch
   /** Browser-level CdpConnection factory (defaults to the real WebSocket connector). */
   connect?: ConnectFn
-  /** Max tabs that may be active inside withTab() at once (default 4). */
+  /** Max tabs that may be active inside withTab() at once (default 8). */
   maxConcurrentTabs?: number
   /** Per-command timeout for tabs created by this manager (ms; 0/undefined = none). */
   commandTimeoutMs?: number
@@ -43,7 +43,7 @@ export async function createBrowserManager(options: BrowserManagerOptions): Prom
   const fetchImpl = options.fetchImpl ?? fetch
   const connect = options.connect ?? connectCdpConnection
   const registry = createTabRegistry()
-  const semaphore = createSemaphore(options.maxConcurrentTabs ?? 4)
+  const semaphore = createSemaphore(options.maxConcurrentTabs ?? 8)
 
   const browserWsUrl = await getBrowserWebSocketUrl(chromeOrigin, fetchImpl)
   const connection = await connect(browserWsUrl)

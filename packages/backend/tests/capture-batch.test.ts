@@ -121,7 +121,7 @@ describe('runBatchCapture', () => {
 
     // Progress surfaced the total chunk count and the live handle.
     expect(progress.some((p) => p.totalChunks === 3 && p.totalProfiles === 5)).toBe(true)
-    expect(progress.some((p) => p.currentHandle === '@user0')).toBe(true)
+    expect(progress.some((p) => p.status === 'capturing' && p.chunkIndex === 1)).toBe(true)
     expect(progress.at(-1)?.profilesCompleted).toBe(5)
   })
 
@@ -203,6 +203,40 @@ describe('runBatchCapture', () => {
     expect(order).toEqual(['id-0', 'id-1'])
     expect(res.stopped).toBe(true)
     expect(res.profilesCompleted).toBe(2)
+  })
+
+  it('captures a chunk concurrently (all calls start before any finishes)', async () => {
+    let started = 0
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    let maxConcurrentStarted = 0
+
+    const run = runBatchCapture({
+      competitors: targets(4), // chunkSize 4 → one burst of 4
+      signal: new AbortController().signal,
+      captureOne: async () => {
+        started++
+        maxConcurrentStarted = Math.max(maxConcurrentStarted, started)
+        await gate // block until all 4 have started
+        return { candidateCount: 1 }
+      },
+      reportProgress: () => {},
+      reportWarning: () => {},
+      sleep: async () => {},
+      random: () => 0,
+      chunkSize: 4,
+      delayMinMs: 0,
+      delayMaxMs: 0,
+    })
+
+    // Let the 4 callbacks reach the gate, then release them all.
+    await new Promise((r) => setTimeout(r, 5))
+    expect(maxConcurrentStarted).toBe(4) // all 4 in flight at once → parallel
+    release()
+
+    const res = await run
+    expect(res.profilesCompleted).toBe(4)
+    expect(res.candidateCount).toBe(4)
   })
 
   it('records a failed profile as a warning and continues the run', async () => {

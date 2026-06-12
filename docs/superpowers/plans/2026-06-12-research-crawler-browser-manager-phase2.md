@@ -979,9 +979,13 @@ git commit -m "refactor(research-crawler): ChatGPT capture uses BrowserManager g
 
 ---
 
-## Task 8: Migrate Qwen service to the getManager seam
+## Task 8: ~~Migrate Qwen service to the getManager seam~~ — DEFERRED TO PHASE 3
 
-Qwen mirrors ChatGPT. Its test has four cases (`capture`, `captureDetails`, `sendPrompt`, not-logged-in), all reusing their existing mock sessions verbatim.
+**Discovered during execution:** Qwen does **not** use `withCdpCaptureSession`. It has its own `openSession` helper (`qwen-cdp-capture.service.ts`) that calls `openChromeTab`/`resolveQwenTarget` + `connectCdpSession` directly — the same pattern as Flow / Instagram discovery / login-detector, which this plan already defers to Phase 3. It is therefore **out of Phase 2's wiring scope** (Phase 2 covers only the `withCdpCaptureSession` consumers: Instagram capture + ChatGPT). Qwen's service and test are left untouched and continue to pass on the legacy `connectCdpSession` transport. Migrating Qwen's `openSession` onto `BrowserManager` moves to Phase 3 alongside Flow/discovery/login-detector.
+
+_Original (now-deferred) task description retained below for Phase 3 reference._
+
+Qwen mirrors ChatGPT in shape. Its test has four cases (`capture`, `captureDetails`, `sendPrompt`, not-logged-in), all reusing their existing mock sessions verbatim.
 
 **Files:**
 - Modify: `packages/research-crawler/src/core/services/qwen-cdp-capture.service.ts`
@@ -1107,12 +1111,12 @@ git commit -m "feat(research-crawler): export BrowserManager launch/close lifecy
 
 ## Definition of Done (Phase 2)
 
-- `withCdpCaptureSession` runs over `BrowserManager` (single multiplexed socket) with its result contract preserved; Instagram capture, ChatGPT, and Qwen flow through it.
+- `withCdpCaptureSession` runs over `BrowserManager` (single multiplexed socket) with its result contract preserved; Instagram capture and ChatGPT (the two `withCdpCaptureSession` consumers) flow through it.
 - `BrowserManager` gains `attach(target)`, event-driven tab eviction, and per-command timeout; `launchBrowserManager`/`closeBrowserManager` own the Chrome process lifecycle.
-- The three service tests drive their original capture assertions through the new `getManager` seam via the shared `fake-browser.ts` helper (mock sessions reused verbatim).
-- `pnpm --filter @anubis/research-crawler typecheck` passes; the full research-crawler suite is green; Flow / Instagram discovery / login-detector (still on `connectCdpSession`) are untouched and passing.
+- The Instagram and ChatGPT service tests drive their original capture assertions through the new `getManager` seam via the shared `fake-browser.ts` helper (ChatGPT mock sessions reused verbatim).
+- `pnpm --filter @anubis/research-crawler typecheck` passes; the full research-crawler suite is green; Qwen / Flow / Instagram discovery / login-detector (all still on `connectCdpSession`) are untouched and passing.
 
 ## Deferred to Phase 3
 
 - Instagram native `Tab` rewrite (drop the legacy `CdpSession` adapter for capture) + consumer-level parallel batch fan-out across competitors (the headline "faster crawling" payoff — now unblocked, since concurrent `captureInstagramData` calls to one origin share a registry-cached manager and open parallel tabs bounded by its semaphore).
-- Migrate Flow, Instagram discovery, and login-detector off `connectCdpSession` onto `BrowserManager`.
+- Migrate **Qwen** (its `openSession` helper), Flow, Instagram discovery, and login-detector off `connectCdpSession` onto `BrowserManager`.

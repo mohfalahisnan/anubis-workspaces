@@ -50,8 +50,11 @@ describe('migrations - legacy DB with under-recorded schema_migrations', () => {
     expect(hasColumn(db, 'competitors', 'bio')).toBe(true)
     expect(hasColumn(db, 'competitors', 'level')).toBe(true)
     expect(hasTable(db, 'projects')).toBe(true)
-    expect(hasTable(db, 'tasks')).toBe(true)
-    expect(hasTable(db, 'content_items')).toBe(true)
+    // Migration 025 moves tasks and content items to canonical Markdown storage
+    // and drops their DB tables, replacing content with a runtime-only sidecar.
+    expect(hasTable(db, 'tasks')).toBe(false)
+    expect(hasTable(db, 'content_items')).toBe(false)
+    expect(hasTable(db, 'content_item_runtime')).toBe(true)
 
     db.close()
   })

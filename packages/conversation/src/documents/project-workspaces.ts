@@ -2,14 +2,14 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  readdirSync,
   realpathSync,
   renameSync,
   unlinkSync,
 } from 'node:fs'
-import { dirname, extname, join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import type { ProjectsRepo } from '../db/repositories/projects-repo.js'
 import { ensureWorkspaceStructure } from '../util/workspace.js'
+import { walkMarkdown } from './walk-markdown.js'
 
 /** Workspace-relative roots that hold canonical Markdown documents. */
 const CANONICAL_DOCUMENT_ROOTS = ['tasks', 'knowledge']
@@ -146,15 +146,4 @@ function moveFile(from: string, to: string): void {
     copyFileSync(from, to)
     unlinkSync(from)
   }
-}
-
-function walkMarkdown(root: string): string[] {
-  const out: string[] = []
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name)
-    if (entry.isSymbolicLink()) continue
-    if (entry.isDirectory()) out.push(...walkMarkdown(path))
-    else if (entry.isFile() && extname(entry.name).toLowerCase() === '.md') out.push(path)
-  }
-  return out
 }

@@ -1,36 +1,33 @@
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   realpathSync,
   renameSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, extname, join, relative, resolve, sep } from 'node:path'
+import { basename, join, relative, resolve, sep } from 'node:path'
 import matter from 'gray-matter'
 import { z } from 'zod'
 import type { ProjectWorkspaces } from './project-workspaces.js'
+import { walkMarkdown } from './walk-markdown.js'
 
 export type CanonicalDocumentType = 'task' | 'competitor' | 'content' | 'research'
 
-const IsoDateString = z.preprocess(
-  (value) => value instanceof Date ? value.toISOString() : value,
-  z.string().datetime(),
-)
-
 /**
- * A frontmatter string field that also tolerates YAML's native timestamp
- * parsing: gray-matter/js-yaml turns an unquoted ISO timestamp into a `Date`,
- * which a bare `z.string()` would reject. Coerces such a `Date` back to an ISO
- * string and otherwise passes the value through unchanged.
+ * Coerce a value that YAML may have parsed as a native `Date` back to an ISO
+ * string. gray-matter/js-yaml turns an unquoted ISO timestamp into a `Date`,
+ * which a bare `z.string()` would reject; any other value passes through
+ * unchanged for the wrapped schema to validate.
  */
-export const FrontmatterDateString = z.preprocess(
-  (value) => (value instanceof Date ? value.toISOString() : value),
-  z.string(),
-)
+const coerceDateToIsoString = (value: unknown): unknown =>
+  value instanceof Date ? value.toISOString() : value
+
+const IsoDateString = z.preprocess(coerceDateToIsoString, z.string().datetime())
+
+/** A frontmatter string field that tolerates YAML's native timestamp parsing. */
+export const FrontmatterDateString = z.preprocess(coerceDateToIsoString, z.string())
 
 const CommonFrontmatter = z.object({
   schema_version: z.literal(1),
@@ -211,18 +208,6 @@ export function parseDocumentData<T>(
       { path: document.relativePath },
     )
   }
-}
-
-function walkMarkdown(root: string): string[] {
-  if (!existsSync(root)) return []
-  const out: string[] = []
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    const path = join(root, entry.name)
-    if (entry.isSymbolicLink()) continue
-    if (entry.isDirectory()) out.push(...walkMarkdown(path))
-    else if (entry.isFile() && extname(entry.name).toLowerCase() === '.md' && lstatSync(path).isFile()) out.push(path)
-  }
-  return out
 }
 
 function isWithin(root: string, target: string): boolean {

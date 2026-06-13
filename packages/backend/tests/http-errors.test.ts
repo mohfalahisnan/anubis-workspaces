@@ -48,6 +48,15 @@ describe('toErrorResponse — the backend error seam', () => {
     expect((body as { error: { code: string } }).error.code).toBe('PROJECT_WORKSPACE_CONFLICT')
   })
 
+  it('maps a missing project workspace to a 404 not found', () => {
+    const { status, body } = toErrorResponse(new ProjectWorkspaceError(
+      'PROJECT_NOT_FOUND',
+      'Project ghost not found',
+    ))
+    expect(status).toBe(404)
+    expect((body as { error: { code: string } }).error.code).toBe('PROJECT_NOT_FOUND')
+  })
+
   it('maps duplicate Markdown fields to a 409 conflict', () => {
     const { status, body } = toErrorResponse(new DocumentStoreError(
       'DUPLICATE_DOCUMENT_FIELD',

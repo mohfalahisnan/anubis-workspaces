@@ -21,6 +21,17 @@ const IsoDateString = z.preprocess(
   z.string().datetime(),
 )
 
+/**
+ * A frontmatter string field that also tolerates YAML's native timestamp
+ * parsing: gray-matter/js-yaml turns an unquoted ISO timestamp into a `Date`,
+ * which a bare `z.string()` would reject. Coerces such a `Date` back to an ISO
+ * string and otherwise passes the value through unchanged.
+ */
+export const FrontmatterDateString = z.preprocess(
+  (value) => (value instanceof Date ? value.toISOString() : value),
+  z.string(),
+)
+
 const CommonFrontmatter = z.object({
   schema_version: z.literal(1),
   id: z.string().min(1),
@@ -123,7 +134,7 @@ export class MarkdownDocumentStore {
 
     const filename = existing
       ? basename(existing.path)
-      : `${slugify(input.title)}-${input.id.slice(0, 8)}.md`
+      : uniqueFilename(targetDirectory, slugify(input.title), input.id)
     const target = this.safePath(workspace, join(relative(workspace, targetDirectory), filename))
     const temp = `${target}.${process.pid}.${Date.now()}.tmp`
     writeFileSync(temp, matter.stringify(input.body.trim() ? `${input.body.trim()}\n` : '', data), 'utf8')
@@ -216,6 +227,24 @@ function walkMarkdown(root: string): string[] {
 
 function isWithin(root: string, target: string): boolean {
   return target === root || target.startsWith(`${root}${sep}`)
+}
+
+/**
+ * Build the filename for a brand-new document. The stable id already lives in
+ * frontmatter, so the filename is presentation only — but it must never collide
+ * with an unrelated file (e.g. a manually authored doc sharing the same title
+ * slug and id prefix), which a blind write would silently overwrite. Append a
+ * numeric suffix until the name is free.
+ */
+function uniqueFilename(directory: string, slug: string, id: string): string {
+  const suffix = id.slice(0, 8)
+  let filename = `${slug}-${suffix}.md`
+  let counter = 2
+  while (existsSync(join(directory, filename))) {
+    filename = `${slug}-${suffix}-${counter}.md`
+    counter++
+  }
+  return filename
 }
 
 function slugify(value: string): string {

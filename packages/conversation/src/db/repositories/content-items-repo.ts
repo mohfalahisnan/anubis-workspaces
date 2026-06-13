@@ -1,7 +1,7 @@
 import type { ContentItemStatus } from '@anubis/shared'
 import { z } from 'zod'
 import type { Db } from '../client.js'
-import { parseDocumentData, type MarkdownDocument, type MarkdownDocumentStore } from '../../documents/document-store.js'
+import { FrontmatterDateString, parseDocumentData, type MarkdownDocument, type MarkdownDocumentStore } from '../../documents/document-store.js'
 import { readSection, writeSections } from '../../documents/markdown-sections.js'
 
 export interface ContentItem {
@@ -59,7 +59,7 @@ const ContentData = z.object({
   reference_url: z.string().optional().nullable(),
   rejection_reason: z.string().optional().nullable(),
   published_url: z.string().optional().nullable(),
-  published_at: z.string().optional().nullable(),
+  published_at: FrontmatterDateString.optional().nullable(),
   source_workflow_run_id: z.string().optional().nullable(),
   source_conversation_id: z.string().optional().nullable(),
   created_at: z.string().datetime(),

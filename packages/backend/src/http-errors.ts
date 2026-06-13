@@ -59,7 +59,11 @@ export function toErrorResponse(error: unknown): {
 
   if (error instanceof ProjectWorkspaceError) {
     return {
-      status: error.code === 'PROJECT_WORKSPACE_CONFLICT' ? 409 : 400,
+      status: error.code === 'PROJECT_WORKSPACE_CONFLICT'
+        ? 409
+        : error.code === 'PROJECT_NOT_FOUND'
+          ? 404
+          : 400,
       body: {
         ok: false,
         error: { code: error.code, message: error.message, details: error.details },

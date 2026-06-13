@@ -1,7 +1,18 @@
-import { existsSync, realpathSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+} from 'node:fs'
+import { dirname, extname, join, relative, resolve } from 'node:path'
 import type { ProjectsRepo } from '../db/repositories/projects-repo.js'
 import { ensureWorkspaceStructure } from '../util/workspace.js'
+
+/** Workspace-relative roots that hold canonical Markdown documents. */
+const CANONICAL_DOCUMENT_ROOTS = ['tasks', 'knowledge']
 
 export class ProjectWorkspaces {
   constructor(
@@ -11,11 +22,40 @@ export class ProjectWorkspaces {
 
   resolve(projectId = 'default'): string {
     const project = this.projects.findById(projectId)
-    if (!project) throw new Error(`Project ${projectId} not found`)
+    if (!project) {
+      throw new ProjectWorkspaceError(
+        'PROJECT_NOT_FOUND',
+        `Project ${projectId} not found`,
+        { projectId },
+      )
+    }
 
     const workdir = this.prepare(projectId, project.workdir)
     if (project.workdir !== workdir) this.projects.update(projectId, { workdir })
     return workdir
+  }
+
+  /**
+   * Resolve a new workspace for an existing project, moving its canonical
+   * Markdown documents from the old location so they are not stranded when a
+   * project's `workdir` changes. Returns the canonical destination path.
+   */
+  changeWorkdir(projectId: string, requestedWorkdir?: string): string {
+    const project = this.projects.findById(projectId)
+    if (!project) {
+      throw new ProjectWorkspaceError(
+        'PROJECT_NOT_FOUND',
+        `Project ${projectId} not found`,
+        { projectId },
+      )
+    }
+
+    const from = canonicalWorkspace(resolve(project.workdir ?? join(this.managedRoot, projectId)))
+    const to = this.prepare(projectId, requestedWorkdir)
+    if (workspaceKey(from) !== workspaceKey(to) && existsSync(from)) {
+      moveCanonicalDocuments(from, to)
+    }
+    return to
   }
 
   prepare(projectId: string, requestedWorkdir?: string): string {
@@ -54,7 +94,7 @@ export class ProjectWorkspaces {
 
 export class ProjectWorkspaceError extends Error {
   constructor(
-    readonly code: 'INVALID_PROJECT_WORKSPACE' | 'PROJECT_WORKSPACE_CONFLICT',
+    readonly code: 'INVALID_PROJECT_WORKSPACE' | 'PROJECT_WORKSPACE_CONFLICT' | 'PROJECT_NOT_FOUND',
     message: string,
     readonly details?: Record<string, unknown>,
   ) {
@@ -70,4 +110,51 @@ function canonicalWorkspace(path: string): string {
 
 function workspaceKey(path: string): string {
   return process.platform === 'win32' ? path.toLowerCase() : path
+}
+
+/**
+ * Move every canonical Markdown document from one workspace to another,
+ * preserving its workspace-relative path. Refuses to overwrite a file that
+ * already exists at the destination so a relocation can never clobber content
+ * the user placed in the target directory.
+ */
+function moveCanonicalDocuments(from: string, to: string): void {
+  for (const root of CANONICAL_DOCUMENT_ROOTS) {
+    const sourceRoot = join(from, root)
+    if (!existsSync(sourceRoot)) continue
+    for (const file of walkMarkdown(sourceRoot)) {
+      const rel = relative(from, file)
+      const dest = join(to, rel)
+      if (existsSync(dest)) {
+        throw new ProjectWorkspaceError(
+          'PROJECT_WORKSPACE_CONFLICT',
+          `Cannot move workspace document ${rel}: a file already exists at the destination`,
+          { document: rel },
+        )
+      }
+      mkdirSync(dirname(dest), { recursive: true })
+      moveFile(file, dest)
+    }
+  }
+}
+
+function moveFile(from: string, to: string): void {
+  try {
+    renameSync(from, to)
+  } catch {
+    // Cross-device rename (EXDEV) — fall back to copy + unlink.
+    copyFileSync(from, to)
+    unlinkSync(from)
+  }
+}
+
+function walkMarkdown(root: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join(root, entry.name)
+    if (entry.isSymbolicLink()) continue
+    if (entry.isDirectory()) out.push(...walkMarkdown(path))
+    else if (entry.isFile() && extname(entry.name).toLowerCase() === '.md') out.push(path)
+  }
+  return out
 }

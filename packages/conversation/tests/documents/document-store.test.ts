@@ -67,6 +67,36 @@ describe('MarkdownDocumentStore', () => {
     )
   })
 
+  it('does not overwrite an unrelated file that occupies a generated filename', () => {
+    const { root, documents } = setup()
+    // A valid, manually authored doc (its own stable id) that happens to sit at
+    // the exact path the next generated filename would resolve to.
+    const decoyPath = join(root, 'knowledge', 'research', 'shared-collidex.md')
+    writeFileSync(decoyPath, `---
+schema_version: 1
+id: manual-decoy
+type: research
+project_id: default
+created_at: 2026-06-13T00:00:00.000Z
+updated_at: 2026-06-13T00:00:00.000Z
+title: Manual decoy
+status: draft
+---
+MANUAL BODY
+`, 'utf8')
+
+    // slugify('Shared') + id.slice(0,8) === 'shared-collidex' → would collide.
+    const created = documents.write({
+      type: 'research', projectId: 'default', root: 'knowledge/research', id: 'collidexyz1234',
+      title: 'Shared', data: { title: 'Shared', status: 'draft' }, body: '',
+    })
+
+    expect(readFileSync(decoyPath, 'utf8')).toContain('MANUAL BODY')
+    expect(created.path.endsWith('shared-collidex-2.md')).toBe(true)
+    expect(documents.find('research', 'knowledge/research', 'manual-decoy')).not.toBeNull()
+    expect(documents.find('research', 'knowledge/research', 'collidexyz1234')?.path).toBe(created.path)
+  })
+
   it('accepts standard unquoted YAML timestamps from manually authored documents', () => {
     const { root, documents } = setup()
     const path = join(root, 'knowledge', 'research', 'manual.md')

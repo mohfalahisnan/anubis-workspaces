@@ -55,7 +55,7 @@ projectRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id')
   const current = stack.projects.findById(id)
   if (!current) return c.json({ ok: false, error: 'not_found' }, 404)
-  const workdir = stack.projectWorkspaces.prepare(id, body.workdir ?? current.workdir)
+  const workdir = stack.projectWorkspaces.changeWorkdir(id, body.workdir ?? current.workdir)
   const project = stack.projects.update(id, { ...body, workdir })!
   return c.json({ ok: true, project })
 })

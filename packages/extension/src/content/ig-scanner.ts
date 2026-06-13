@@ -29,7 +29,8 @@ export type InstagramMediaAssets = {
 export type InstagramMediaRecord = {
   username: string;
   postUrl: string;
-  likes: number;
+  /** Undefined when the creator has hidden like counts (`like_and_view_counts_disabled`). */
+  likes?: number;
   comment: number;
   timestamp: string;
   caption?: string;
@@ -136,11 +137,23 @@ function normalizeMedia(value: Record<string, unknown>, sourceResponseUrl: strin
   const id = pickString(value, ["id", "media_id"]);
   const username = getMediaUsername(value);
   const postUrl = pickString(value, ["permalink"]) ?? (shortcode ? `https://www.instagram.com/p/${shortcode}/` : undefined);
-  const likes = pickNumber(value, ["like_count", "likes"]) ?? nestedCount(value.edge_liked_by);
+  // Instagram returns a garbage `like_count` (commonly 3) when the creator has
+  // hidden like/view counts on a post. Treat those as unknown so the bogus value
+  // never pollutes averages/baselines. Otherwise `like_count` (mobile v1) and
+  // `edge_media_preview_like.count` (web GraphQL) carry the true total;
+  // `edge_liked_by` is only a small facepile preview (often ~3) — last resort.
+  const likesHidden = pickBoolean(value, ["like_and_view_counts_disabled"]) === true;
+  const likes = likesHidden
+    ? undefined
+    : pickNumber(value, ["like_count", "likes"]) ??
+      nestedCount(value.edge_media_preview_like) ??
+      nestedCount(value.edge_liked_by);
   const comment = pickNumber(value, ["comment_count", "comments"]) ?? nestedCount(value.edge_media_to_comment);
   const timestamp = normalizeTimestamp(value);
 
-  if (!id || !shortcode || !postUrl || likes === undefined || comment === undefined || !timestamp) {
+  // A post with hidden likes is still valid content, so `likes` is allowed to be
+  // undefined here; the structural fields below identify it as media.
+  if (!id || !shortcode || !postUrl || comment === undefined || !timestamp) {
     return null;
   }
 

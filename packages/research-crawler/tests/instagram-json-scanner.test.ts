@@ -10,6 +10,61 @@ function response(body: unknown) {
   return [{ responseUrl: 'https://i.instagram.com/api/v1/feed/', body }]
 }
 
+test('prefers edge_media_preview_like.count over edge_liked_by facepile preview', () => {
+  // Modern IG web GraphQL: edge_liked_by.count is a small facepile preview,
+  // while the true like total lives in edge_media_preview_like.count.
+  const { media } = collectInstagramRecordsFromResponses(
+    response({
+      id: '17900000000000001',
+      shortcode: 'Cpreview',
+      edge_media_preview_like: { count: 1222 },
+      edge_liked_by: { count: 3 },
+      edge_media_to_comment: { count: 20 },
+      taken_at_timestamp: 1700000000,
+      display_url: 'https://img/photo.jpg'
+    })
+  )
+
+  assert.equal(media.length, 1)
+  assert.equal(media[0].likes, 1222)
+})
+
+test('falls back to edge_liked_by.count when no other like field is present', () => {
+  const { media } = collectInstagramRecordsFromResponses(
+    response({
+      id: '17900000000000002',
+      shortcode: 'Conlyliked',
+      edge_liked_by: { count: 77 },
+      edge_media_to_comment: { count: 4 },
+      taken_at_timestamp: 1700000000,
+      display_url: 'https://img/photo.jpg'
+    })
+  )
+
+  assert.equal(media[0].likes, 77)
+})
+
+test('treats hidden like counts (like_and_view_counts_disabled) as unknown but keeps the post', () => {
+  // When a creator hides like/view counts, IG returns a garbage like_count (≈3).
+  // We must not trust it: likes become undefined, but the post is still captured.
+  const { media } = collectInstagramRecordsFromResponses(
+    response({
+      id: '17900000000000003',
+      shortcode: 'Chidden',
+      like_and_view_counts_disabled: true,
+      like_count: 3,
+      comment_count: 12,
+      taken_at: 1700000000,
+      caption: { text: 'hidden likes post' },
+      media_type: 8
+    })
+  )
+
+  assert.equal(media.length, 1)
+  assert.equal(media[0].likes, undefined)
+  assert.equal(media[0].comment, 12)
+})
+
 test('extracts caption from web GraphQL edge_media_to_caption', () => {
   const { media } = collectInstagramRecordsFromResponses(
     response({

@@ -6,6 +6,8 @@ import type {
 } from 'electron-updater'
 // Pure cjs module does not support named exports, so we need to import the default export and access the autoUpdater property
 import updater from 'electron-updater'
+import path from 'node:path'
+import { sweepAppProcesses } from './process-cleanup'
 
 const autoUpdater = updater.autoUpdater
 let cancellationToken = new updater.CancellationToken()
@@ -79,6 +81,10 @@ export function update(win: Electron.BrowserWindow) {
   // (Apple Developer ID + notarization). Until that is set up, this call will fail
   // silently on Mac. Windows works fine without signing (just shows SmartScreen warnings).
   ipcMain.handle('quit-and-install', () => {
+    // Kill the backend Anubis.exe + crawler Chrome now, so NSIS never races a
+    // surviving child holding install-dir DLLs. quitAndInstall also fires
+    // before-quit, but doing it here guarantees completion before handoff.
+    sweepAppProcesses({ installDir: path.dirname(process.execPath), selfPid: process.pid })
     autoUpdater.quitAndInstall(false, true)
   })
 }

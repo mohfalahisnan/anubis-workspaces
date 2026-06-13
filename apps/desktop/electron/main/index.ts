@@ -4,6 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { startBackend } from './backend'
 import { update } from './update'
+import { sweepAppProcesses } from './process-cleanup'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -144,6 +145,11 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Clear orphans left by a previous unclean exit (crash, Task Manager kill)
+  // before we start a new backend — self-heals stuck installs and frees the
+  // crawler CDP ports. Excludes this process via process.pid.
+  sweepAppProcesses({ installDir: path.dirname(process.execPath), selfPid: process.pid })
+
   const backendRoot = app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked')
     : APP_ROOT
@@ -168,6 +174,9 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   stopBackend?.()
+  // Belt-and-suspenders: kill any app binary / crawler Chrome that escaped the
+  // backend tree (detached Chrome reparents and survives killBackendTree).
+  sweepAppProcesses({ installDir: path.dirname(process.execPath), selfPid: process.pid })
 })
 
 app.on('window-all-closed', () => {

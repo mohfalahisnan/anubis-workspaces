@@ -1,5 +1,6 @@
 import type { TaskPriority, TaskStatus } from '@anubis/shared'
-import type { Db } from '../client.js'
+import { z } from 'zod'
+import { DocumentStoreError, parseDocumentData, type MarkdownDocument, type MarkdownDocumentStore } from '../../documents/document-store.js'
 
 export interface Task {
   id: string
@@ -14,21 +15,6 @@ export interface Task {
   createdAt: number
   updatedAt: number
   deletedAt?: number
-}
-
-interface Row {
-  id: string
-  project_id: string | null
-  title: string
-  description: string | null
-  status: TaskStatus
-  priority: TaskPriority
-  assignee_profile_id: string | null
-  file_references: string
-  workflow_references: string
-  created_at: number
-  updated_at: number
-  deleted_at: number | null
 }
 
 export interface ListTasksOpts {
@@ -53,67 +39,53 @@ export interface CreateTaskInput {
 
 export type UpdateTaskPatch = Partial<Omit<Task, 'id' | 'projectId' | 'createdAt' | 'deletedAt'>>
 
-function parseStringArray(json: string): string[] {
-  try {
-    const parsed = JSON.parse(json) as unknown
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : []
-  } catch {
-    return []
-  }
+const TaskData = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  title: z.string().min(1),
+  status: z.enum(['backlog', 'todo', 'in_progress', 'in_review', 'done']),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  assignee_profile_id: z.string().optional().nullable(),
+  file_references: z.array(z.string()).default([]),
+  workflow_references: z.array(z.string()).default([]),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+}).passthrough()
+
+const STATUS_DIR: Record<TaskStatus, string> = {
+  backlog: 'backlog',
+  todo: 'todo',
+  in_progress: 'in-progress',
+  in_review: 'in-review',
+  done: 'done',
 }
 
-function toTask(row: Row): Task {
-  return {
-    id: row.id,
-    projectId: row.project_id ?? undefined,
-    title: row.title,
-    description: row.description ?? undefined,
-    status: row.status,
-    priority: row.priority,
-    assigneeProfileId: row.assignee_profile_id ?? undefined,
-    fileReferences: parseStringArray(row.file_references),
-    workflowReferences: parseStringArray(row.workflow_references),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at ?? undefined,
-  }
-}
+const ROOT = 'tasks'
 
 export class TasksRepo {
-  constructor(private db: Db) {}
+  constructor(private readonly documents: MarkdownDocumentStore) {}
 
   create(input: CreateTaskInput): Task {
-    this.db
-      .prepare(`
-        INSERT INTO tasks (
-          id, project_id, title, description, status, priority, assignee_profile_id,
-          file_references, workflow_references, created_at, updated_at
-        ) VALUES (
-          @id, @projectId, @title, @description, @status, @priority, @assigneeProfileId,
-          @fileReferences, @workflowReferences, @createdAt, @updatedAt
-        )
-      `)
-      .run({
-        id: input.id,
-        projectId: input.projectId ?? 'default',
-        title: input.title,
-        description: input.description ?? null,
-        status: input.status ?? 'backlog',
-        priority: input.priority ?? 'medium',
-        assigneeProfileId: input.assigneeProfileId ?? null,
-        fileReferences: JSON.stringify(input.fileReferences ?? []),
-        workflowReferences: JSON.stringify(input.workflowReferences ?? []),
-        createdAt: input.now,
-        updatedAt: input.now,
-      })
+    const task: Task = {
+      id: input.id,
+      projectId: input.projectId ?? 'default',
+      title: input.title,
+      description: input.description,
+      status: input.status ?? 'backlog',
+      priority: input.priority ?? 'medium',
+      assigneeProfileId: input.assigneeProfileId,
+      fileReferences: input.fileReferences ?? [],
+      workflowReferences: input.workflowReferences ?? [],
+      createdAt: input.now,
+      updatedAt: input.now,
+    }
+    this.write(task, null, input.now)
     return this.findByIdOrThrow(input.id)
   }
 
   findById(id: string): Task | null {
-    const row = this.db
-      .prepare('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL')
-      .get(id) as Row | undefined
-    return row ? toTask(row) : null
+    const document = this.documents.find('task', ROOT, id)
+    return document ? toTask(document) : null
   }
 
   findByIdOrThrow(id: string): Task {
@@ -123,56 +95,73 @@ export class TasksRepo {
   }
 
   list(opts: ListTasksOpts = {}): Task[] {
-    const where = ['deleted_at IS NULL']
-    const params: unknown[] = []
-    if (opts.projectId) { where.push('project_id = ?'); params.push(opts.projectId) }
-    if (opts.status) { where.push('status = ?'); params.push(opts.status) }
-    if (opts.assigneeProfileId) { where.push('assignee_profile_id = ?'); params.push(opts.assigneeProfileId) }
-    params.push(opts.limit ?? 200)
-    const rows = this.db
-      .prepare(`SELECT * FROM tasks WHERE ${where.join(' AND ')} ORDER BY updated_at DESC LIMIT ?`)
-      .all(...params) as Row[]
-    return rows.map(toTask)
+    let tasks = this.documents.list('task', ROOT, opts.projectId).map(toTask)
+    if (opts.status) tasks = tasks.filter((task) => task.status === opts.status)
+    if (opts.assigneeProfileId) tasks = tasks.filter((task) => task.assigneeProfileId === opts.assigneeProfileId)
+    return tasks.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, opts.limit ?? 200)
   }
 
   update(id: string, patch: UpdateTaskPatch): Task | null {
-    const current = this.findById(id)
-    if (!current) return null
+    const document = this.documents.find('task', ROOT, id)
+    if (!document) return null
+    const current = toTask(document)
     const next: Task = { ...current, ...patch, updatedAt: Date.now() }
-    this.db
-      .prepare(`
-        UPDATE tasks SET
-          title = ?,
-          description = ?,
-          status = ?,
-          priority = ?,
-          assignee_profile_id = ?,
-          file_references = ?,
-          workflow_references = ?,
-          updated_at = ?
-        WHERE id = ? AND deleted_at IS NULL
-      `)
-      .run(
-        next.title,
-        next.description ?? null,
-        next.status,
-        next.priority,
-        next.assigneeProfileId ?? null,
-        JSON.stringify(next.fileReferences),
-        JSON.stringify(next.workflowReferences),
-        next.updatedAt,
-        id,
-      )
-    return next
+    this.write(next, document, next.updatedAt)
+    return this.findById(id)
   }
 
   softDelete(id: string): Task | null {
     const current = this.findById(id)
     if (!current) return null
-    const now = Date.now()
-    this.db
-      .prepare('UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?')
-      .run(now, now, id)
+    this.documents.delete('task', ROOT, id)
     return current
+  }
+
+  private write(task: Task, existing: MarkdownDocument | null, now: number): void {
+    this.documents.write({
+      type: 'task',
+      projectId: task.projectId ?? 'default',
+      root: ROOT,
+      directory: STATUS_DIR[task.status],
+      id: task.id,
+      title: task.title,
+      existing,
+      now,
+      data: {
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        assignee_profile_id: task.assigneeProfileId ?? null,
+        file_references: task.fileReferences,
+        workflow_references: task.workflowReferences,
+      },
+      body: task.description ?? '',
+    })
+  }
+}
+
+function toTask(document: MarkdownDocument): Task {
+  const data = parseDocumentData(document, TaskData, 'task')
+  const expectedDir = STATUS_DIR[data.status]
+  const parts = document.relativePath.split('/')
+  if (parts[0] !== ROOT || parts[1] !== expectedDir) {
+    throw new DocumentStoreError(
+      'INVALID_DOCUMENT',
+      `Task ${data.id} status ${data.status} must be stored under tasks/${expectedDir}`,
+      { path: document.relativePath },
+    )
+  }
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    title: data.title,
+    description: document.body.trim() || undefined,
+    status: data.status,
+    priority: data.priority,
+    assigneeProfileId: data.assignee_profile_id ?? undefined,
+    fileReferences: data.file_references,
+    workflowReferences: data.workflow_references,
+    createdAt: Date.parse(data.created_at),
+    updatedAt: Date.parse(data.updated_at),
   }
 }

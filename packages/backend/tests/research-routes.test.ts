@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -60,7 +60,7 @@ describe('research routes', () => {
     expect(created.status).toBe(201)
     const body = await created.json() as {
       session: { id: string; status: string; counts: { candidates: number } }
-      candidates: Array<{ id: string; likes: number; score?: number; candidateLevel: string; validationStatus: string }>
+      candidates: Array<{ id: string; likes: number; postUrl?: string; score?: number; candidateLevel: string; validationStatus: string }>
     }
     expect(body.session.status).toBe('done')
     expect(body.session.counts.candidates).toBe(4)
@@ -85,5 +85,21 @@ describe('research routes', () => {
 
     const validOnly = await app.request('/research/candidates?projectId=default&validation=valid').then((r) => r.json()) as { items: unknown[] }
     expect(validOnly.items).toHaveLength(1)
+
+    const promoted = await app.request(`/research/candidates/${viral.id}/promote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Viral hook finding' }),
+    })
+    expect(promoted.status).toBe(201)
+    const promotedBody = await promoted.json() as { document: { id: string; candidateIds: string[]; sourceUrls: string[] } }
+    expect(promotedBody.document.candidateIds).toEqual([viral.id])
+    expect(promotedBody.document.sourceUrls).toEqual([viral.postUrl])
+
+    const researchDir = join(tmpDir, 'workspaces', 'default', 'knowledge', 'research')
+    expect(await readdir(researchDir)).toHaveLength(1)
+
+    const listedDocuments = await app.request('/research/documents?projectId=default').then((r) => r.json()) as { items: Array<{ id: string }> }
+    expect(listedDocuments.items.map((item) => item.id)).toContain(promotedBody.document.id)
   })
 })

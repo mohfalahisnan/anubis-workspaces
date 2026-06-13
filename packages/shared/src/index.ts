@@ -1332,3 +1332,24 @@ export interface UpdateResearchCandidateInput {
 
 export type ResearchSessionListResponse = ListResponse<ResearchSessionSummary>
 export type ResearchCandidateListResponse = ListResponse<ResearchCandidateSummary>
+
+export type ResearchDocumentStatus = 'draft' | 'final' | 'archived'
+
+export interface ResearchDocumentSummary {
+  id: string
+  projectId: string
+  title: string
+  status: ResearchDocumentStatus
+  tags: string[]
+  candidateIds: string[]
+  competitorIds: string[]
+  postIds: string[]
+  sourceUrls: string[]
+  summary?: string
+  findings?: string
+  evidence?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type ResearchDocumentListResponse = ListResponse<ResearchDocumentSummary>

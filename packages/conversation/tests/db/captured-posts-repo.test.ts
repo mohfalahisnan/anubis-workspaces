@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { openDatabase, type Db } from '../../src/db/client.js'
 import { runMigrations } from '../../src/db/migrate.js'
 import { MIGRATIONS } from '../../src/db/migrations/index.js'
 import { CompetitorsRepo } from '../../src/db/repositories/competitors-repo.js'
 import { CompetitorsService } from '../../src/competitors/competitors-service.js'
 import { CapturedPostsRepo, type CapturedPost } from '../../src/db/repositories/captured-posts-repo.js'
+import { createTestDocuments } from '../helpers/documents.js'
+import type { MarkdownDocumentStore } from '../../src/documents/document-store.js'
 
 function post(competitorId: string, postUrl: string, likes: number, postedAt = '2026-06-01T00:00:00Z'): CapturedPost {
   return {
@@ -25,14 +27,21 @@ describe('CapturedPostsRepo', () => {
   let db: Db
   let repo: CapturedPostsRepo
   let competitorId: string
+  let documents: MarkdownDocumentStore
+  let cleanup: () => void
 
   beforeEach(() => {
     db = openDatabase(':memory:')
     runMigrations(db, MIGRATIONS)
-    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const context = createTestDocuments(db)
+    documents = context.documents
+    cleanup = context.cleanup
+    const svc = new CompetitorsService(new CompetitorsRepo(db, documents))
     competitorId = svc.create({ handle: '@notion' }).id
     repo = new CapturedPostsRepo(db)
   })
+
+  afterEach(() => cleanup())
 
   it('upsert is idempotent on (competitor_id, post_url) — second insert updates fields', () => {
     repo.upsert(post(competitorId, '/p/AAA', 100))
@@ -118,7 +127,7 @@ describe('CapturedPostsRepo', () => {
   })
 
   it('list without competitorId dedups the same URL across competitors before applying limit', () => {
-    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const svc = new CompetitorsService(new CompetitorsRepo(db, documents))
     const otherId = svc.create({ handle: '@linear' }).id
     repo.upsert(post(competitorId, '/p/SHARED', 100))
     repo.upsert({ ...post(otherId, '/p/SHARED', 50), id: 'id-shared-other' })
@@ -131,7 +140,7 @@ describe('CapturedPostsRepo', () => {
   })
 
   it('countForCompetitor counts only that competitor', () => {
-    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const svc = new CompetitorsService(new CompetitorsRepo(db, documents))
     const otherId = svc.create({ handle: '@linear' }).id
     repo.upsert(post(competitorId, '/p/A', 1))
     repo.upsert(post(competitorId, '/p/B', 2))
@@ -142,7 +151,7 @@ describe('CapturedPostsRepo', () => {
   })
 
   it('countAll dedups the same post URL captured under two competitors', () => {
-    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const svc = new CompetitorsService(new CompetitorsRepo(db, documents))
     const otherId = svc.create({ handle: '@linear' }).id
     repo.upsert(post(competitorId, '/p/SHARED', 100))
     repo.upsert(post(otherId, 'https://instagram.com/p/SHARED', 50))
@@ -153,7 +162,7 @@ describe('CapturedPostsRepo', () => {
   })
 
   it('markRefreshedAt updates lastRefreshedAt without touching other fields', () => {
-    const svc = new CompetitorsService(new CompetitorsRepo(db))
+    const svc = new CompetitorsService(new CompetitorsRepo(db, documents))
     svc.update(competitorId, { followers: 1_000 })
     svc.markRefreshedAt(competitorId, 12345)
     const c = svc.get(competitorId)!

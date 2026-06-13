@@ -1,5 +1,8 @@
 import type { ContentItemStatus } from '@anubis/shared'
+import { z } from 'zod'
 import type { Db } from '../client.js'
+import { parseDocumentData, type MarkdownDocument, type MarkdownDocumentStore } from '../../documents/document-store.js'
+import { readSection, writeSections } from '../../documents/markdown-sections.js'
 
 export interface ContentItem {
   id: string
@@ -24,29 +27,6 @@ export interface ContentItem {
   deletedAt?: number
 }
 
-interface Row {
-  id: string
-  project_id: string | null
-  reference_post_id: string | null
-  reference_url: string | null
-  title: string
-  status: ContentItemStatus
-  raw_brief: string | null
-  improved_draft: string | null
-  rejection_reason: string | null
-  published_url: string | null
-  published_at: string | null
-  analytics_likes: number | null
-  analytics_comments: number | null
-  analytics_saves: number | null
-  metrics_synced_at: number | null
-  source_workflow_run_id: string | null
-  source_conversation_id: string | null
-  created_at: number
-  updated_at: number
-  deleted_at: number | null
-}
-
 export interface ListContentItemsOpts {
   projectId?: string
   status?: ContentItemStatus
@@ -69,67 +49,61 @@ export interface CreateContentItemInput {
 
 export type UpdateContentItemPatch = Partial<Omit<ContentItem, 'id' | 'projectId' | 'referencePostId' | 'referenceUrl' | 'createdAt' | 'deletedAt'>>
 
-function toItem(row: Row): ContentItem {
-  return {
-    id: row.id,
-    projectId: row.project_id ?? undefined,
-    referencePostId: row.reference_post_id ?? undefined,
-    referenceUrl: row.reference_url ?? undefined,
-    title: row.title,
-    status: row.status,
-    rawBrief: row.raw_brief ?? undefined,
-    improvedDraft: row.improved_draft ?? undefined,
-    rejectionReason: row.rejection_reason ?? undefined,
-    publishedUrl: row.published_url ?? undefined,
-    publishedAt: row.published_at ?? undefined,
-    analyticsLikes: row.analytics_likes ?? undefined,
-    analyticsComments: row.analytics_comments ?? undefined,
-    analyticsSaves: row.analytics_saves ?? undefined,
-    metricsSyncedAt: row.metrics_synced_at ?? undefined,
-    sourceWorkflowRunId: row.source_workflow_run_id ?? undefined,
-    sourceConversationId: row.source_conversation_id ?? undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deletedAt: row.deleted_at ?? undefined,
-  }
+const ROOT = 'knowledge/content'
+const ContentData = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  title: z.string().min(1),
+  status: z.enum(['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected']),
+  reference_post_id: z.string().optional().nullable(),
+  reference_url: z.string().optional().nullable(),
+  rejection_reason: z.string().optional().nullable(),
+  published_url: z.string().optional().nullable(),
+  published_at: z.string().optional().nullable(),
+  source_workflow_run_id: z.string().optional().nullable(),
+  source_conversation_id: z.string().optional().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+}).passthrough()
+
+interface RuntimeRow {
+  analytics_likes: number | null
+  analytics_comments: number | null
+  analytics_saves: number | null
+  metrics_synced_at: number | null
 }
 
 export class ContentItemsRepo {
-  constructor(private db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly documents: MarkdownDocumentStore,
+  ) {}
 
   create(input: CreateContentItemInput): ContentItem {
-    this.db
-      .prepare(`
-        INSERT INTO content_items (
-          id, project_id, reference_post_id, reference_url, title, status, raw_brief, improved_draft,
-          source_workflow_run_id, source_conversation_id, created_at, updated_at
-        ) VALUES (
-          @id, @projectId, @referencePostId, @referenceUrl, @title, @status, @rawBrief, @improvedDraft,
-          @sourceWorkflowRunId, @sourceConversationId, @createdAt, @updatedAt
-        )
-      `)
-      .run({
-        id: input.id,
-        projectId: input.projectId ?? 'default',
-        referencePostId: input.referencePostId ?? null,
-        referenceUrl: input.referenceUrl ?? null,
-        title: input.title,
-        status: input.status ?? 'idea',
-        rawBrief: input.rawBrief ?? null,
-        improvedDraft: input.improvedDraft ?? null,
-        sourceWorkflowRunId: input.sourceWorkflowRunId ?? null,
-        sourceConversationId: input.sourceConversationId ?? null,
-        createdAt: input.now,
-        updatedAt: input.now,
-      })
-    return this.findByIdOrThrow(input.id)
+    const item: ContentItem = {
+      id: input.id,
+      projectId: input.projectId ?? 'default',
+      referencePostId: input.referencePostId,
+      referenceUrl: input.referenceUrl,
+      title: input.title,
+      status: input.status ?? 'idea',
+      rawBrief: input.rawBrief,
+      improvedDraft: input.improvedDraft,
+      sourceWorkflowRunId: input.sourceWorkflowRunId,
+      sourceConversationId: input.sourceConversationId,
+      createdAt: input.now,
+      updatedAt: input.now,
+    }
+    this.write(item, null, input.now)
+    this.ensureRuntime(item.id)
+    return this.findByIdOrThrow(item.id)
   }
 
   findById(id: string): ContentItem | null {
-    const row = this.db
-      .prepare('SELECT * FROM content_items WHERE id = ? AND deleted_at IS NULL')
-      .get(id) as Row | undefined
-    return row ? toItem(row) : null
+    const document = this.documents.find('content', ROOT, id)
+    if (!document) return null
+    const item = toItem(document)
+    return { ...item, ...this.runtime(id) }
   }
 
   findByIdOrThrow(id: string): ContentItem {
@@ -139,66 +113,109 @@ export class ContentItemsRepo {
   }
 
   list(opts: ListContentItemsOpts = {}): ContentItem[] {
-    const where = ['deleted_at IS NULL']
-    const params: unknown[] = []
-    if (opts.projectId) { where.push('project_id = ?'); params.push(opts.projectId) }
-    if (opts.status) { where.push('status = ?'); params.push(opts.status) }
-    params.push(opts.limit ?? 200)
-    const rows = this.db
-      .prepare(`SELECT * FROM content_items WHERE ${where.join(' AND ')} ORDER BY updated_at DESC LIMIT ?`)
-      .all(...params) as Row[]
-    return rows.map(toItem)
+    let items = this.documents.list('content', ROOT, opts.projectId).map((document) => {
+      const item = toItem(document)
+      return { ...item, ...this.runtime(item.id) }
+    })
+    if (opts.status) items = items.filter((item) => item.status === opts.status)
+    return items.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, opts.limit ?? 200)
   }
 
   update(id: string, patch: UpdateContentItemPatch): ContentItem | null {
-    const current = this.findById(id)
-    if (!current) return null
+    const document = this.documents.find('content', ROOT, id)
+    if (!document) return null
+    const current = this.findById(id)!
     const next: ContentItem = { ...current, ...patch, updatedAt: Date.now() }
-    this.db
-      .prepare(`
-        UPDATE content_items SET
-          title = ?,
-          status = ?,
-          raw_brief = ?,
-          improved_draft = ?,
-          rejection_reason = ?,
-          published_url = ?,
-          published_at = ?,
-          analytics_likes = ?,
-          analytics_comments = ?,
-          analytics_saves = ?,
-          metrics_synced_at = ?,
-          source_workflow_run_id = ?,
-          source_conversation_id = ?,
-          updated_at = ?
-        WHERE id = ? AND deleted_at IS NULL
-      `)
-      .run(
-        next.title,
-        next.status,
-        next.rawBrief ?? null,
-        next.improvedDraft ?? null,
-        next.rejectionReason ?? null,
-        next.publishedUrl ?? null,
-        next.publishedAt ?? null,
-        next.analyticsLikes ?? null,
-        next.analyticsComments ?? null,
-        next.analyticsSaves ?? null,
-        next.metricsSyncedAt ?? null,
-        next.sourceWorkflowRunId ?? null,
-        next.sourceConversationId ?? null,
-        next.updatedAt,
-        id,
-      )
-    return next
+    const authored = Object.keys(patch).some((key) => !RUNTIME_FIELDS.has(key))
+    if (authored) this.write(next, document, next.updatedAt)
+    this.ensureRuntime(id)
+    this.db.prepare(`
+      UPDATE content_item_runtime SET analytics_likes = ?, analytics_comments = ?,
+        analytics_saves = ?, metrics_synced_at = ? WHERE content_id = ?
+    `).run(
+      next.analyticsLikes ?? null,
+      next.analyticsComments ?? null,
+      next.analyticsSaves ?? null,
+      next.metricsSyncedAt ?? null,
+      id,
+    )
+    return this.findById(id)
   }
 
   softDelete(id: string): ContentItem | null {
     const current = this.findById(id)
     if (!current) return null
-    this.db
-      .prepare('UPDATE content_items SET deleted_at = ?, updated_at = ? WHERE id = ?')
-      .run(Date.now(), Date.now(), id)
+    this.documents.delete('content', ROOT, id)
+    this.db.prepare('DELETE FROM content_item_runtime WHERE content_id = ?').run(id)
     return current
+  }
+
+  private write(item: ContentItem, existing: MarkdownDocument | null, now: number): void {
+    const body = writeSections(existing?.body ?? '', {
+      Brief: item.rawBrief,
+      Draft: item.improvedDraft,
+    })
+    this.documents.write({
+      type: 'content',
+      projectId: item.projectId ?? 'default',
+      root: ROOT,
+      id: item.id,
+      title: item.title,
+      existing,
+      now,
+      data: {
+        title: item.title,
+        status: item.status,
+        reference_post_id: item.referencePostId ?? null,
+        reference_url: item.referenceUrl ?? null,
+        rejection_reason: item.rejectionReason ?? null,
+        published_url: item.publishedUrl ?? null,
+        published_at: item.publishedAt ?? null,
+        source_workflow_run_id: item.sourceWorkflowRunId ?? null,
+        source_conversation_id: item.sourceConversationId ?? null,
+      },
+      body,
+    })
+  }
+
+  private ensureRuntime(id: string): void {
+    this.db.prepare('INSERT OR IGNORE INTO content_item_runtime (content_id) VALUES (?)').run(id)
+  }
+
+  private runtime(id: string): Pick<ContentItem, 'analyticsLikes' | 'analyticsComments' | 'analyticsSaves' | 'metricsSyncedAt'> {
+    let row = this.db.prepare('SELECT * FROM content_item_runtime WHERE content_id = ?').get(id) as RuntimeRow | undefined
+    if (!row) {
+      this.ensureRuntime(id)
+      row = this.db.prepare('SELECT * FROM content_item_runtime WHERE content_id = ?').get(id) as RuntimeRow
+    }
+    return {
+      analyticsLikes: row?.analytics_likes ?? undefined,
+      analyticsComments: row?.analytics_comments ?? undefined,
+      analyticsSaves: row?.analytics_saves ?? undefined,
+      metricsSyncedAt: row?.metrics_synced_at ?? undefined,
+    }
+  }
+}
+
+const RUNTIME_FIELDS = new Set(['analyticsLikes', 'analyticsComments', 'analyticsSaves', 'metricsSyncedAt'])
+
+function toItem(document: MarkdownDocument): ContentItem {
+  const data = parseDocumentData(document, ContentData, 'content')
+  return {
+    id: data.id,
+    projectId: data.project_id,
+    referencePostId: data.reference_post_id ?? undefined,
+    referenceUrl: data.reference_url ?? undefined,
+    title: data.title,
+    status: data.status,
+    rawBrief: readSection(document.body, 'Brief'),
+    improvedDraft: readSection(document.body, 'Draft'),
+    rejectionReason: data.rejection_reason ?? undefined,
+    publishedUrl: data.published_url ?? undefined,
+    publishedAt: data.published_at ?? undefined,
+    sourceWorkflowRunId: data.source_workflow_run_id ?? undefined,
+    sourceConversationId: data.source_conversation_id ?? undefined,
+    createdAt: Date.parse(data.created_at),
+    updatedAt: Date.parse(data.updated_at),
   }
 }

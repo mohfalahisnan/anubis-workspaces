@@ -48,17 +48,7 @@ function getEngineBinary(): string {
 }
 
 function getProjectWorkdir(projectId: string): string {
-  const project = getStack().projects.findById(projectId)
-  if (!project) throw new Error(`Project ${projectId} not found.`)
-  if (!project.workdir) {
-    throw new Error(
-      `Project "${project.name}" has no workdir. Set a workspace path on the project before using its Knowledge Base.`,
-    )
-  }
-  if (!existsSync(project.workdir)) {
-    throw new Error(`Project workdir does not exist on disk: ${project.workdir}`)
-  }
-  return project.workdir
+  return getStack().projectWorkspaces.resolve(projectId)
 }
 
 /**

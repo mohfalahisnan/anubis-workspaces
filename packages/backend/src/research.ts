@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
+import { newId } from '@anubis/conversation'
 
 const ControlsSchema = z.object({
   competitorIds: z.array(z.string().min(1)).optional(),
@@ -24,7 +25,82 @@ const UpdateCandidateBody = z.object({
   nicheReason: z.string().nullable().optional(),
 }).strict()
 
+const ResearchDocumentStatus = z.enum(['draft', 'final', 'archived'])
+const ResearchDocumentBody = z.object({
+  projectId: z.string().min(1).optional(),
+  title: z.string().min(1),
+  status: ResearchDocumentStatus.optional(),
+  tags: z.array(z.string()).optional(),
+  candidateIds: z.array(z.string()).optional(),
+  competitorIds: z.array(z.string()).optional(),
+  postIds: z.array(z.string()).optional(),
+  sourceUrls: z.array(z.string()).optional(),
+  summary: z.string().optional(),
+  findings: z.string().optional(),
+  evidence: z.string().optional(),
+}).strict()
+
+const ResearchDocumentPatch = ResearchDocumentBody.partial().omit({ projectId: true })
+const PromoteCandidateBody = z.object({ title: z.string().min(1).optional() }).strict()
+
 export const researchRoutes = new Hono()
+
+researchRoutes.post('/documents', async (c) => {
+  const body = ResearchDocumentBody.parse(await c.req.json())
+  const now = Date.now()
+  const document = getStack().researchDocuments.create({
+    id: newId(),
+    ...body,
+    title: body.title.trim(),
+    now,
+  })
+  return c.json({ ok: true, document }, 201)
+})
+
+researchRoutes.get('/documents', (c) => {
+  return c.json({ ok: true, items: getStack().researchDocuments.list(c.req.query('projectId')) })
+})
+
+researchRoutes.get('/documents/:id', (c) => {
+  const document = getStack().researchDocuments.findById(c.req.param('id'))
+  if (!document) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, document })
+})
+
+researchRoutes.patch('/documents/:id', async (c) => {
+  const body = ResearchDocumentPatch.parse(await c.req.json())
+  const document = getStack().researchDocuments.update(c.req.param('id'), body)
+  if (!document) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, document })
+})
+
+researchRoutes.delete('/documents/:id', (c) => {
+  const document = getStack().researchDocuments.delete(c.req.param('id'))
+  if (!document) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true })
+})
+
+researchRoutes.post('/candidates/:id/promote', async (c) => {
+  const body = PromoteCandidateBody.parse(await c.req.json().catch(() => ({})))
+  const stack = getStack()
+  const candidate = stack.research.getCandidate(c.req.param('id'))
+  if (!candidate) return c.json({ ok: false, error: 'not_found' }, 404)
+  const competitor = stack.competitors.get(candidate.competitorId)
+  const document = stack.researchDocuments.create({
+    id: newId(),
+    projectId: candidate.projectId ?? 'default',
+    title: body.title?.trim() || `Research: ${competitor?.handle ?? candidate.postId}`,
+    status: 'draft',
+    candidateIds: [candidate.id],
+    competitorIds: [candidate.competitorId],
+    postIds: [candidate.postId],
+    sourceUrls: candidate.postUrl ? [candidate.postUrl] : [],
+    summary: candidate.caption,
+    evidence: candidate.postUrl,
+    now: Date.now(),
+  })
+  return c.json({ ok: true, document }, 201)
+})
 
 // Static segments before parameterised ones (Hono resolves by registration order).
 researchRoutes.post('/sessions', async (c) => {

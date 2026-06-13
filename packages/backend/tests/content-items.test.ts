@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -79,6 +79,25 @@ describe('content item routes', () => {
     expect(patchedBody.item.status).toBe('review')
     expect(patchedBody.item.improvedDraft).toBe('Improved copy')
     expect(patchedBody.item.analytics.saves).toBe(7)
+
+    const contentDir = join(tmpDir, 'workspaces', 'default', 'knowledge', 'content')
+    const files = await readdir(contentDir)
+    expect(files).toHaveLength(1)
+    const contentPath = join(contentDir, files[0]!)
+    const source = await readFile(contentPath, 'utf8')
+    await writeFile(contentPath, `${source}\n## Custom Notes\n\nKeep this section.\n`.replace('Improved copy', 'Edited draft outside Anubis'), 'utf8')
+
+    const manuallyEdited = await app.request(`/content-items/${createdBody.item.id}`).then((r) => r.json()) as {
+      item: { improvedDraft?: string }
+    }
+    expect(manuallyEdited.item.improvedDraft).toBe('Edited draft outside Anubis')
+
+    await app.request(`/content-items/${createdBody.item.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Renamed idea' }),
+    })
+    expect(await readFile(contentPath, 'utf8')).toContain('## Custom Notes\n\nKeep this section.')
 
     const listed = await app.request('/content-items?projectId=default').then((r) => r.json()) as { items: unknown[] }
     expect(listed.items).toHaveLength(1)

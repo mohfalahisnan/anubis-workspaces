@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
-import { newId, ensureWorkspaceStructure } from '@anubis/conversation'
+import { newId } from '@anubis/conversation'
 import { deleteKnowledgeBaseForWorkdir } from './knowledge-base.js'
 
 const CreateBody = z.object({
@@ -9,7 +9,7 @@ const CreateBody = z.object({
   emoji: z.string().min(1).optional(),
   color: z.string().min(1).optional(),
   description: z.string().optional(),
-  workdir: z.string().optional(),
+  workdir: z.string().trim().min(1).optional(),
 }).strict()
 
 const UpdateBody = z.object({
@@ -17,7 +17,7 @@ const UpdateBody = z.object({
   emoji: z.string().min(1).optional(),
   color: z.string().min(1).optional(),
   description: z.string().optional(),
-  workdir: z.string().optional(),
+  workdir: z.string().trim().min(1).optional(),
 }).strict()
 
 export const projectRoutes = new Hono()
@@ -34,28 +34,29 @@ projectRoutes.get('/:id', (c) => {
 
 projectRoutes.post('/', async (c) => {
   const body = CreateBody.parse(await c.req.json())
-  if (body.workdir) {
-    ensureWorkspaceStructure(body.workdir)
-  }
+  const stack = getStack()
   const id = newId()
   const now = Date.now()
+  const workdir = stack.projectWorkspaces.prepare(id, body.workdir)
   const project = {
     id,
     ...body,
+    workdir,
     createdAt: now,
     updatedAt: now,
   }
-  getStack().projects.insert(project)
+  stack.projects.insert(project)
   return c.json({ ok: true, project }, 201)
 })
 
 projectRoutes.patch('/:id', async (c) => {
   const body = UpdateBody.parse(await c.req.json())
-  if (body.workdir) {
-    ensureWorkspaceStructure(body.workdir)
-  }
-  const project = getStack().projects.update(c.req.param('id'), body)
-  if (!project) return c.json({ ok: false, error: 'not_found' }, 404)
+  const stack = getStack()
+  const id = c.req.param('id')
+  const current = stack.projects.findById(id)
+  if (!current) return c.json({ ok: false, error: 'not_found' }, 404)
+  const workdir = stack.projectWorkspaces.prepare(id, body.workdir ?? current.workdir)
+  const project = stack.projects.update(id, { ...body, workdir })!
   return c.json({ ok: true, project })
 })
 

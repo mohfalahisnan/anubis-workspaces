@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -84,6 +84,20 @@ describe('task routes', () => {
     expect(patchedBody.task.priority).toBe('urgent')
     expect(patchedBody.task.assigneeProfileId).toBeUndefined()
     expect(patchedBody.task.fileReferences).toEqual(['C:/Projects/anubis-workspaces/CONTEXT.md'])
+
+    const inProgressDir = join(tmpDir, 'workspaces', 'default', 'tasks', 'in-progress')
+    const files = await readdir(inProgressDir)
+    expect(files).toHaveLength(1)
+    const taskPath = join(inProgressDir, files[0]!)
+    const manuallyRenamed = join(inProgressDir, 'edited-outside-anubis.md')
+    await rename(taskPath, manuallyRenamed)
+    const source = await readFile(manuallyRenamed, 'utf8')
+    await writeFile(manuallyRenamed, source.replace('Generic task management', 'Edited manually'), 'utf8')
+
+    const manuallyEdited = await app.request(`/tasks/${createdBody.task.id}`).then((r) => r.json()) as {
+      task: { description?: string }
+    }
+    expect(manuallyEdited.task.description).toBe('Edited manually')
 
     const listed = await app.request('/tasks?projectId=default').then((r) => r.json()) as { items: unknown[] }
     expect(listed.items).toHaveLength(1)

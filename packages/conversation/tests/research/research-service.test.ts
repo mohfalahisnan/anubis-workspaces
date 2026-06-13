@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { openDatabase, type Db } from '../../src/db/client.js'
 import { runMigrations } from '../../src/db/migrate.js'
 import { MIGRATIONS } from '../../src/db/migrations/index.js'
@@ -8,19 +8,23 @@ import { CapturedPostsRepo } from '../../src/db/repositories/captured-posts-repo
 import { ResearchSessionsRepo } from '../../src/db/repositories/research-sessions-repo.js'
 import { ResearchCandidatesRepo } from '../../src/db/repositories/research-candidates-repo.js'
 import { ResearchService } from '../../src/research/research-service.js'
+import { createTestDocuments } from '../helpers/documents.js'
 
 describe('ResearchService', () => {
   let db: Db
   let competitors: CompetitorsService
   let posts: CapturedPostsRepo
   let svc: ResearchService
+  let cleanup: () => void
 
   const isoDaysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
 
   beforeEach(() => {
     db = openDatabase(':memory:')
     runMigrations(db, MIGRATIONS)
-    competitors = new CompetitorsService(new CompetitorsRepo(db))
+    const context = createTestDocuments(db)
+    cleanup = context.cleanup
+    competitors = new CompetitorsService(new CompetitorsRepo(db, context.documents))
     posts = new CapturedPostsRepo(db)
     svc = new ResearchService({
       competitors,
@@ -29,6 +33,8 @@ describe('ResearchService', () => {
       candidates: new ResearchCandidatesRepo(db),
     })
   })
+
+  afterEach(() => cleanup())
 
   function seedGreenCompetitorWithPosts() {
     const c = competitors.create({ handle: '@green', followers: 25_000 }) // green tier

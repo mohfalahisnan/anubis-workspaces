@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z, ZodError } from 'zod'
-import { NoCredentialsError } from '@anubis/conversation'
+import { DocumentStoreError, NoCredentialsError, ProjectWorkspaceError } from '@anubis/conversation'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import { HttpError, toErrorResponse } from '../src/http-errors.js'
 
@@ -37,6 +37,33 @@ describe('toErrorResponse — the backend error seam', () => {
       ok: false,
       error: { code: NO_CREDENTIALS_ERROR_CODE, profileId: 'profile-1', agent: 'claude' },
     })
+  })
+
+  it('maps a duplicate project workspace to a 409 conflict', () => {
+    const { status, body } = toErrorResponse(new ProjectWorkspaceError(
+      'PROJECT_WORKSPACE_CONFLICT',
+      'Workspace is already assigned',
+    ))
+    expect(status).toBe(409)
+    expect((body as { error: { code: string } }).error.code).toBe('PROJECT_WORKSPACE_CONFLICT')
+  })
+
+  it('maps a missing project workspace to a 404 not found', () => {
+    const { status, body } = toErrorResponse(new ProjectWorkspaceError(
+      'PROJECT_NOT_FOUND',
+      'Project ghost not found',
+    ))
+    expect(status).toBe(404)
+    expect((body as { error: { code: string } }).error.code).toBe('PROJECT_NOT_FOUND')
+  })
+
+  it('maps duplicate Markdown fields to a 409 conflict', () => {
+    const { status, body } = toErrorResponse(new DocumentStoreError(
+      'DUPLICATE_DOCUMENT_FIELD',
+      'Duplicate competitor handle @same',
+    ))
+    expect(status).toBe(409)
+    expect((body as { error: { code: string } }).error.code).toBe('DUPLICATE_DOCUMENT_FIELD')
   })
 
   it('falls back to 500 INTERNAL_SERVER_ERROR for unknown errors', () => {

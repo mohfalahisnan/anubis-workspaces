@@ -1,5 +1,5 @@
 import { ZodError } from 'zod'
-import { NoCredentialsError } from '@anubis/conversation'
+import { DocumentStoreError, NoCredentialsError, ProjectWorkspaceError } from '@anubis/conversation'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 
 /** The HTTP statuses the backend's error seam can produce. */
@@ -45,6 +45,30 @@ export function toErrorResponse(error: unknown): {
 
   if (error instanceof HttpError) {
     return { status: error.status, body: error.body }
+  }
+
+  if (error instanceof DocumentStoreError) {
+    return {
+      status: error.code.startsWith('DUPLICATE_') ? 409 : 400,
+      body: {
+        ok: false,
+        error: { code: error.code, message: error.message, details: error.details },
+      },
+    }
+  }
+
+  if (error instanceof ProjectWorkspaceError) {
+    return {
+      status: error.code === 'PROJECT_WORKSPACE_CONFLICT'
+        ? 409
+        : error.code === 'PROJECT_NOT_FOUND'
+          ? 404
+          : 400,
+      body: {
+        ok: false,
+        error: { code: error.code, message: error.message, details: error.details },
+      },
+    }
   }
 
   if (error instanceof NoCredentialsError) {

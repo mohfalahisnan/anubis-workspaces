@@ -1,19 +1,31 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { openDatabase, type Db } from '../../src/db/client.js'
 import { runMigrations } from '../../src/db/migrate.js'
 import { MIGRATIONS } from '../../src/db/migrations/index.js'
 import { CompetitorsRepo } from '../../src/db/repositories/competitors-repo.js'
 import { CompetitorsService } from '../../src/competitors/competitors-service.js'
+import { createTestDocuments } from '../helpers/documents.js'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import matter from 'gray-matter'
+import { DocumentStoreError } from '../../src/documents/document-store.js'
 
 describe('CompetitorsService', () => {
   let db: Db
   let svc: CompetitorsService
+  let cleanup: () => void
+  let root: string
 
   beforeEach(() => {
     db = openDatabase(':memory:')
     runMigrations(db, MIGRATIONS)
-    svc = new CompetitorsService(new CompetitorsRepo(db))
+    const context = createTestDocuments(db)
+    root = context.root
+    cleanup = context.cleanup
+    svc = new CompetitorsService(new CompetitorsRepo(db, context.documents))
   })
+
+  afterEach(() => cleanup())
 
   it('create normalises the handle and assigns a default tint', () => {
     const c = svc.create({ handle: 'ali.abdaal' })
@@ -103,5 +115,33 @@ describe('CompetitorsService', () => {
     expect(got.baselineLikes).toBe(120)
     expect(got.baselineSampleSize).toBe(18)
     expect(got.baselineUpdatedAt).toBe(1_700_000_000_000)
+  })
+
+  it('reads manual Markdown edits on the next request', () => {
+    const created = svc.create({ handle: '@manual-edit' })
+    const directory = join(root, 'knowledge', 'competitors')
+    const path = join(directory, readdirSync(directory)[0]!)
+    const source = readFileSync(path, 'utf8')
+    writeFileSync(path, source.replace('niche: null', 'niche: Strategy'), 'utf8')
+    expect(svc.get(created.id)?.niche).toBe('Strategy')
+  })
+
+  it('reports manually duplicated handles as a document conflict', () => {
+    svc.create({ handle: '@first-handle' })
+    svc.create({ handle: '@second-handle' })
+    const directory = join(root, 'knowledge', 'competitors')
+    const secondPath = readdirSync(directory)
+      .map((file) => join(directory, file))
+      .find((path) => matter(readFileSync(path, 'utf8')).data.handle === '@second-handle')!
+    const parsed = matter(readFileSync(secondPath, 'utf8'))
+    parsed.data.handle = '@FIRST-HANDLE'
+    writeFileSync(secondPath, matter.stringify(parsed.content, parsed.data), 'utf8')
+
+    expect(() => svc.list()).toThrowError(
+      expect.objectContaining({
+        code: 'DUPLICATE_DOCUMENT_FIELD',
+        details: expect.objectContaining({ field: 'handle', paths: expect.any(Array) }),
+      }) as DocumentStoreError,
+    )
   })
 })

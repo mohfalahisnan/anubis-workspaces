@@ -18,6 +18,7 @@ import { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 import { ResearchSessionsRepo } from './db/repositories/research-sessions-repo.js'
 import { ResearchCandidatesRepo } from './db/repositories/research-candidates-repo.js'
 import { ResearchService } from './research/research-service.js'
+import { ResearchDocumentsRepo } from './research/research-documents-repo.js'
 import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 import { TasksRepo } from './db/repositories/tasks-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
@@ -33,6 +34,8 @@ import { CronService } from './cron/cron-service.js'
 import { NodeCronScheduler } from './cron/node-cron-scheduler.js'
 import { TaskManager } from './conversations/task-manager.js'
 import { ConversationService } from './conversations/conversation-service.js'
+import { ProjectWorkspaces } from './documents/project-workspaces.js'
+import { MarkdownDocumentStore } from './documents/document-store.js'
 import type { CronJob } from './db/repositories/cron-jobs-repo.js'
 
 export interface CreateConversationServiceOpts {
@@ -50,6 +53,7 @@ export interface ConversationStack {
   competitors: CompetitorsService
   capturedPosts: CapturedPostsRepo
   research: ResearchService
+  researchDocuments: ResearchDocumentsRepo
   contentItems: ContentItemsRepo
   tasks: TasksRepo
   workflows: WorkflowsRepo
@@ -63,6 +67,7 @@ export interface ConversationStack {
   aiAgent: AiAgentService
   knownWorkspaces: KnownWorkspacesRepo
   projects: ProjectsRepo
+  projectWorkspaces: ProjectWorkspaces
   /** Root path under which each profile's per-agent home dir lives. */
   agentHomeRoot: string
   /** Registry that owns the (profileId, agent) → ProfileHome handle. */
@@ -90,19 +95,24 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const cronRepo = new CronJobsRepo(db)
   const knownWorkspacesRepo = new KnownWorkspacesRepo(db)
   const projectsRepo = new ProjectsRepo(db)
+  const projectWorkspaces = new ProjectWorkspaces(projectsRepo, workspacesRoot)
+  projectWorkspaces.resolve('default')
+  const documents = new MarkdownDocumentStore(projectWorkspaces)
 
   const profiles = new ProfileService(profilesRepo, profileHomes)
   profiles.seedBuiltins()
-  try {
-    profiles.bootstrapDefaultClaudeProfile({
-      systemSource: join(homedir(), '.claude'),
-    })
-  } catch (e) {
-    // Boot must not fail because of a bootstrap glitch — log + continue.
-    // eslint-disable-next-line no-console
-    console.warn('[anubis] bootstrap default profile failed:', e)
+  if (!process.env.VITEST) {
+    try {
+      profiles.bootstrapDefaultClaudeProfile({
+        systemSource: join(homedir(), '.claude'),
+      })
+    } catch (e) {
+      // Boot must not fail because of a bootstrap glitch — log + continue.
+      // eslint-disable-next-line no-console
+      console.warn('[anubis] bootstrap default profile failed:', e)
+    }
   }
-  const competitors = new CompetitorsService(new CompetitorsRepo(db))
+  const competitors = new CompetitorsService(new CompetitorsRepo(db, documents))
   const capturedPosts = new CapturedPostsRepo(db)
   const research = new ResearchService({
     competitors,
@@ -110,8 +120,9 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     sessions: new ResearchSessionsRepo(db),
     candidates: new ResearchCandidatesRepo(db),
   })
-  const contentItems = new ContentItemsRepo(db)
-  const tasks = new TasksRepo(db)
+  const researchDocuments = new ResearchDocumentsRepo(documents)
+  const contentItems = new ContentItemsRepo(db, documents)
+  const tasks = new TasksRepo(documents)
   const workflowsRepo = new WorkflowsRepo(db)
   workflowsRepo.seedBuiltins()
   const workflowRunsRepo = new WorkflowRunsRepo(db)
@@ -161,13 +172,14 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   cron.loadFromDb()
 
   const stack: ConversationStack = {
-    conversation, profiles, competitors, capturedPosts, research, contentItems, tasks,
+    conversation, profiles, competitors, capturedPosts, research, researchDocuments, contentItems, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,
     appConfig, skills, sse, cron, taskManager: tm, aiAgent,
     knownWorkspaces: knownWorkspacesRepo,
     projects: projectsRepo,
+    projectWorkspaces,
     agentHomeRoot,
     profileHomes,
     transaction<T>(fn: () => T): T {
@@ -197,6 +209,8 @@ export { CapturedPostsRepo } from './db/repositories/captured-posts-repo.js'
 export type { ResearchSession } from './db/repositories/research-sessions-repo.js'
 export type { ResearchCandidate, ListCandidatesOpts } from './db/repositories/research-candidates-repo.js'
 export { ResearchService } from './research/research-service.js'
+export type { ResearchDocument, ResearchDocumentStatus, CreateResearchDocumentInput, UpdateResearchDocumentPatch } from './research/research-documents-repo.js'
+export { ResearchDocumentsRepo } from './research/research-documents-repo.js'
 export type { ContentItem, ListContentItemsOpts, UpdateContentItemPatch } from './db/repositories/content-items-repo.js'
 export { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 export type { Task, ListTasksOpts, UpdateTaskPatch } from './db/repositories/tasks-repo.js'
@@ -235,6 +249,8 @@ export { SseBroadcaster } from './sse/broadcaster.js'
 export type { SseEvent } from './sse/broadcaster.js'
 export type { Project } from './db/repositories/projects-repo.js'
 export { ProjectsRepo } from './db/repositories/projects-repo.js'
+export { ProjectWorkspaces, ProjectWorkspaceError } from './documents/project-workspaces.js'
+export { MarkdownDocumentStore, DocumentStoreError } from './documents/document-store.js'
 export { newId } from './util/ids.js'
 export { ensureWorkspaceStructure, DEFAULT_ANUBISIGNORE } from './util/workspace.js'
 

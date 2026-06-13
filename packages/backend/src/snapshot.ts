@@ -159,7 +159,9 @@ export function importSnapshot(
   const stack = getStack()
   if (!stack.projects.findById(targetProjectId)) throw notFound(targetProjectId)
 
-  return stack.transaction((): ImportSnapshotResult => {
+  const createdCompetitorIds: string[] = []
+  try {
+    return stack.transaction((): ImportSnapshotResult => {
     const warnings: string[] = []
     let created = 0
     let matched = 0
@@ -189,6 +191,7 @@ export function importSnapshot(
         bio: sc.bio,
         level: sc.level,
       })
+      createdCompetitorIds.push(c.id)
       byHandle.set(key, { id: c.id, projectId: c.projectId ?? targetProjectId })
       created++
     }
@@ -246,7 +249,13 @@ export function importSnapshot(
       posts: { imported, skipped },
       warnings,
     }
-  })
+    })
+  } catch (error) {
+    // SQLite rolls back automatically; compensate for canonical files written
+    // during the transaction so a failed import does not leave partial docs.
+    for (const id of createdCompetitorIds.reverse()) stack.competitors.remove(id)
+    throw error
+  }
 }
 
 /* ---------- routes ---------- */

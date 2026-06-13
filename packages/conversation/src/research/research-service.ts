@@ -131,6 +131,10 @@ export class ResearchService {
     return this.deps.candidates.list(opts)
   }
 
+  getCandidate(id: string): ResearchCandidate | null {
+    return this.deps.candidates.findById(id)
+  }
+
   /** Update a candidate's decision and/or niche verdict; re-evaluate validation. */
   updateCandidate(
     id: string,

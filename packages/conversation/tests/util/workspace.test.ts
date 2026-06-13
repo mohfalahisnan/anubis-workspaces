@@ -28,6 +28,11 @@ describe('ensureWorkspaceStructure', () => {
     expect(existsSync(join(tempDir, 'knowledge/brand'))).toBe(true)
     expect(existsSync(join(tempDir, 'knowledge/product'))).toBe(true)
     expect(existsSync(join(tempDir, 'knowledge/campaigns'))).toBe(true)
+    expect(existsSync(join(tempDir, 'knowledge/content'))).toBe(true)
+    expect(existsSync(join(tempDir, 'knowledge/research'))).toBe(true)
+    expect(existsSync(join(tempDir, 'tasks/backlog'))).toBe(true)
+    expect(existsSync(join(tempDir, 'tasks/in-progress'))).toBe(true)
+    expect(existsSync(join(tempDir, 'tasks/done'))).toBe(true)
 
     // Verify inbox subdirectories
     expect(existsSync(join(tempDir, 'inbox'))).toBe(true)

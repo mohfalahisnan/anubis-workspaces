@@ -40,6 +40,16 @@ export class ProfileHome {
   }
 
   /**
+   * The env vars that point the CLI at this home's credentials, WITHOUT the
+   * directory/instruction side effects of {@link prepare}. Use when you only
+   * need to authenticate a one-off run against an existing, credentialed home
+   * (e.g. the content pipeline) and must not disturb the home's instructions.
+   */
+  env(): Record<string, string> {
+    return envFor(this.agent, this.path())
+  }
+
+  /**
    * Ensure the home directory exists, write profile-level instruction files,
    * and return the env vars the CLI needs to read from this home. Single
    * call replaces ensureAgentHome + writeProfileInstructions + envFor.

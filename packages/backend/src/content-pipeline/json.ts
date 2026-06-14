@@ -46,12 +46,20 @@ export async function runStructured<T>(
   runner: StructuredRunner,
   opts: RunStructuredOpts<T>,
 ): Promise<T> {
-  try {
-    return extractJson(await runner(opts.prompt), opts.schema)
-  } catch {
-    const hint = opts.retryHint
-      ?? 'Your previous reply was not valid JSON. Reply with ONLY a single JSON object, no prose, no code fence.'
-    const retryPrompt = `${opts.prompt}\n\n${hint}`
-    return extractJson(await runner(retryPrompt), opts.schema)
+  const hint = opts.retryHint
+    ?? 'Your previous reply was not valid JSON. Reply with ONLY a single JSON object, no prose, no code fence.'
+  let lastText = ''
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const prompt = attempt === 0 ? opts.prompt : `${opts.prompt}\n\n${hint}`
+    lastText = await runner(prompt)
+    try {
+      return extractJson(lastText, opts.schema)
+    } catch {
+      // First attempt: retry with the hint. Second attempt: fall through to the error below.
+    }
   }
+  // Surface the agent's actual reply — when the agent errors (e.g. an auth failure) its
+  // text IS the diagnostic, and a bare "Unexpected token" hides it.
+  const snippet = lastText.trim().slice(0, 300)
+  throw new Error(`AI step did not return valid JSON. The agent replied: ${snippet || '(empty response)'}`)
 }

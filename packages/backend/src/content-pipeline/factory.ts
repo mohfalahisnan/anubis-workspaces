@@ -10,6 +10,14 @@ const agentService = createAiAgentService()
 const MAX_AUTO_ITERATIONS = 3
 /** Opus for the review step (reasoning-heavy); other steps use the agent default. */
 const REVIEW_MODEL = 'claude-opus-4-7'
+/**
+ * Optional explicit Claude profile whose agent-home credentials authenticate
+ * the pipeline's CLI calls. When unset we prefer the bootstrapped `claude-coding`
+ * default, then any other signed-in Claude profile. The chosen profile's
+ * CLAUDE_CONFIG_DIR is injected so the spawned CLI reads its credentials — the
+ * same mechanism chat uses. Without it the CLI runs unauthenticated (401).
+ */
+const PIPELINE_PROFILE_OVERRIDE = process.env.ANUBIS_PIPELINE_PROFILE_ID
 
 export function getPipelineService(): ContentPipelineService {
   const stack = getStack()
@@ -35,6 +43,22 @@ export function getPipelineService(): ContentPipelineService {
     runAgent: async ({ prompt, cwd, projectId, step }) => {
       const workDir = join(dataDir, 'content-pipeline', cwd.split('/').pop() ?? 'scratch')
       mkdirSync(workDir, { recursive: true })
+      // Authenticate the CLI the same way chat does: point CLAUDE_CONFIG_DIR at a
+      // signed-in profile's agent-home. Prefer an explicit override, then the
+      // bootstrapped default, then any signed-in Claude profile.
+      const profileId = PIPELINE_PROFILE_OVERRIDE
+        ?? (stack.profileHomes.for('claude-coding', 'claude').hasCredentials() ? 'claude-coding' : undefined)
+        ?? stack.profiles.list().find((p) => p.config.agent === 'claude'
+            && stack.profileHomes.for(p.id, 'claude').hasCredentials())?.id
+        ?? 'claude-coding'
+      const home = stack.profileHomes.for(profileId, 'claude')
+      if (!home.hasCredentials()) {
+        throw new Error(
+          'No signed-in Claude profile found for the content pipeline. Open Profiles, sign in to a '
+          + 'Claude profile (e.g. "Claude — Coding"), then retry — or set ANUBIS_PIPELINE_PROFILE_ID '
+          + 'to a signed-in Claude profile id.',
+        )
+      }
       const res = await agentService.runAgent({
         agent: 'claude',
         cwd: workDir,
@@ -42,6 +66,7 @@ export function getPipelineService(): ContentPipelineService {
         model: step === 'ai_review' ? REVIEW_MODEL : undefined,
         permissionMode: 'bypassPermissions',
         workspaceId: projectId,
+        extraEnv: home.env(),
       })
       return res.text
     },

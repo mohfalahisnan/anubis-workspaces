@@ -129,6 +129,24 @@ describe('pipeline routes', () => {
     const res = await app.request('/content-items/pc3/pipeline/step/bogus', { method: 'POST' })
     expect(res.status).toBe(400)
   })
+
+  it('surfaces an AI step failure as a clean 502 with the message', async () => {
+    const app = await loadApp()
+    const { __setPipelineProviderForTests } = await import('../src/content-items.js')
+    const { getPipelineService } = await import('../src/content-pipeline/index.js')
+    __setPipelineProviderForTests(() => ({
+      runBreakdown: async () => { throw new Error('AI step did not return valid JSON. The agent replied: Failed to authenticate. API Error: 401') },
+    }) as never)
+    try {
+      const res = await app.request('/content-items/whatever/pipeline/step/breakdown', { method: 'POST' })
+      expect(res.status).toBe(502)
+      const body = await res.json() as { error: { code: string; message: string } }
+      expect(body.error.code).toBe('AI_STEP_FAILED')
+      expect(body.error.message).toContain('Failed to authenticate')
+    } finally {
+      __setPipelineProviderForTests(getPipelineService)
+    }
+  })
 })
 
 describe('lessons + brand context', () => {

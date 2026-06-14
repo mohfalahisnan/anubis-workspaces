@@ -18,7 +18,7 @@ let generationProvider = getGenerationService
 /** Test seam: override the generation service provider with a fake. */
 export function __setGenerationProviderForTests(fn: typeof getGenerationService): void { generationProvider = fn }
 
-const StatusSchema = z.enum(['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected'])
+const StatusSchema = z.enum(['idea', 'raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review', 'generating', 'draft', 'review', 'scheduled', 'published', 'rejected'])
 
 const ListQuery = z.object({
   projectId: z.string().optional(),
@@ -250,9 +250,13 @@ contentItemRoutes.post('/:id/pipeline/step/:step', async (c) => {
   const parsed = StepParam.safeParse(c.req.param('step'))
   if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', issues: parsed.error.issues } }, 400)
   const svc = pipelineProvider()
-  if (parsed.data === 'breakdown') return c.json({ ok: true, brief: await svc.runBreakdown(id) })
-  if (parsed.data === 'refine') return c.json({ ok: true, refined: await svc.runRefine(id) })
-  return c.json({ ok: true, review: await svc.runAiReview(id) })
+  try {
+    if (parsed.data === 'breakdown') return c.json({ ok: true, brief: await svc.runBreakdown(id) })
+    if (parsed.data === 'refine') return c.json({ ok: true, refined: await svc.runRefine(id) })
+    return c.json({ ok: true, review: await svc.runAiReview(id) })
+  } catch (err) {
+    return c.json({ ok: false, error: { code: 'AI_STEP_FAILED', message: err instanceof Error ? err.message : 'AI step failed' } }, 502)
+  }
 })
 
 contentItemRoutes.post('/:id/human-review', async (c) => {

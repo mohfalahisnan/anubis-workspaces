@@ -32,9 +32,10 @@ describe('runStructured', () => {
     expect(out).toEqual({ a: 1, b: 'x' })
     expect(runner).toHaveBeenCalledTimes(2)
   })
-  it('throws after the retry also fails', async () => {
-    const runner = vi.fn().mockResolvedValue('still not json')
-    await expect(runStructured(runner, { prompt: 'p', schema: Schema })).rejects.toThrow()
+  it('throws after the retry also fails, surfacing the agent output', async () => {
+    const runner = vi.fn().mockResolvedValue('Failed to authenticate. API Error: 401')
+    await expect(runStructured(runner, { prompt: 'p', schema: Schema }))
+      .rejects.toThrow(/AI step did not return valid JSON.*Failed to authenticate/s)
     expect(runner).toHaveBeenCalledTimes(2)
   })
 })

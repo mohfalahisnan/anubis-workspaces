@@ -18,6 +18,8 @@ import {
   type HumanReview,
   type ImprovedBrief,
   type RefinedContent,
+  type DraftOutput,
+  type GenerationTask,
   type CapturePreviewPayload,
   type CaptureResultPayload,
   type CompetitorListResponse,
@@ -1601,4 +1603,34 @@ export async function saveBrandContext(
     { method: 'PUT', body: JSON.stringify(fields) },
   )
   return r.brandContext
+}
+
+/* ------------------------------------------------------------------ *
+ * Content generation (generating → draft)
+ * ------------------------------------------------------------------ */
+
+export async function startGeneration(id: string): Promise<string> {
+  const r = await api<{ ok: true; jobId: string }>(
+    `/content-items/${encodeURIComponent(id)}/generation/start`, { method: 'POST' },
+  )
+  return r.jobId
+}
+
+export async function getGeneration(id: string): Promise<{ tasks: GenerationTask[]; draftOutput: DraftOutput | null }> {
+  const r = await api<{ ok: true; tasks: GenerationTask[]; draftOutput: DraftOutput | null }>(
+    `/content-items/${encodeURIComponent(id)}/generation`,
+  )
+  return { tasks: r.tasks, draftOutput: r.draftOutput }
+}
+
+export async function retryGenerationTask(id: string, taskId: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/content-items/${encodeURIComponent(id)}/generation/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' },
+  )
+}
+
+export async function cancelGenerationTask(id: string, taskId: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/content-items/${encodeURIComponent(id)}/generation/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' },
+  )
 }

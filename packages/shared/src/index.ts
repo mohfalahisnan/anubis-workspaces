@@ -14,7 +14,19 @@ export type AgentKind = 'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-w
 export type ProfileSource = 'builtin' | 'user'
 export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
-export type ContentItemStatus = 'idea' | 'brief' | 'draft' | 'review' | 'scheduled' | 'published' | 'rejected'
+export type ContentItemStatus =
+  | 'idea'
+  | 'raw_extracted'
+  | 'brief'
+  | 'content_refined'
+  | 'ai_review'
+  | 'human_review'
+  | 'generating'
+  | 'draft'
+  | 'review'
+  | 'scheduled'
+  | 'published'
+  | 'rejected'
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type SkillSource =
@@ -894,6 +906,7 @@ export interface ContentItemSummary {
   analytics: ContentItemAnalytics
   sourceWorkflowRunId?: string
   sourceConversationId?: string
+  sourceCandidateId?: string
   createdAt: number
   updatedAt: number
   referencePost?: CapturedPostSummary
@@ -909,6 +922,7 @@ export interface CreateContentItemInput {
   improvedDraft?: string
   sourceWorkflowRunId?: string
   sourceConversationId?: string
+  sourceCandidateId?: string
 }
 
 export interface UpdateContentItemInput {
@@ -929,6 +943,140 @@ export interface UpdateContentItemInput {
 }
 
 export type ContentItemListResponse = ListResponse<ContentItemSummary>
+
+/* ============================================================
+   Content pipeline (Phase 1: idea → human_review)
+   ============================================================ */
+
+export type LessonSource = 'ai_review' | 'human_review' | 'generation_failure' | 'final_draft_review'
+export type LessonType =
+  | 'brand_alignment'
+  | 'tone_of_voice'
+  | 'niche_alignment'
+  | 'content_quality'
+  | 'visual_quality'
+  | 'copywriting_quality'
+  | 'technical_generation_error'
+
+export interface ContentLesson {
+  id: string
+  projectId: string
+  contentId: string
+  source: LessonSource
+  type: LessonType
+  reason: string
+  whatWentWrong: string
+  howToImprove: string
+  relatedBrandRule?: string
+  relatedToneRule?: string
+  relatedNicheRule?: string
+  createdAt: number
+}
+
+export interface RawIdea {
+  caption?: string
+  assetRefs: string[]
+  sourceUrl?: string
+  sourcePlatform?: string
+  sourceCompetitor?: string
+  mediaKind?: 'image' | 'video' | 'carousel'
+  mediaMetadata?: Record<string, unknown>
+  transcript?: string
+}
+
+export interface ImprovedBrief {
+  coreIdea: string
+  targetAudience: string
+  marketFit: string
+  problem: string
+  mainMessage: string
+  contentAngle: string
+  hookDirection: string
+  brandAlignmentNotes: string
+  toneDirection: string
+  adaptationStrategy: string
+  riskNotes: string
+  referenceLessons: string[]
+}
+
+export interface VisualBrief {
+  concept: string
+  sceneDirection: string
+  subject: string
+  layout: string
+  mood: string
+  style: string
+  keyElements: string[]
+  textOverlay?: string
+  negativeDirection?: string
+}
+
+export interface Copywriting {
+  hook: string
+  body: string
+  cta: string
+  textOverlay?: string
+  carouselSlides?: string[]
+  videoScript?: string
+}
+
+export interface Hashtags {
+  primary: string[]
+  niche: string[]
+  brandSafe: string[]
+  platformNotes?: string
+}
+
+export interface RefinedContent {
+  caption: string
+  visualBrief: VisualBrief
+  copywriting: Copywriting
+  hashtags: Hashtags
+  platformNotes?: string
+}
+
+export interface AiReviewChecklistItem {
+  criterion: string
+  pass: boolean
+  note?: string
+}
+
+export interface AiReview {
+  decision: 'approved' | 'rejected'
+  score?: number
+  checklist: AiReviewChecklistItem[]
+  rejectionReason?: string
+  improvementInstruction?: string
+}
+
+export interface HumanReview {
+  decision: 'approved' | 'rejected'
+  reason?: string
+  reviewedAt: number
+}
+
+export interface ContentPipeline {
+  contentId: string
+  rawIdea?: RawIdea
+  improvedBrief?: ImprovedBrief
+  refinedContent?: RefinedContent
+  aiReview?: AiReview
+  humanReview?: HumanReview
+  transcript?: string
+  transcriptSource?: string
+  autoIterationCount: number
+  updatedAt: number
+}
+
+export interface BrandContext {
+  projectId: string
+  brandGuideline: string
+  toneOfVoice: string
+  targetAudience: string
+  nichePositioning: string
+  contentRules: string
+  updatedAt: number
+}
 
 export interface TaskSummary {
   id: string

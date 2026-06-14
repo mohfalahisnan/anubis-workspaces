@@ -29,7 +29,17 @@ export async function buildRawIdea(input: BuildRawIdeaInput): Promise<RawIdea> {
   }
 
   if (post?.mediaKind === 'video' && post.mediaUrl) {
-    raw.transcript = await input.transcribeMedia(post.mediaUrl)
+    // Best-effort: a silent / no-audio-track video makes the extractor's ffmpeg
+    // step fail ("Output file does not contain any stream", exit -22). That must
+    // not kill the whole extract step — fall back to caption-only.
+    try {
+      raw.transcript = await input.transcribeMedia(post.mediaUrl)
+    } catch (err) {
+      console.warn(
+        `[content-pipeline] transcription failed for ${post.mediaUrl}; continuing without a transcript: `
+        + (err instanceof Error ? err.message : String(err)),
+      )
+    }
   }
   // image / carousel: no OCR by default (Phase 1).
 

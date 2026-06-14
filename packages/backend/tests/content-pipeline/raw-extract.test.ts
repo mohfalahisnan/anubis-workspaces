@@ -29,6 +29,17 @@ describe('buildRawIdea', () => {
     expect(raw.transcript).toBe('spoken words')
   })
 
+  it('survives a transcription failure (e.g. no-audio video) with caption only', async () => {
+    const transcribe = vi.fn().mockRejectedValue(new Error('ffmpeg: Output file does not contain any stream'))
+    const raw = await buildRawIdea({
+      post: { ...imgPost, mediaKind: 'video', mediaUrl: 'https://cdn/silent.mp4' },
+      transcribeMedia: transcribe,
+    })
+    expect(transcribe).toHaveBeenCalled()
+    expect(raw.transcript).toBeUndefined()
+    expect(raw.caption).toBe('hello') // still usable downstream
+  })
+
   it('falls back to referenceUrl when there is no post', async () => {
     const raw = await buildRawIdea({ referenceUrl: 'https://ig/p/9', transcribeMedia: vi.fn() })
     expect(raw.sourceUrl).toBe('https://ig/p/9')

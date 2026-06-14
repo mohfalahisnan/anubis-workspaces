@@ -1062,6 +1062,7 @@ export interface ContentPipeline {
   refinedContent?: RefinedContent
   aiReview?: AiReview
   humanReview?: HumanReview
+  draftOutput?: DraftOutput
   transcript?: string
   transcriptSource?: string
   autoIterationCount: number
@@ -1076,6 +1077,66 @@ export interface BrandContext {
   nichePositioning: string
   contentRules: string
   updatedAt: number
+}
+
+/* ============================================================
+   Content generation (Phase 2: generating → draft)
+   ============================================================ */
+
+export type GenerationCapability = 'text' | 'image' | 'video' | 'audio' | 'voiceover'
+
+export type GenerationTaskType =
+  | 'final_caption'
+  | 'final_hashtags'
+  | 'text_overlay'
+  | 'image'
+  | 'carousel'
+  | 'video'
+  | 'audio'
+  | 'voiceover'
+
+export type GenerationTaskStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'manual'
+
+export interface GenerationOutput {
+  text?: string
+  assetPaths?: string[]
+  meta?: Record<string, unknown>
+}
+
+export interface GenerationTask {
+  id: string
+  contentId: string
+  projectId: string
+  type: GenerationTaskType
+  capability: GenerationCapability
+  generator: string
+  inputPrompt: string
+  status: GenerationTaskStatus
+  output?: GenerationOutput
+  error?: string
+  retryCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface DraftOutput {
+  finalCaption: string
+  finalHashtags: string[]
+  assets: Array<{ type: GenerationTaskType; paths: string[]; meta?: Record<string, unknown> }>
+  copywriting?: Copywriting
+  platformNotes?: string
+  sourceRef: { candidateId?: string; referenceUrl?: string; referencePostId?: string }
+  generationMeta: Array<{ taskId: string; type: GenerationTaskType; generator: string; status: GenerationTaskStatus }>
+  reviewHistory: { aiReview?: AiReview; humanReview?: HumanReview }
+  lessonsUsed: string[]
+  generationLogs: Array<{ taskId: string; type: GenerationTaskType; status: GenerationTaskStatus; error?: string }>
+  stitchedAt: number
 }
 
 export interface TaskSummary {

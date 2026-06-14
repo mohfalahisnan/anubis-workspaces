@@ -1067,6 +1067,40 @@ export interface PipelineStepProfileConfig {
   ai_review?: string
 }
 
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
+
+/** Per-step prompt + agent-behaviour overrides for a Content Studio pipeline step. */
+export interface PipelineStepSettings {
+  /**
+   * Override the default prompt template for this step. Empty/undefined → the
+   * shipped default is used. May contain `{{placeholder}}` tokens that are
+   * interpolated with the step's runtime context (see PipelinePromptDefaults).
+   */
+  promptTemplate?: string
+  /** Model id override for this step (falls back to the profile's model). */
+  model?: string
+  /** Reasoning-effort override for this step. */
+  reasoningEffort?: ReasoningEffort
+  /** Sampling temperature (best-effort: only applied by agents that support it). */
+  temperature?: number
+  /** How many times to auto-retry malformed/truncated JSON before failing. */
+  maxJsonAttempts?: number
+}
+
+/** Per-project Content Studio pipeline settings (prompts + parameters per step). */
+export interface PipelineSettings {
+  projectId: string
+  steps: Partial<Record<PipelineAiStep, PipelineStepSettings>>
+  updatedAt: number
+}
+
+/** The shipped default prompt templates, surfaced so the UI can show/reset them. */
+export interface PipelinePromptDefaults {
+  brief: string
+  refine: string
+  ai_review: string
+}
+
 export interface PipelineAgentProgress {
   /** Pipeline step this progress update belongs to (extract, breakdown, refine, ai_review, etc.). */
   step: string
@@ -1120,16 +1154,6 @@ export interface PipelineHistoryEntry {
   /** Agent kind that produced this output (absent for deterministic/human steps). */
   agent?: AgentKind
   createdAt: number
-}
-
-export interface BrandContext {
-  projectId: string
-  brandGuideline: string
-  toneOfVoice: string
-  targetAudience: string
-  nichePositioning: string
-  contentRules: string
-  updatedAt: number
 }
 
 /* ============================================================

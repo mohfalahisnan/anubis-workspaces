@@ -22,8 +22,8 @@ import { ResearchDocumentsRepo } from './research/research-documents-repo.js'
 import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 import { ContentPipelineRepo } from './db/repositories/content-pipeline-repo.js'
 import { ContentPipelineHistoryRepo } from './db/repositories/content-pipeline-history-repo.js'
+import { ContentPipelineSettingsRepo } from './db/repositories/content-pipeline-settings-repo.js'
 import { ContentLessonsRepo } from './db/repositories/content-lessons-repo.js'
-import { BrandContextRepo } from './db/repositories/brand-context-repo.js'
 import { ContentGenerationTasksRepo } from './db/repositories/content-generation-tasks-repo.js'
 import { TasksRepo } from './db/repositories/tasks-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
@@ -64,8 +64,8 @@ export interface ConversationStack {
   contentItems: ContentItemsRepo
   contentPipeline: ContentPipelineRepo
   contentPipelineHistory: ContentPipelineHistoryRepo
+  contentPipelineSettings: ContentPipelineSettingsRepo
   contentLessons: ContentLessonsRepo
-  brandContext: BrandContextRepo
   contentGenerationTasks: ContentGenerationTasksRepo
   tasks: TasksRepo
   workflows: WorkflowsRepo
@@ -136,8 +136,8 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const contentItems = new ContentItemsRepo(db, documents)
   const contentPipeline = new ContentPipelineRepo(db)
   const contentPipelineHistory = new ContentPipelineHistoryRepo(db)
+  const contentPipelineSettings = new ContentPipelineSettingsRepo(db)
   const contentLessons = new ContentLessonsRepo(db)
-  const brandContext = new BrandContextRepo(documents)
   const contentGenerationTasks = new ContentGenerationTasksRepo(db)
   const tasks = new TasksRepo(documents)
   const workflowsRepo = new WorkflowsRepo(db)
@@ -191,7 +191,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   const stack: ConversationStack = {
     conversation, profiles, competitors, capturedPosts, research, researchDocuments, contentItems,
-    contentPipeline, contentPipelineHistory, contentLessons, brandContext, contentGenerationTasks, tasks,
+    contentPipeline, contentPipelineHistory, contentPipelineSettings, contentLessons, contentGenerationTasks, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,

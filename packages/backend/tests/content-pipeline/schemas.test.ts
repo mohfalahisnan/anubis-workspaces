@@ -20,12 +20,11 @@ describe('pipeline schemas', () => {
 })
 
 describe('prompt builders', () => {
-  it('brief prompt embeds raw idea, brand context, and lessons', () => {
+  it('brief prompt embeds raw idea, KB context, and lessons', () => {
     const p = buildBriefPrompt({
       rawIdea: { caption: 'CAP', assetRefs: [] },
-      brand: { brandGuideline: 'BG', toneOfVoice: 'TOV', targetAudience: 'TA', nichePositioning: 'NP', contentRules: 'CR' },
+      context: 'Brand guideline: BG\nNiche: NP',
       lessons: [{ type: 'tone_of_voice', howToImprove: 'be punchier' }],
-      kbHits: [],
     })
     expect(p).toContain('CAP')
     expect(p).toContain('BG')
@@ -34,7 +33,7 @@ describe('prompt builders', () => {
     expect(p).toContain('IMPROVED BRIEF')
   })
   it('review prompt asks for approved/rejected', () => {
-    const p = buildReviewPrompt({ refined: { caption: 'x' } as never, brand: undefined, niche: 'NP' })
+    const p = buildReviewPrompt({ refined: { caption: 'x' } as never, context: '' })
     expect(p).toContain('approved')
     expect(p).toContain('rejected')
   })

@@ -1,5 +1,5 @@
 import type {
-  AgentKind, AiReview, BrandContext, ContentLesson, HumanReview, ImprovedBrief, LessonType, PipelineAgentProgress, PipelineStep, PipelineStepProfileConfig, RawIdea, RefinedContent,
+  AgentKind, AiReview, ContentLesson, HumanReview, ImprovedBrief, LessonType, PipelineAgentProgress, PipelineSettings, PipelineStep, PipelineStepProfileConfig, PipelineStepSettings, ReasoningEffort, RawIdea, RefinedContent,
 } from '@anubis/shared'
 import { runStructured, type StructuredRunner } from './json.js'
 import {
@@ -44,13 +44,30 @@ export interface PipelineDeps {
     create: (input: Omit<ContentLesson, 'id' | 'createdAt'>) => ContentLesson
     listForInjection: (q: { projectId: string; types?: LessonType[]; limit?: number }) => ContentLesson[]
   }
-  brand: { get: (projectId: string) => BrandContext | undefined }
-  kbSearch: (projectId: string, query: string) => Promise<string[]>
-  runAgent: (input: { prompt: string; cwd: string; projectId: string; step: string; profileId?: string; onProgress?: (message: string) => void }) => Promise<string>
+  /**
+   * Retrieve the project knowledge-base context pack (brand guideline, niche,
+   * similar winning content, …) for a query. Returns '' when nothing is indexed
+   * or the engine is unavailable — the pipeline still runs without it.
+   */
+  contextPack: (projectId: string, query: string) => Promise<string>
+  runAgent: (input: {
+    prompt: string
+    cwd: string
+    projectId: string
+    step: string
+    profileId?: string
+    /** Per-step overrides (fall back to the profile's values). */
+    model?: string
+    reasoningEffort?: ReasoningEffort
+    temperature?: number
+    onProgress?: (message: string) => void
+  }) => Promise<string>
   /** Extract raw idea from the item's reference post/URL. Returns the raw idea and patches the pipeline. */
   extract: (id: string) => Promise<RawIdea>
   /** Application config for project-level pipeline settings (e.g., page-level step profiles). */
   appConfig: { get: () => { pipelineStepProfiles?: PipelineStepProfileConfig } }
+  /** Per-project prompt + parameter overrides for each pipeline step. */
+  settings: { get: (projectId: string) => PipelineSettings }
   maxAutoIterations: number
 }
 
@@ -67,8 +84,29 @@ export interface FullAutoResult extends AutoResult {
 export class ContentPipelineService {
   constructor(private readonly deps: PipelineDeps) {}
 
-  private runner(item: PipelineItem, step: string, profileId?: string, onProgress?: (message: string) => void): StructuredRunner {
-    return (prompt: string) => this.deps.runAgent({ prompt, cwd: `content-pipeline/${item.id}`, projectId: item.projectId, step, profileId, onProgress })
+  private runner(
+    item: PipelineItem,
+    step: string,
+    profileId: string | undefined,
+    settings: PipelineStepSettings | undefined,
+    onProgress?: (message: string) => void,
+  ): StructuredRunner {
+    return (prompt: string) => this.deps.runAgent({
+      prompt,
+      cwd: `content-pipeline/${item.id}`,
+      projectId: item.projectId,
+      step,
+      profileId,
+      model: settings?.model,
+      reasoningEffort: settings?.reasoningEffort,
+      temperature: settings?.temperature,
+      onProgress,
+    })
+  }
+
+  /** Per-step prompt + parameter overrides for an item's project. */
+  private stepSettings(item: PipelineItem, step: keyof PipelineSettings['steps']): PipelineStepSettings | undefined {
+    return this.deps.settings.get(item.projectId).steps[step]
   }
 
   private reportProgress(id: string, step: string, status: PipelineAgentProgress['status'], message: string, startedAt?: string): void {
@@ -129,14 +167,15 @@ export class ContentPipelineService {
   async runBreakdown(id: string, profileId?: string): Promise<ImprovedBrief> {
     const item = this.requireItem(id)
     const p = this.deps.pipeline.get(id)
-    const rawIdea = (p.rawIdea ?? { assetRefs: [] }) as never
-    const brand = this.deps.brand.get(item.projectId)
+    const rawIdea = (p.rawIdea ?? { assetRefs: [] }) as RawIdea
     const lessons = this.deps.lessons.listForInjection({ projectId: item.projectId, limit: 8 })
-    const kbHits = await this.deps.kbSearch(item.projectId, brand?.nichePositioning ?? '')
+    const context = await this.deps.contextPack(item.projectId, briefQuery(rawIdea))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).brief
-    const brief = await this.runAiStep(id, 'breakdown', resolvedId, (onProgress) => runStructured(this.runner(item, 'brief', resolvedId, onProgress), {
-      prompt: buildBriefPrompt({ rawIdea, brand, lessons, kbHits }),
+    const settings = this.stepSettings(item, 'brief')
+    const brief = await this.runAiStep(id, 'breakdown', resolvedId, (onProgress) => runStructured(this.runner(item, 'brief', resolvedId, settings, onProgress), {
+      prompt: buildBriefPrompt({ rawIdea, context, lessons }, settings?.promptTemplate),
       schema: ImprovedBriefSchema,
+      maxAttempts: settings?.maxJsonAttempts,
     }))
     this.deps.pipeline.patch(id, { improvedBrief: brief })
     this.recordHistory(id, 'breakdown', brief, resolvedId)
@@ -149,11 +188,13 @@ export class ContentPipelineService {
     const p = this.deps.pipeline.get(id)
     const brief = p.improvedBrief
     if (!brief) throw new Error('Cannot refine before a brief exists.')
-    const brand = this.deps.brand.get(item.projectId)
+    const context = await this.deps.contextPack(item.projectId, refineQuery(brief))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).refine
-    const refined = await this.runAiStep(id, 'refine', resolvedId, (onProgress) => runStructured(this.runner(item, 'refine', resolvedId, onProgress), {
-      prompt: buildRefinePrompt({ brief, brand }),
+    const settings = this.stepSettings(item, 'refine')
+    const refined = await this.runAiStep(id, 'refine', resolvedId, (onProgress) => runStructured(this.runner(item, 'refine', resolvedId, settings, onProgress), {
+      prompt: buildRefinePrompt({ brief, context }, settings?.promptTemplate),
       schema: RefinedContentSchema,
+      maxAttempts: settings?.maxJsonAttempts,
     }))
     this.deps.pipeline.patch(id, { refinedContent: refined })
     this.recordHistory(id, 'refine', refined, resolvedId)
@@ -166,11 +207,13 @@ export class ContentPipelineService {
     const p = this.deps.pipeline.get(id)
     const refined = p.refinedContent
     if (!refined) throw new Error('Cannot review before refined content exists.')
-    const brand = this.deps.brand.get(item.projectId)
+    const context = await this.deps.contextPack(item.projectId, reviewQuery(refined))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).ai_review
-    const review = await this.runAiStep(id, 'ai-review', resolvedId, (onProgress) => runStructured(this.runner(item, 'ai_review', resolvedId, onProgress), {
-      prompt: buildReviewPrompt({ refined, brand, niche: brand?.nichePositioning }),
+    const settings = this.stepSettings(item, 'ai_review')
+    const review = await this.runAiStep(id, 'ai-review', resolvedId, (onProgress) => runStructured(this.runner(item, 'ai_review', resolvedId, settings, onProgress), {
+      prompt: buildReviewPrompt({ refined, context }, settings?.promptTemplate),
       schema: AiReviewSchema,
+      maxAttempts: settings?.maxJsonAttempts,
     }))
     this.deps.pipeline.patch(id, { aiReview: review })
     this.recordHistory(id, 'ai_review', review, resolvedId)
@@ -265,4 +308,21 @@ export class ContentPipelineService {
     if (!item) throw new Error(`content item ${id} not found`)
     return item
   }
+}
+
+/* Per-step knowledge-base queries: pack context relevant to THIS item's content.
+   Fall back to a brand-oriented query when the content has nothing to search on. */
+
+const BRAND_FALLBACK_QUERY = 'brand guideline tone of voice niche positioning'
+
+function briefQuery(rawIdea: RawIdea): string {
+  return (rawIdea.caption || rawIdea.transcript || rawIdea.sourceCompetitor || BRAND_FALLBACK_QUERY).slice(0, 400)
+}
+
+function refineQuery(brief: ImprovedBrief): string {
+  return [brief.coreIdea, brief.mainMessage].filter(Boolean).join(' — ').slice(0, 400) || BRAND_FALLBACK_QUERY
+}
+
+function reviewQuery(refined: RefinedContent): string {
+  return (refined.caption || refined.copywriting?.hook || BRAND_FALLBACK_QUERY).slice(0, 400)
 }

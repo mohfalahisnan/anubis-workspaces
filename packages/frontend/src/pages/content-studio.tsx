@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshCwIcon, SparklesIcon, ZapIcon } from 'lucide-react'
+import { RefreshCwIcon, SlidersHorizontalIcon, ZapIcon } from 'lucide-react'
 import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline, DraftOutput, GenerationTask, PipelineHistoryEntry, PipelineStepProfileConfig, ProfileSummary } from '@anubis/shared'
 import {
   cancelGenerationTask, getAppConfig, getContentPipeline, getGeneration, getJob, listContentItems, listProfiles,
@@ -8,7 +8,7 @@ import {
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import { LessonHistorySection } from './content-studio/sections'
-import { BrandContextDialog } from './content-studio/brand-context-dialog'
+import { PipelineSettingsDialog } from './content-studio/pipeline-settings-dialog'
 import { PipelineTimeline } from './content-studio/pipeline-timeline'
 import { StepProfilePicker } from './content-studio/step-profile-picker'
 
@@ -28,7 +28,7 @@ export function ContentStudioPage() {
   const [gen, setGen] = useState<{ tasks: GenerationTask[]; draftOutput: DraftOutput | null }>({ tasks: [], draftOutput: null })
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
-  const [brandOpen, setBrandOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [profiles, setProfiles] = useState<ProfileSummary[]>([])
   const [pageStepProfiles, setPageStepProfiles] = useState<PipelineStepProfileConfig>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -140,8 +140,8 @@ export function ContentStudioPage() {
               <h1 className='text-[22px] font-semibold tracking-[-0.02em]'>Content Studio</h1>
               <p className='mt-0.5 text-[12.5px] text-muted-foreground'>Idea → raw → brief → refined → AI review → human review.</p>
             </div>
-            <button type='button' onClick={() => setBrandOpen(true)} className={secondaryButton}>
-              <SparklesIcon className='size-4' /> Brand Context
+            <button type='button' onClick={() => setSettingsOpen(true)} className={secondaryButton}>
+              <SlidersHorizontalIcon className='size-4' /> Pipeline Settings
             </button>
           </div>
           <StepProfilePicker
@@ -240,7 +240,7 @@ export function ContentStudioPage() {
         )}
       </div>
 
-      <BrandContextDialog open={brandOpen} projectId={projectId} onClose={() => setBrandOpen(false)} />
+      <PipelineSettingsDialog open={settingsOpen} projectId={projectId} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

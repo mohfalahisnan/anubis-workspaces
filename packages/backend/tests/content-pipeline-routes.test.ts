@@ -151,7 +151,39 @@ describe('pipeline routes', () => {
   })
 })
 
-describe('lessons + brand context', () => {
+describe('pipeline settings', () => {
+  it('GET returns defaults and PUT round-trips per-step overrides', async () => {
+    const app = await loadApp()
+    const get0 = await app.request('/pipeline-settings?projectId=default').then((r) => r.json()) as {
+      settings: { steps: Record<string, unknown> }
+      defaults: { brief: string; refine: string; ai_review: string }
+    }
+    expect(get0.defaults.brief).toContain('{{source}}')
+    expect(get0.settings.steps).toEqual({})
+
+    const put = await app.request('/pipeline-settings?projectId=default', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ steps: { ai_review: { promptTemplate: 'custom {{content}}', maxJsonAttempts: 4 } } }),
+    })
+    expect(put.status).toBe(200)
+
+    const get1 = await app.request('/pipeline-settings?projectId=default').then((r) => r.json()) as {
+      settings: { steps: { ai_review?: { promptTemplate?: string; maxJsonAttempts?: number } } }
+    }
+    expect(get1.settings.steps.ai_review).toMatchObject({ promptTemplate: 'custom {{content}}', maxJsonAttempts: 4 })
+  })
+
+  it('rejects an out-of-range temperature', async () => {
+    const app = await loadApp()
+    const res = await app.request('/pipeline-settings?projectId=default', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ steps: { brief: { temperature: 9 } } }),
+    })
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('lessons', () => {
   it('GET /lessons returns project lessons', async () => {
     const app = await loadApp()
     const { getStack } = await import('../src/services.js')
@@ -160,17 +192,6 @@ describe('lessons + brand context', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as { lessons: unknown[] }
     expect(body.lessons.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('PUT then GET /brand-context round-trips', async () => {
-    const app = await loadApp()
-    const put = await app.request('/brand-context?projectId=default', {
-      method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ brandGuideline: 'BG', toneOfVoice: 'T', targetAudience: 'A', nichePositioning: 'N', contentRules: 'C' }),
-    })
-    expect(put.status).toBe(200)
-    const get = await app.request('/brand-context?projectId=default').then((r) => r.json()) as { brandContext: { brandGuideline: string } }
-    expect(get.brandContext.brandGuideline).toBe('BG')
   })
 })
 

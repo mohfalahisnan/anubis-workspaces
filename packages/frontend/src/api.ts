@@ -12,12 +12,14 @@ import {
   type ContentItemStatus,
   type ContentItemSummary,
   type AiReview,
-  type BrandContext,
   type ContentLesson,
   type ContentPipeline,
   type HumanReview,
   type ImprovedBrief,
   type PipelineHistoryEntry,
+  type PipelinePromptDefaults,
+  type PipelineSettings,
+  type PipelineStepSettings,
   type RefinedContent,
   type DraftOutput,
   type GenerationTask,
@@ -1610,22 +1612,28 @@ export async function listLessons(projectId?: string): Promise<ContentLesson[]> 
   return r.lessons
 }
 
-export async function getBrandContext(projectId?: string): Promise<BrandContext> {
+/* ---------- Content pipeline settings (per-project prompts + params) ---------- */
+
+export async function getPipelineSettings(
+  projectId?: string,
+): Promise<{ settings: PipelineSettings; defaults: PipelinePromptDefaults }> {
   const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
-  const r = await api<{ ok: true; brandContext: BrandContext }>(`/brand-context${qs}`)
-  return r.brandContext
+  const r = await api<{ ok: true; settings: PipelineSettings; defaults: PipelinePromptDefaults }>(`/pipeline-settings${qs}`)
+  return { settings: r.settings, defaults: r.defaults }
 }
 
-export async function saveBrandContext(
+export async function updatePipelineSettings(
   projectId: string,
-  fields: Omit<BrandContext, 'projectId' | 'updatedAt'>,
-): Promise<BrandContext> {
-  const r = await api<{ ok: true; brandContext: BrandContext }>(
-    `/brand-context?projectId=${encodeURIComponent(projectId)}`,
-    { method: 'PUT', body: JSON.stringify(fields) },
+  steps: PipelineSettings['steps'],
+): Promise<PipelineSettings> {
+  const r = await api<{ ok: true; settings: PipelineSettings }>(
+    `/pipeline-settings?projectId=${encodeURIComponent(projectId)}`,
+    { method: 'PUT', body: JSON.stringify({ steps }) },
   )
-  return r.brandContext
+  return r.settings
 }
+
+export type { PipelineSettings, PipelineStepSettings, PipelinePromptDefaults }
 
 /* ------------------------------------------------------------------ *
  * Content generation (generating → draft)

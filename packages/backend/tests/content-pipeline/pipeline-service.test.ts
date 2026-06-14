@@ -29,11 +29,11 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
         create: vi.fn((l: Record<string, unknown>) => { const x = { id: 'L', createdAt: 1, ...l }; lessons.push(x); return x }),
         listForInjection: vi.fn(() => []),
       },
-      brand: { get: vi.fn(() => undefined) },
-      kbSearch: vi.fn(async () => []),
+      contextPack: vi.fn(async () => ''),
       runAgent: vi.fn(),
       extract: vi.fn(async () => ({ caption: 'cap', assetRefs: [] })),
       appConfig: { get: vi.fn(() => ({})) },
+      settings: { get: vi.fn(() => ({ projectId: 'default', steps: {}, updatedAt: 0 })) },
       maxAutoIterations: 3,
       ...overrides,
     },
@@ -58,6 +58,26 @@ describe('ContentPipelineService.runBreakdown', () => {
     expect(deps.history.append).toHaveBeenCalledWith(
       expect.objectContaining({ contentId: 'c1', step: 'breakdown', iteration: 0, data: expect.any(Object) }),
     )
+  })
+
+  it('applies the per-step prompt template + model/effort override', async () => {
+    const { deps } = makeDeps({
+      settings: {
+        get: vi.fn(() => ({
+          projectId: 'default',
+          steps: { brief: { promptTemplate: 'CUSTOM PROMPT for {{source}}', model: 'codex-x', reasoningEffort: 'high' } },
+          updatedAt: 1,
+        })),
+      },
+    })
+    deps.runAgent.mockResolvedValue(JSON.stringify(briefFixture()))
+    const svc = new ContentPipelineService(deps as never)
+    await svc.runBreakdown('c1')
+    const call = deps.runAgent.mock.calls[0]![0] as { prompt: string; model?: string; reasoningEffort?: string }
+    expect(call.prompt).toContain('CUSTOM PROMPT for')
+    expect(call.prompt).toContain('Caption: cap')
+    expect(call.model).toBe('codex-x')
+    expect(call.reasoningEffort).toBe('high')
   })
 })
 

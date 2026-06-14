@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import type { BrandContext, ContentLesson, ImprovedBrief, RawIdea, RefinedContent } from '@anubis/shared'
+import type { ContentLesson, ImprovedBrief, RawIdea, RefinedContent } from '@anubis/shared'
+import {
+  DEFAULT_PROMPT_TEMPLATES, renderPrompt,
+  buildBriefVars, buildRefineVars, buildReviewVars,
+} from './prompts.js'
 
 export const ImprovedBriefSchema: z.ZodType<ImprovedBrief> = z.object({
   coreIdea: z.string(),
@@ -58,97 +62,27 @@ export const AiReviewSchema = z.object({
   improvementInstruction: z.string().optional(),
 })
 
-type BrandLike = BrandContext | Partial<BrandContext> | undefined
-
-function brandBlock(brand: BrandLike): string {
-  if (!brand) return '(no brand context provided)'
-  return [
-    `Brand guideline: ${brand.brandGuideline ?? ''}`,
-    `Tone of voice: ${brand.toneOfVoice ?? ''}`,
-    `Target audience: ${brand.targetAudience ?? ''}`,
-    `Niche positioning: ${brand.nichePositioning ?? ''}`,
-    `Content rules: ${brand.contentRules ?? ''}`,
-  ].join('\n')
-}
-
-function lessonsBlock(lessons: Array<Pick<ContentLesson, 'type' | 'howToImprove'>>): string {
-  if (!lessons.length) return '(no prior lessons)'
-  return lessons.map((l) => `- [${l.type}] ${l.howToImprove}`).join('\n')
-}
-
-const JSON_ONLY = 'Reply with ONLY a single JSON object matching the schema. No prose, no markdown fence.'
+/* Prompt builders delegate to the templated defaults (see prompts.ts). Pass an
+   override `template` to render the same step variables into a custom prompt. */
 
 export function buildBriefPrompt(input: {
   rawIdea: RawIdea
-  brand: BrandLike
+  context: string
   lessons: Array<Pick<ContentLesson, 'type' | 'howToImprove'>>
-  kbHits: string[]
-}): string {
-  return [
-    'You are a content strategist. Analyze the source content and produce an IMPROVED BRIEF for our brand.',
-    '',
-    'Answer internally: what is this about; topic; market fit; audience problem; information communicated; why it performed; angle/hook; emotional trigger; content structure; what we can adapt.',
-    '',
-    '=== SOURCE (raw idea) ===',
-    `Caption: ${input.rawIdea.caption ?? ''}`,
-    input.rawIdea.transcript ? `Transcript: ${input.rawIdea.transcript}` : '',
-    `Platform: ${input.rawIdea.sourcePlatform ?? ''}`,
-    `Source URL: ${input.rawIdea.sourceUrl ?? ''}`,
-    '',
-    '=== BRAND CONTEXT ===',
-    brandBlock(input.brand),
-    '',
-    '=== LESSONS FROM PAST MISTAKES (apply these) ===',
-    lessonsBlock(input.lessons),
-    '',
-    input.kbHits.length ? `=== KNOWLEDGE BASE ===\n${input.kbHits.join('\n')}` : '',
-    '',
-    'Produce JSON with keys: coreIdea, targetAudience, marketFit, problem, mainMessage, contentAngle, hookDirection, brandAlignmentNotes, toneDirection, adaptationStrategy, riskNotes, referenceLessons (string[]).',
-    JSON_ONLY,
-  ].filter(Boolean).join('\n')
+}, template?: string): string {
+  return renderPrompt(template || DEFAULT_PROMPT_TEMPLATES.brief, buildBriefVars(input))
 }
 
 export function buildRefinePrompt(input: {
   brief: ImprovedBrief
-  brand: BrandLike
-}): string {
-  return [
-    'Turn this brief into content-ready material for our brand.',
-    '',
-    '=== BRIEF ===',
-    JSON.stringify(input.brief, null, 2),
-    '',
-    '=== BRAND CONTEXT ===',
-    brandBlock(input.brand),
-    '',
-    'Produce JSON with keys:',
-    'caption (string),',
-    'visualBrief { concept, sceneDirection, subject, layout, mood, style, keyElements (string[]), textOverlay?, negativeDirection? },',
-    'copywriting { hook, body, cta, textOverlay?, carouselSlides? (string[]), videoScript? },',
-    'hashtags { primary (string[]), niche (string[]), brandSafe (string[]), platformNotes? },',
-    'platformNotes?.',
-    JSON_ONLY,
-  ].join('\n')
+  context: string
+}, template?: string): string {
+  return renderPrompt(template || DEFAULT_PROMPT_TEMPLATES.refine, buildRefineVars(input))
 }
 
 export function buildReviewPrompt(input: {
   refined: RefinedContent
-  brand: BrandLike
-  niche?: string
-}): string {
-  return [
-    'Review the refined content and decide if it is good enough to continue.',
-    'Validate: niche alignment, brand alignment, tone of voice, content clarity, hook strength, message quality, audience relevance, visual brief quality, copywriting quality, similarity-to-competitor risk, hallucination risk, misleading-claim risk, weak-differentiation risk.',
-    '',
-    '=== CONTENT ===',
-    JSON.stringify(input.refined, null, 2),
-    '',
-    '=== BRAND CONTEXT ===',
-    brandBlock(input.brand),
-    input.niche ? `Niche: ${input.niche}` : '',
-    '',
-    'Decision MUST be exactly "approved" or "rejected".',
-    'Produce JSON: { decision: "approved"|"rejected", score (0-100 number, optional), checklist: [{ criterion, pass (boolean), note? }], rejectionReason? (required if rejected), improvementInstruction? (required if rejected) }.',
-    JSON_ONLY,
-  ].filter(Boolean).join('\n')
+  context: string
+}, template?: string): string {
+  return renderPrompt(template || DEFAULT_PROMPT_TEMPLATES.ai_review, buildReviewVars(input))
 }

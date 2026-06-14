@@ -40,6 +40,8 @@ export interface RunAgentInput {
   files?: string[]
   yolo?: boolean
   reasoningEffort?: ReasoningEffort
+  /** Sampling temperature. Best-effort: forwarded only to agents that support it. */
+  temperature?: number
   sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
   approvalPolicy?: 'untrusted' | 'on-request' | 'on-failure' | 'never'
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'

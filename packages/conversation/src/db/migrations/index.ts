@@ -105,4 +105,5 @@ export const MIGRATIONS: Migration[] = [
   load(28, '028_content_pipeline_step_profiles.sql'),
   load(29, '029_content_pipeline_agent_progress.sql'),
   load(30, '030_content_pipeline_history.sql'),
+  load(31, '031_content_pipeline_settings.sql'),
 ]

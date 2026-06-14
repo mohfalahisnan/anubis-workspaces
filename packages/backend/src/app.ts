@@ -23,7 +23,8 @@ import { knowledgeBaseRoutes } from './knowledge-base.js'
 import { jobRoutes } from './jobs.js'
 import { snapshotRoutes } from './snapshot.js'
 import { researchRoutes } from './research.js'
-import { brandContextRoutes, lessonRoutes } from './brand-context.js'
+import { lessonRoutes } from './lessons.js'
+import { pipelineSettingsRoutes } from './pipeline-settings.js'
 
 const app = new Hono()
 
@@ -76,8 +77,8 @@ app.route('/knowledge-base', knowledgeBaseRoutes)
 app.route('/jobs', jobRoutes)
 app.route('/snapshot', snapshotRoutes)
 app.route('/research', researchRoutes)
-app.route('/brand-context', brandContextRoutes)
 app.route('/lessons', lessonRoutes)
+app.route('/pipeline-settings', pipelineSettingsRoutes)
 
 app.onError((error, c) => {
   const { status, body } = toErrorResponse(error)

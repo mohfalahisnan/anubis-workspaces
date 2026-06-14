@@ -33,6 +33,8 @@ function eventToProgressMessage(event: AgentEvent): string | null {
 const agentService = createAiAgentService()
 
 const MAX_AUTO_ITERATIONS = 3
+/** Token budget for the per-step knowledge-base context pack. */
+const CONTEXT_PACK_BUDGET = 2000
 /** Opus for the review step (reasoning-heavy); other steps use the agent default. */
 const REVIEW_MODEL = 'claude-opus-4-7'
 /**
@@ -89,10 +91,21 @@ export function getPipelineService(): ContentPipelineService {
     history: { append: (input) => { stack.contentPipelineHistory.append(input) } },
     resolveAgent: (profileId) => resolveAgentKind(stack, profileId),
     lessons: stack.contentLessons,
-    brand: { get: (projectId) => stack.brandContext.get(projectId) },
     appConfig: { get: () => stack.appConfig.get() },
-    kbSearch: async () => [], // Phase 1: KB injection optional/empty; wire knowledge-base.contextPack later.
-    runAgent: async ({ prompt, cwd, projectId, step, profileId, onProgress }) => {
+    settings: { get: (projectId) => stack.contentPipelineSettings.get(projectId) },
+    // Pull brand guideline / niche / similar winning content from the project's
+    // knowledge-base index. Best-effort: returns '' when the engine binary isn't
+    // configured or the project isn't indexed, so the pipeline still runs.
+    contextPack: async (projectId, query) => {
+      try {
+        const { contextPack } = await import('../knowledge-base.js')
+        const res = await contextPack({ projectId, query, budget: CONTEXT_PACK_BUDGET })
+        return res.text ?? ''
+      } catch {
+        return ''
+      }
+    },
+    runAgent: async ({ prompt, cwd, projectId, step, profileId, model: stepModel, reasoningEffort: stepEffort, temperature, onProgress }) => {
       const workDir = join(dataDir, 'content-pipeline', cwd.split('/').pop() ?? 'scratch')
       mkdirSync(workDir, { recursive: true })
       // Resolve the profile + its agent. Each step runs on whatever agent the
@@ -116,15 +129,19 @@ export function getPipelineService(): ContentPipelineService {
         )
       }
       const cfg = stack.appConfig.get()
-      // Model: profile's own config.model wins; for the reasoning-heavy ai_review
-      // step fall back to a stronger Claude model only when running on Claude.
-      const model = resolved.model ?? (step === 'ai_review' && agent === 'claude' ? REVIEW_MODEL : undefined)
+      // Model: per-step override wins, then the profile's own config.model; for the
+      // reasoning-heavy ai_review step fall back to a stronger Claude model only
+      // when running on Claude.
+      const model = stepModel ?? resolved.model ?? (step === 'ai_review' && agent === 'claude' ? REVIEW_MODEL : undefined)
       const input = {
         agent,
         cwd: workDir,
         prompt,
         model,
-        reasoningEffort: resolved.reasoningEffort,
+        reasoningEffort: stepEffort ?? resolved.reasoningEffort,
+        // Best-effort: most CLI agents ignore temperature, but plumb it through
+        // for the (e.g. Qoder) ones that accept sampling parameters.
+        temperature,
         // Run autonomously regardless of agent: prefer the profile's own setting,
         // else the most permissive non-interactive default for each knob.
         sandboxMode: resolved.sandboxMode ?? 'workspace-write' as const,

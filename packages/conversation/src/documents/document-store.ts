@@ -13,7 +13,7 @@ import { z } from 'zod'
 import type { ProjectWorkspaces } from './project-workspaces.js'
 import { walkMarkdown } from './walk-markdown.js'
 
-export type CanonicalDocumentType = 'task' | 'competitor' | 'content' | 'research'
+export type CanonicalDocumentType = 'task' | 'competitor' | 'content' | 'research' | 'brand'
 
 /**
  * Coerce a value that YAML may have parsed as a native `Date` back to an ISO
@@ -32,7 +32,7 @@ export const FrontmatterDateString = z.preprocess(coerceDateToIsoString, z.strin
 const CommonFrontmatter = z.object({
   schema_version: z.literal(1),
   id: z.string().min(1),
-  type: z.enum(['task', 'competitor', 'content', 'research']),
+  type: z.enum(['task', 'competitor', 'content', 'research', 'brand']),
   project_id: z.string().min(1),
   created_at: IsoDateString,
   updated_at: IsoDateString,

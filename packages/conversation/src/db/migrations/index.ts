@@ -100,4 +100,6 @@ export const MIGRATIONS: Migration[] = [
   load(23, '023_competitor_research_fields.sql'),
   load(24, '024_research_tables.sql'),
   load(25, '025_markdown_canonical.sql'),
+  load(26, '026_content_pipeline.sql'),
+  load(27, '027_content_generation.sql'),
 ]

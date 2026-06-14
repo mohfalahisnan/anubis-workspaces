@@ -11,6 +11,15 @@ import {
   type ContentItemListResponse,
   type ContentItemStatus,
   type ContentItemSummary,
+  type AiReview,
+  type BrandContext,
+  type ContentLesson,
+  type ContentPipeline,
+  type HumanReview,
+  type ImprovedBrief,
+  type RefinedContent,
+  type DraftOutput,
+  type GenerationTask,
   type CapturePreviewPayload,
   type CaptureResultPayload,
   type CompetitorListResponse,
@@ -1516,3 +1525,112 @@ export async function importProjectSnapshot(
   })
 }
 
+
+/* ------------------------------------------------------------------ *
+ * Content pipeline (idea → human_review)
+ * ------------------------------------------------------------------ */
+
+export async function saveCandidateAsIdea(candidateId: string, projectId?: string): Promise<ContentItemSummary> {
+  const r = await api<{ ok: true; item: ContentItemSummary }>('/content-items/from-candidate', {
+    method: 'POST',
+    body: JSON.stringify({ candidateId, projectId }),
+  })
+  return r.item
+}
+
+export async function extractRawIdea(id: string): Promise<ContentPipeline> {
+  const r = await api<{ ok: true; pipeline: ContentPipeline }>(
+    `/content-items/${encodeURIComponent(id)}/extract`,
+    { method: 'POST' },
+  )
+  return r.pipeline
+}
+
+export async function getContentPipeline(id: string): Promise<{ pipeline: ContentPipeline; lessons: ContentLesson[] }> {
+  const r = await api<{ ok: true; pipeline: ContentPipeline; lessons: ContentLesson[] }>(
+    `/content-items/${encodeURIComponent(id)}/pipeline`,
+  )
+  return { pipeline: r.pipeline, lessons: r.lessons }
+}
+
+export async function runPipeline(id: string): Promise<string> {
+  const r = await api<{ ok: true; jobId: string }>(
+    `/content-items/${encodeURIComponent(id)}/pipeline/run`,
+    { method: 'POST' },
+  )
+  return r.jobId
+}
+
+export async function runPipelineStep(
+  id: string,
+  step: 'breakdown' | 'refine' | 'ai-review',
+): Promise<{ brief?: ImprovedBrief; refined?: RefinedContent; review?: AiReview }> {
+  return api<{ ok: true; brief?: ImprovedBrief; refined?: RefinedContent; review?: AiReview }>(
+    `/content-items/${encodeURIComponent(id)}/pipeline/step/${step}`,
+    { method: 'POST' },
+  )
+}
+
+export async function submitHumanReview(
+  id: string,
+  input: { decision: 'approved' | 'rejected'; reason?: string; type?: string },
+): Promise<HumanReview> {
+  const r = await api<{ ok: true; review: HumanReview }>(
+    `/content-items/${encodeURIComponent(id)}/human-review`,
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+  return r.review
+}
+
+export async function listLessons(projectId?: string): Promise<ContentLesson[]> {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+  const r = await api<{ ok: true; lessons: ContentLesson[] }>(`/lessons${qs}`)
+  return r.lessons
+}
+
+export async function getBrandContext(projectId?: string): Promise<BrandContext> {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+  const r = await api<{ ok: true; brandContext: BrandContext }>(`/brand-context${qs}`)
+  return r.brandContext
+}
+
+export async function saveBrandContext(
+  projectId: string,
+  fields: Omit<BrandContext, 'projectId' | 'updatedAt'>,
+): Promise<BrandContext> {
+  const r = await api<{ ok: true; brandContext: BrandContext }>(
+    `/brand-context?projectId=${encodeURIComponent(projectId)}`,
+    { method: 'PUT', body: JSON.stringify(fields) },
+  )
+  return r.brandContext
+}
+
+/* ------------------------------------------------------------------ *
+ * Content generation (generating → draft)
+ * ------------------------------------------------------------------ */
+
+export async function startGeneration(id: string): Promise<string> {
+  const r = await api<{ ok: true; jobId: string }>(
+    `/content-items/${encodeURIComponent(id)}/generation/start`, { method: 'POST' },
+  )
+  return r.jobId
+}
+
+export async function getGeneration(id: string): Promise<{ tasks: GenerationTask[]; draftOutput: DraftOutput | null }> {
+  const r = await api<{ ok: true; tasks: GenerationTask[]; draftOutput: DraftOutput | null }>(
+    `/content-items/${encodeURIComponent(id)}/generation`,
+  )
+  return { tasks: r.tasks, draftOutput: r.draftOutput }
+}
+
+export async function retryGenerationTask(id: string, taskId: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/content-items/${encodeURIComponent(id)}/generation/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' },
+  )
+}
+
+export async function cancelGenerationTask(id: string, taskId: string): Promise<void> {
+  await api<{ ok: true }>(
+    `/content-items/${encodeURIComponent(id)}/generation/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' },
+  )
+}

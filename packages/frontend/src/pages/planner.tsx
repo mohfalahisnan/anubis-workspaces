@@ -37,11 +37,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { ViewToggle } from '@/components/view-toggle'
 import { KanbanBoard, type KanbanColumn } from '@/components/kanban'
 
-const STATUSES: ContentItemStatus[] = ['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected']
+const STATUSES: ContentItemStatus[] = ['idea', 'raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review', 'generating', 'draft', 'review', 'scheduled', 'published', 'rejected']
 
 const STATUS_LABEL: Record<ContentItemStatus, string> = {
   idea: 'Idea',
+  raw_extracted: 'Raw',
   brief: 'Brief',
+  content_refined: 'Refined',
+  ai_review: 'AI Review',
+  human_review: 'Human Review',
+  generating: 'Generating',
   draft: 'Draft',
   review: 'Review',
   scheduled: 'Scheduled',
@@ -51,7 +56,12 @@ const STATUS_LABEL: Record<ContentItemStatus, string> = {
 
 const STATUS_TONE: Record<ContentItemStatus, string> = {
   idea: 'border-border bg-muted/30 text-muted-foreground',
+  raw_extracted: 'border-border bg-muted/40 text-muted-foreground',
   brief: 'border-[#4E6E8E]/40 bg-[#4E6E8E]/12 text-[#9db8d2]',
+  content_refined: 'border-[#4E6E8E]/40 bg-[#4E6E8E]/12 text-[#9db8d2]',
+  ai_review: 'border-[#7E5E92]/45 bg-[#7E5E92]/15 text-[#d9b7ec]',
+  human_review: 'border-[#7E5E92]/45 bg-[#7E5E92]/15 text-[#d9b7ec]',
+  generating: 'border-[var(--anubis-gold)]/40 bg-[var(--anubis-gold)]/10 text-[var(--anubis-gold)]',
   draft: 'border-[var(--anubis-gold)]/40 bg-[var(--anubis-gold)]/10 text-[var(--anubis-gold)]',
   review: 'border-[#7E5E92]/45 bg-[#7E5E92]/15 text-[#d9b7ec]',
   scheduled: 'border-[#3F8079]/45 bg-[#3F8079]/15 text-[#9bd8d0]',

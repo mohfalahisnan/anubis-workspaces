@@ -17,6 +17,7 @@ import { useProject } from '@/lib/use-project'
 import {
   createResearchSession,
   listCompetitors,
+  saveCandidateAsIdea,
   updateResearchCandidate,
 } from '@/api'
 import { CandidateLevelBadge } from '@/components/research/candidate-level-badge'
@@ -172,6 +173,15 @@ export function ResearchPage() {
     setDetail((prev) => (prev && prev.id === updated.id ? updated : prev))
   }
 
+  async function saveAsIdea(candidate: ResearchCandidateSummary) {
+    try {
+      await saveCandidateAsIdea(candidate.id, projectId)
+      setBanner({ kind: 'success', message: 'Saved to Content Planner as an idea. Open it in Content Studio.' })
+    } catch (e) {
+      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Failed to save as idea.' })
+    }
+  }
+
   const visibleCandidates = useMemo(
     () =>
       candidates
@@ -292,6 +302,7 @@ export function ResearchPage() {
         competitor={detail ? competitorById.get(detail.competitorId) : undefined}
         onClose={() => setDetail(null)}
         onDecision={(c, d) => void setDecision(c, d)}
+        onSaveAsIdea={(c) => void saveAsIdea(c)}
       />
     </div>
   )
@@ -449,11 +460,13 @@ function CandidateDetailSheet({
   competitor,
   onClose,
   onDecision,
+  onSaveAsIdea,
 }: {
   candidate: ResearchCandidateSummary | null
   competitor: CompetitorSummary | undefined
   onClose: () => void
   onDecision: (c: ResearchCandidateSummary, decision: ResearchCandidateSummary['decision']) => void
+  onSaveAsIdea: (c: ResearchCandidateSummary) => void
 }) {
   return (
     <Sheet open={!!candidate} onOpenChange={(o) => !o && onClose()}>
@@ -495,9 +508,12 @@ function CandidateDetailSheet({
               <p className='mt-1 text-[12px] text-muted-foreground'>{candidateValidationReason(candidate)}</p>
             </div>
 
-            <div className='mt-auto flex gap-2 pt-2'>
-              <button type='button' onClick={() => onDecision(candidate, 'saved')} className='inline-flex h-9 flex-1 items-center justify-center rounded-md bg-[var(--anubis-gold)] px-3 text-[13px] font-semibold text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]'>Save to library</button>
-              <button type='button' onClick={() => onDecision(candidate, 'rejected')} className='inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-[13px] font-medium text-muted-foreground hover:text-destructive'>Reject</button>
+            <div className='mt-auto flex flex-col gap-2 pt-2'>
+              <button type='button' onClick={() => onSaveAsIdea(candidate)} className='inline-flex h-9 items-center justify-center rounded-md bg-[var(--anubis-gold)] px-3 text-[13px] font-semibold text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)]'>Save as idea → Content Studio</button>
+              <div className='flex gap-2'>
+                <button type='button' onClick={() => onDecision(candidate, 'saved')} className='inline-flex h-9 flex-1 items-center justify-center rounded-md border border-border px-3 text-[13px] font-medium text-foreground hover:bg-muted'>Save to library</button>
+                <button type='button' onClick={() => onDecision(candidate, 'rejected')} className='inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-[13px] font-medium text-muted-foreground hover:text-destructive'>Reject</button>
+              </div>
             </div>
           </>
         )}

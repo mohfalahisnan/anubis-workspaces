@@ -13,6 +13,7 @@ export type Route =
   | { page: 'active-conversation'; conversationId?: string }
   | { page: 'content' }
   | { page: 'planner' }
+  | { page: 'content-studio' }
   | { page: 'tasks' }
   | { page: 'profiles' }
   | { page: 'profile-editor'; profileId: string }

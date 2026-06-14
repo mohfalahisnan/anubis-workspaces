@@ -22,6 +22,7 @@ export interface ContentItem {
   metricsSyncedAt?: number
   sourceWorkflowRunId?: string
   sourceConversationId?: string
+  sourceCandidateId?: string
   createdAt: number
   updatedAt: number
   deletedAt?: number
@@ -44,6 +45,7 @@ export interface CreateContentItemInput {
   improvedDraft?: string
   sourceWorkflowRunId?: string
   sourceConversationId?: string
+  sourceCandidateId?: string
   now: number
 }
 
@@ -54,9 +56,10 @@ const ContentData = z.object({
   id: z.string(),
   project_id: z.string(),
   title: z.string().min(1),
-  status: z.enum(['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected']),
+  status: z.enum(['idea', 'raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review', 'generating', 'draft', 'review', 'scheduled', 'published', 'rejected']),
   reference_post_id: z.string().optional().nullable(),
   reference_url: z.string().optional().nullable(),
+  source_candidate_id: z.string().optional().nullable(),
   rejection_reason: z.string().optional().nullable(),
   published_url: z.string().optional().nullable(),
   published_at: FrontmatterDateString.optional().nullable(),
@@ -91,6 +94,7 @@ export class ContentItemsRepo {
       improvedDraft: input.improvedDraft,
       sourceWorkflowRunId: input.sourceWorkflowRunId,
       sourceConversationId: input.sourceConversationId,
+      sourceCandidateId: input.sourceCandidateId,
       createdAt: input.now,
       updatedAt: input.now,
     }
@@ -173,6 +177,7 @@ export class ContentItemsRepo {
         published_at: item.publishedAt ?? null,
         source_workflow_run_id: item.sourceWorkflowRunId ?? null,
         source_conversation_id: item.sourceConversationId ?? null,
+        source_candidate_id: item.sourceCandidateId ?? null,
       },
       body,
     })
@@ -215,6 +220,7 @@ function toItem(document: MarkdownDocument): ContentItem {
     publishedAt: data.published_at ?? undefined,
     sourceWorkflowRunId: data.source_workflow_run_id ?? undefined,
     sourceConversationId: data.source_conversation_id ?? undefined,
+    sourceCandidateId: data.source_candidate_id ?? undefined,
     createdAt: Date.parse(data.created_at),
     updatedAt: Date.parse(data.updated_at),
   }

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
   CodeIcon,
+  EyeIcon,
+  EyeOffIcon,
   FolderSearchIcon,
+  KeyRoundIcon,
   RefreshCwIcon,
   SaveIcon,
 } from 'lucide-react'
@@ -67,7 +70,11 @@ export function SettingsPage() {
     config !== null &&
     (form.enableNotifications ?? true) !== (config.enableNotifications ?? true)
 
-  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty
+  const qoderApiKeyDirty =
+    config !== null &&
+    (form.qoderApiKey ?? '') !== (config.qoderApiKey ?? '')
+
+  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty || qoderApiKeyDirty
   const canSave = dirty && levelsValid && multipliersValid
 
   async function handleSave() {
@@ -80,6 +87,7 @@ export function SettingsPage() {
         competitorLevels: form.competitorLevels ?? config?.competitorLevels,
         levelMultipliers: form.levelMultipliers ?? config?.levelMultipliers,
         enableNotifications: form.enableNotifications ?? true,
+        qoderApiKey: form.qoderApiKey ?? '',
       })
       setConfig(next)
       setForm((f) => ({
@@ -90,6 +98,7 @@ export function SettingsPage() {
         competitorLevels: next.competitorLevels,
         levelMultipliers: next.levelMultipliers,
         enableNotifications: next.enableNotifications ?? true,
+        qoderApiKey: next.qoderApiKey ?? '',
       }))
       setCompetitorLevels(next.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS)
       setLevelMultipliers(next.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS)
@@ -210,6 +219,33 @@ export function SettingsPage() {
             />
             <p className='text-[12px] text-muted-foreground'>
               Required for OCR and transcription. Output is cached as <code className='font-mono text-foreground/80'>*.anubis.txt</code> next to the source file; the Knowledge Base picks these up on re-index.
+            </p>
+          </div>
+        </section>
+
+        <section className='mt-8 border-t border-border pt-6'>
+          <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>AI Provider Keys</h2>
+          <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
+            API keys for cloud-based AI providers. Stored locally in <code className='font-mono text-foreground/80'>config.json</code> alongside other settings.
+          </p>
+
+          <div className='mt-4 flex flex-col gap-1.5'>
+            <label className='text-[12.5px] font-medium text-foreground'>Qoder Personal Access Token</label>
+            <ApiKeyField
+              value={form.qoderApiKey ?? ''}
+              onChange={(v) => setForm((f) => ({ ...f, qoderApiKey: v }))}
+              placeholder='qoder_pat_xxxxxxxxxxxxxxxx'
+            />
+            <p className='text-[12px] text-muted-foreground'>
+              Required to use the Qoder agent. Generate a token at{' '}
+              <a
+                href='https://app.qoder.com/settings/tokens'
+                target='_blank'
+                rel='noreferrer'
+                className='text-foreground/80 underline underline-offset-2 hover:text-foreground'
+              >
+                app.qoder.com/settings/tokens
+              </a>.
             </p>
           </div>
         </section>
@@ -455,4 +491,43 @@ function formatThreshold(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}K`
   return n.toLocaleString()
+}
+
+function ApiKeyField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (next: string) => void
+  placeholder?: string
+}) {
+  const [revealed, setRevealed] = useState(false)
+
+  return (
+    <div className='mt-3 flex gap-2'>
+      <div className='relative flex-1'>
+        <KeyRoundIcon className='pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-muted-foreground' strokeWidth={1.8} />
+        <input
+          type={revealed ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete='off'
+          spellCheck={false}
+          className='h-10 w-full rounded-md border border-border bg-card pl-9 pr-10 font-mono text-[12.5px] text-foreground outline-none focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
+        />
+        <button
+          type='button'
+          onClick={() => setRevealed((v) => !v)}
+          aria-label={revealed ? 'Hide key' : 'Show key'}
+          className='absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground'
+        >
+          {revealed
+            ? <EyeOffIcon className='size-[15px]' strokeWidth={1.8} />
+            : <EyeIcon className='size-[15px]' strokeWidth={1.8} />}
+        </button>
+      </div>
+    </div>
+  )
 }

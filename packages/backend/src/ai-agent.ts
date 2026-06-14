@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { createAiAgentService } from '@anubis/ai-agent'
+import { createAiAgentService, type AiAgentService } from '@anubis/ai-agent'
+import { getStack } from './services.js'
 
-const agentSchema = z.enum(['codex', 'claude', 'antigravity', 'gpt-web', 'qwen-web'])
+const agentSchema = z.enum(['codex', 'claude', 'antigravity', 'gpt-web', 'qwen-web', 'qoder'])
 const reasoningEffortSchema = z.enum(['minimal', 'low', 'medium', 'high'])
 const sandboxModeSchema = z.enum(['read-only', 'workspace-write', 'danger-full-access'])
 const approvalPolicySchema = z.enum(['untrusted', 'on-request', 'on-failure', 'never'])
@@ -29,18 +30,34 @@ const runAgentSchema = z.object({
   disallowedTools: z.array(z.string().min(1)).optional(),
 }).strict()
 
-const aiAgentService = createAiAgentService()
+// Lazily-initialised so the Qoder API key is picked up from config on first
+// use (or re-created after invalidation when the user saves a new key).
+let _aiAgentService: AiAgentService | null = null
+
+function getAiAgentService(): AiAgentService {
+  if (!_aiAgentService) {
+    const cfg = getStack().appConfig.get()
+    _aiAgentService = createAiAgentService({ qoderApiKey: cfg.qoderApiKey })
+  }
+  return _aiAgentService
+}
+
+/** Called by the config route whenever qoderApiKey changes. */
+export function invalidateAiAgentService(): void {
+  _aiAgentService = null
+}
 
 export const aiAgentRoutes = new Hono()
 
 aiAgentRoutes.get('/catalog', (c) => {
   return c.json({
     ok: true,
-    catalog: aiAgentService.catalog(),
+    catalog: getAiAgentService().catalog(),
   })
 })
 
 aiAgentRoutes.post('/run', async (c) => {
   const input = runAgentSchema.parse(await c.req.json())
-  return c.json(await aiAgentService.runAgent(input))
+  const cfg = getStack().appConfig.get()
+  return c.json(await getAiAgentService().runAgent({ ...input, qoderApiKey: cfg.qoderApiKey }))
 })

@@ -54,6 +54,7 @@ const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
   antigravity: 'the Antigravity CLI',
   'gpt-web': 'GPT Web',
   'qwen-web': 'Qwen Web',
+  qoder: 'Qoder',
 }
 
 function useProfiles() {
@@ -1189,7 +1190,9 @@ function Composer({
     availability && agent ? !availability[agent].available : false
   const installHint =
     agentUnavailable && agent
-      ? `\`${agent}\` not found on PATH. Install ${AGENT_INSTALL_LABEL[agent]} first.`
+      ? agent === 'qoder'
+        ? 'Add a Qoder API key in Settings to use Qoder.'
+        : `\`${agent}\` not found on PATH. Install ${AGENT_INSTALL_LABEL[agent]} first.`
       : null
 
   const hasContent = value.trim().length > 0 || quotes.length > 0 || attachedFiles.length > 0

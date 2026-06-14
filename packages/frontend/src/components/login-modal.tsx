@@ -33,6 +33,10 @@ const NOT_INSTALLED_COPY: Record<AgentKind, { title: string; body: string }> = {
     title: 'Qwen Web Runner',
     body: 'Configure the Qwen Web environment and make sure the crawler agent is running, then close and reopen this app.',
   },
+  qoder: {
+    title: 'Qoder API Key',
+    body: 'Add your Qoder Personal Access Token in Settings → AI Provider Keys, then retry.',
+  },
 }
 
 type Status =

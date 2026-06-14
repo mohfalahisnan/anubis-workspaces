@@ -10,7 +10,7 @@ const CreateBody = z.object({
   profileId: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
   workspacePath: z.string().min(1).optional(),
-  agent: z.enum(['claude', 'codex', 'antigravity', 'gpt-web', 'qwen-web']).optional(),
+  agent: z.enum(['claude', 'codex', 'antigravity', 'gpt-web', 'qwen-web', 'qoder']).optional(),
   override: z.record(z.string(), z.unknown()).optional(),
 }).strict()
 

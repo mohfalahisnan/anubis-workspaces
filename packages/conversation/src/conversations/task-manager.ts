@@ -26,6 +26,8 @@ export interface TurnInput {
   appendSystemPrompt?: string
   files?: string[]
   prevAgentSessionId?: string
+  /** Qoder personal access token from settings, forwarded to the qoder runner. */
+  qoderApiKey?: string
 }
 
 export interface TaskManagerOpts {
@@ -93,6 +95,7 @@ export class TaskManager {
         permissionMode: profile.permissionMode,
         allowedTools: profile.allowedTools,
         disallowedTools: profile.disallowedTools,
+        qoderApiKey: turn.qoderApiKey,
       })
       const task: AgentTask = {
         conversationId: conv.id,

@@ -117,6 +117,9 @@ profileRoutes.post('/:id/login/terminal', async (c) => {
   if (agent === 'qwen-web') {
     return c.json({ ok: false, error: 'Terminal login not supported for Qwen Web. Please log in via the browser.' }, 400)
   }
+  if (agent === 'qoder') {
+    return c.json({ ok: false, error: 'Terminal login not supported for Qoder. Add your Personal Access Token in Settings → AI Provider Keys.' }, 400)
+  }
   const availability = stack.aiAgent.catalog().agentAvailability[agent]
   if (!availability.available) {
     return c.json(

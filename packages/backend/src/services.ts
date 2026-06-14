@@ -30,6 +30,7 @@ export function getStack(): ConversationStack {
       userAutoInject: join(userSkillsRoot, 'auto-inject'),
       userOptIn: join(userSkillsRoot, 'opt-in'),
     },
+    backendUrl: () => process.env.ANUBIS_BACKEND_URL,
     cronActionRunner: (job, services) => runCronActionJob(job, services, dataDir),
     contextPacker: async (projectId, query, budget) => {
       const { contextPack } = await import('./knowledge-base.js')

@@ -10,7 +10,7 @@ export interface ApiHealthResponse {
   time: string
 }
 
-export type AgentKind = 'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web'
+export type AgentKind = 'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web' | 'qoder'
 export type ProfileSource = 'builtin' | 'user'
 export type ConversationStatus = 'pending' | 'running' | 'finished' | 'error'
 export type MessageRole = 'user' | 'assistant' | 'system'
@@ -422,6 +422,8 @@ export interface AppConfig {
   enableContextInjection?: boolean
   /** The agent profile ID to use for context building and prompt improvement. */
   contextInjectionProfileId?: string
+  /** Qoder personal access token stored in settings (preferred over QODER_PERSONAL_ACCESS_TOKEN env var). */
+  qoderApiKey?: string
 }
 
 /* ============================================================

@@ -46,3 +46,5 @@ bun.lock
 test/screenshots
 
 graphify-out
+# Qoder CLI generated repo-wiki/knowledge cache (runtime state)
+.qoder/

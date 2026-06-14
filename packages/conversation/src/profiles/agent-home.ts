@@ -58,7 +58,9 @@ export function envFor(
   homePath: string,
 ): Record<string, string> {
   if (agent === 'codex') return { CODEX_HOME: homePath }
-  if (agent === 'gpt-web' || agent === 'qwen-web') return {}
+  // gpt-web/qwen-web (browser) and qoder (in-process SDK, auth via a personal
+  // access token / qodercli session) have no isolated config dir to point at.
+  if (agent === 'gpt-web' || agent === 'qwen-web' || agent === 'qoder') return {}
   // The Antigravity CLI (`agy`) is built on the Gemini CLI and relocates its
   // home (config + per-project state under ~/.gemini) via GEMINI_DIR — verified
   // against the agy v1.0.5 binary. This isolates a profile's config/state, but
@@ -101,9 +103,17 @@ export function hasCredentials(
   // nothing on disk to detect, so we don't gate antigravity turns on a marker
   // file — auth is handled globally via `agy` login or an API key in the env.
   // Returning true here avoids falsely blocking every run with NoCredentials.
-  if (agent === 'antigravity' || agent === 'gpt-web' || agent === 'qwen-web') return true
+  // No per-profile on-disk credential marker: antigravity (OS keyring),
+  // gpt-web/qwen-web (browser session), qoder (personal access token / qodercli
+  // session). Auth for these is global, so don't gate turns on a home file.
+  if (agent === 'antigravity' || agent === 'gpt-web' || agent === 'qwen-web' || agent === 'qoder') return true
+  // Only file-login agents (claude, codex) gate on an on-disk credential marker.
+  // Any other future agent kind has no known marker file, so don't block it —
+  // and never pass `undefined` to join().
+  const file = CREDENTIAL_FILE[agent as 'claude' | 'codex'] as string | undefined
+  if (!file) return true
   const home = homePathFor(agentHomeRoot, profileId, agent)
-  return existsSync(join(home, CREDENTIAL_FILE[agent as 'claude' | 'codex']))
+  return existsSync(join(home, file))
 }
 
 export interface CopyHomeOpts {

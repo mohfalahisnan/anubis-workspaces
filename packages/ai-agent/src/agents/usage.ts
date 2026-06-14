@@ -104,6 +104,25 @@ function extractQwenWebUsage(raw: any): ExtractedUsage {
   }
 }
 
+function extractQoderUsage(raw: any): ExtractedUsage {
+  const u = raw?.usage ?? {}
+  const input = n(u.input_tokens ?? u.prompt_tokens ?? 0)
+  const cached = n(u.cache_read_input_tokens ?? 0)
+  const output = n(u.output_tokens ?? u.completion_tokens ?? 0)
+  const reasoning = n(u.reasoning_tokens ?? 0)
+  const total = n(u.total_tokens ?? input + output + reasoning)
+
+  return {
+    model: raw?.model,
+    inputTokens: input,
+    cachedInputTokens: cached,
+    outputTokens: output,
+    reasoningTokens: reasoning,
+    totalTokens: total,
+    raw: { usage: u },
+  }
+}
+
 export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
   switch (agent) {
     case 'codex':
@@ -116,5 +135,7 @@ export function extractUsage(agent: Agent, raw: unknown): ExtractedUsage {
       return extractGptWebUsage(raw)
     case 'qwen-web':
       return extractQwenWebUsage(raw)
+    case 'qoder':
+      return extractQoderUsage(raw)
   }
 }

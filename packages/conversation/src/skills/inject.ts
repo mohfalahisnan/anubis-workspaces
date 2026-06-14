@@ -26,14 +26,19 @@ export interface ProjectContext {
   id: string
   name: string
   workspacePath?: string
+  /** Live Anubis backend base URL, so the agent can call the HTTP API. */
+  backendUrl?: string
 }
 
 function buildProjectBlock(project: ProjectContext): string {
   const lines = [
-    '# currentProject',
+    '# anubisRuntime',
     `The active Anubis project is **${project.name}** (id: \`${project.id}\`).`,
-    'Use this project id when creating tasks, conversations, content items, or other project-scoped objects via the Anubis API — do not default to the \`default\` project.',
+    'Use this project id when creating tasks, conversations, content items, or other project-scoped objects via the Anubis API — do not substitute a different project.',
   ]
+  if (project.backendUrl) {
+    lines.push(`Anubis backend API base URL: \`${project.backendUrl}\` (local HTTP API; e.g. \`GET ${project.backendUrl}/health\`).`)
+  }
   if (project.workspacePath) {
     lines.push(`Workspace path: \`${project.workspacePath}\``)
   }

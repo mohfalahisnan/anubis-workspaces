@@ -84,7 +84,7 @@ function lookupAntigravity(): AgentAvailability {
   return { available: false, source: 'detected' }
 }
 
-export function detectAgents(): Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web', AgentAvailability> {
+export function detectAgents(opts?: { qoderApiKey?: string }): Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web' | 'qoder', AgentAvailability> {
   const claudeCmd = process.env.ANUBIS_CLAUDE_COMMAND
   const codexCmd = process.env.ANUBIS_CODEX_COMMAND
   const antigravityCmd = process.env.ANUBIS_ANTIGRAVITY_COMMAND
@@ -100,5 +100,22 @@ export function detectAgents(): Record<'claude' | 'codex' | 'antigravity' | 'gpt
       : lookupAntigravity(),
     'gpt-web': { available: true, source: 'detected' },
     'qwen-web': { available: true, source: 'detected' },
+    qoder: detectQoder(opts?.qoderApiKey),
   }
+}
+
+function detectQoder(qoderApiKey?: string): AgentAvailability {
+  // Prefer settings-stored key
+  if (qoderApiKey) {
+    return { available: true, source: 'detected' }
+  }
+  // Available if QODER_PERSONAL_ACCESS_TOKEN env var is set
+  if (process.env.QODER_PERSONAL_ACCESS_TOKEN) {
+    return { available: true, source: 'detected' }
+  }
+  // Or if qodercli binary is on PATH (has an active login session)
+  const cli = lookup('qodercli')
+  if (cli.available) return cli
+  // Fallback: also check 'qoder' binary name
+  return lookup('qoder')
 }

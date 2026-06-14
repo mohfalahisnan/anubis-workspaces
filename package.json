@@ -64,6 +64,7 @@
       "@types/react-dom": "^19.2.3"
     },
     "onlyBuiltDependencies": [
+      "@qoder-ai/qoder-agent-sdk",
       "better-sqlite3",
       "electron",
       "electron-winstaller",

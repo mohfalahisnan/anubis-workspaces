@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
+import { invalidateAiAgentService } from './ai-agent.js'
 
 /* -----------------------------------------------------------
    App config routes
@@ -46,6 +47,7 @@ const PatchBody = z.object({
   enableNotifications: z.boolean().optional(),
   enableContextInjection: z.boolean().optional(),
   contextInjectionProfileId: z.string().optional(),
+  qoderApiKey: z.string().optional(),
 }).strict()
 
 export const configRoutes = new Hono()
@@ -57,5 +59,6 @@ configRoutes.get('/', (c) => {
 configRoutes.patch('/', async (c) => {
   const body = PatchBody.parse(await c.req.json())
   const merged = getStack().appConfig.update(body)
+  if (body.qoderApiKey !== undefined) invalidateAiAgentService()
   return c.json({ ok: true, config: merged })
 })

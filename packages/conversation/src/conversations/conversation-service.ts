@@ -99,6 +99,8 @@ export interface ConversationServiceDeps {
   projects: ProjectsRepo
   appConfig: AppConfigService
   contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
+  /** Resolver for the live backend base URL, injected into agent system prompts. */
+  backendUrl?: () => string | undefined
   /**
    * Registry of per-profile agent homes (one isolated dir per profile+agent
    * under {ANUBIS_DATA_DIR}/agent-homes). Replaces the loose `agentHomeRoot`
@@ -333,10 +335,19 @@ The improved prompt should:
       .map(name => this.deps.skills.byName(name))
       .filter((s): s is NonNullable<typeof s> => Boolean(s))
 
+    // Always inject runtime context (project id + backend URL) so the agent can
+    // call the Anubis API against the right project. The block renders if there's
+    // a project to name or a backend URL to expose.
+    const backendUrl = this.deps.backendUrl?.()
+    const ctxProject = this.deps.projects.findById(cur.projectId ?? 'default')
     let projectCtx: ProjectContext | undefined
-    if (cur.projectId && cur.projectId !== 'default') {
-      const proj = this.deps.projects.findById(cur.projectId)
-      if (proj) projectCtx = { id: proj.id, name: proj.name, workspacePath: cur.workspacePath }
+    if (ctxProject || backendUrl) {
+      projectCtx = {
+        id: ctxProject?.id ?? cur.projectId ?? 'default',
+        name: ctxProject?.name ?? ctxProject?.id ?? cur.projectId ?? 'default',
+        workspacePath: cur.workspacePath,
+        backendUrl,
+      }
     }
     const profileInstructions = composeAppendSystemPrompt(resolved.appendSystemPrompt, skillDefs, projectCtx)
 
@@ -369,10 +380,11 @@ The improved prompt should:
     // For non-web agents without a profileId there is no filesystem-backed agent
     // home (writeProfileInstructions is skipped above), so the assembled context
     // — skills pointer and active project id — must travel inline as appendSystemPrompt.
-    // We also pass the system prompt inline for Codex and Antigravity profiles, as
-    // they do not auto-read instruction markdown files from their home directory.
+    // We also pass the system prompt inline for Codex, Antigravity, and Qoder
+    // profiles, as they do not auto-read instruction markdown files from a home
+    // directory (qoder is an in-process SDK with no CLAUDE_CONFIG_DIR home).
     const inlineSystemPrompt =
-      !isWebAgent && (!cur.profileId || cur.agent === 'codex' || cur.agent === 'antigravity')
+      !isWebAgent && (!cur.profileId || cur.agent === 'codex' || cur.agent === 'antigravity' || cur.agent === 'qoder')
         ? profileInstructions
         : undefined
 
@@ -388,6 +400,7 @@ The improved prompt should:
         prompt: finalPrompt,
         msgId,
         prevAgentSessionId: prevSession,
+        qoderApiKey: appConfig.qoderApiKey,
         ...(webSystemPrompt !== undefined
           ? { appendSystemPrompt: webSystemPrompt }
           : inlineSystemPrompt !== undefined

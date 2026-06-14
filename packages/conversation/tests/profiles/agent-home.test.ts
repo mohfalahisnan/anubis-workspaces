@@ -47,6 +47,12 @@ describe('hasCredentials', () => {
     // No file is planted and the home does not exist — agy auth is global.
     expect(hasCredentials('p1', 'antigravity', root)).toBe(true)
   })
+
+  it('reports qoder as authed (auth is a personal access token / qodercli session, not a home file)', () => {
+    // qoder has no entry in CREDENTIAL_FILE; hasCredentials must not pass
+    // `undefined` to join(), and must not gate on a per-profile home file.
+    expect(hasCredentials('p1', 'qoder', root)).toBe(true)
+  })
 })
 
 describe('envFor', () => {
@@ -54,6 +60,12 @@ describe('envFor', () => {
     expect(envFor('claude', '/home/p')).toEqual({ CLAUDE_CONFIG_DIR: '/home/p' })
     expect(envFor('codex', '/home/p')).toEqual({ CODEX_HOME: '/home/p' })
     expect(envFor('antigravity', '/home/p')).toEqual({ GEMINI_DIR: '/home/p' })
+  })
+
+  it('injects no config-dir env for SDK/browser agents (qoder, gpt-web, qwen-web)', () => {
+    expect(envFor('qoder', '/home/p')).toEqual({})
+    expect(envFor('gpt-web', '/home/p')).toEqual({})
+    expect(envFor('qwen-web', '/home/p')).toEqual({})
   })
 })
 

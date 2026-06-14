@@ -46,6 +46,8 @@ export interface CreateConversationServiceOpts {
   dataDir: string
   skillRoots: SkillRoots
   aiAgent?: AiAgentService
+  /** Resolver for the live backend base URL, injected into agent system prompts. */
+  backendUrl?: () => string | undefined
   idleMs?: number
   cronActionRunner?: (job: CronJob, stack: ConversationStack) => Promise<void>
   contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
@@ -179,6 +181,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     workspacesRoot,
     appConfig,
     contextPacker: opts.contextPacker,
+    backendUrl: opts.backendUrl,
   })
 
   cron.loadFromDb()

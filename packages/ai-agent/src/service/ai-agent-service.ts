@@ -10,6 +10,7 @@ import { ClaudeAgent } from '../agents/claude/runner.js'
 import { AntigravityAgent } from '../agents/antigravity/runner.js'
 import { GptWebAgent } from '../agents/gpt-web/runner.js'
 import { QwenWebAgent } from '../agents/qwen-web/runner.js'
+import { QoderAgent } from '../agents/qoder/runner.js'
 import type { AgentEventMap, AgentStream } from '../events/stream.js'
 import { detectAgents, type AgentAvailability } from './detect-agents.js'
 
@@ -19,6 +20,8 @@ export interface AiAgentServiceOptions {
   antigravityCommand?: string
   codexIdleMs?: number
   env?: NodeJS.ProcessEnv
+  /** Qoder personal access token from settings (takes precedence over env var). */
+  qoderApiKey?: string
 }
 
 export interface RunAgentInput {
@@ -40,6 +43,8 @@ export interface RunAgentInput {
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
   allowedTools?: string[]
   disallowedTools?: string[]
+  /** Qoder personal access token forwarded from settings. */
+  qoderApiKey?: string
 }
 
 export type AgentEvent =
@@ -67,15 +72,18 @@ export class AiAgentService {
   private antigravity: AntigravityAgent
   private gptWeb: GptWebAgent
   private qwenWeb: QwenWebAgent
-  private availability: Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web', AgentAvailability>
+  private qoder: QoderAgent
+  private availability: Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web' | 'qoder', AgentAvailability>
+  private qoderApiKey: string | undefined
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
+    this.qoderApiKey = opts.qoderApiKey
     // Detect first so we can use the resolved absolute path as a spawn fallback.
     // On Windows in particular, a bare `spawn('codex', …)` doesn't follow
     // PATHEXT, so npm-installed shims like `codex.cmd` fail with ENOENT even
     // though `where.exe codex` finds them.
-    this.availability = detectAgents()
+    this.availability = detectAgents({ qoderApiKey: opts.qoderApiKey })
     const codexCommand =
       opts.codexCommand
       ?? process.env.ANUBIS_CODEX_COMMAND
@@ -113,6 +121,7 @@ export class AiAgentService {
     })
     this.gptWeb = new GptWebAgent()
     this.qwenWeb = new QwenWebAgent()
+    this.qoder = new QoderAgent({ env })
   }
 
   catalog() {
@@ -240,6 +249,42 @@ export class AiAgentService {
         extraEnv: input.extraEnv,
         appendSystemPrompt: input.appendSystemPrompt,
         files: input.files,
+      })
+
+      return {
+        workspaceId,
+        sessionId,
+        stream: emitter,
+        cancel,
+      }
+    }
+
+    if (input.agent === 'qoder') {
+      let appendSystemPrompt = input.appendSystemPrompt
+      if (input.files?.length) {
+        const fileList = input.files.map(f => basename(f)).join(', ')
+        const filesNote = `The user has explicitly attached the following files to this turn: ${fileList}. You can read or edit them in the workspace.`
+        appendSystemPrompt = appendSystemPrompt
+          ? `${appendSystemPrompt}\n\n${filesNote}`
+          : filesNote
+      }
+      const permissionMode = input.yolo
+        ? 'bypassPermissions'
+        : input.permissionMode ?? 'default'
+      const { emitter, cancel } = await this.qoder.run({
+        workspaceId,
+        sessionId,
+        prevSessionId: input.prevAgentSessionId,
+        cwd: input.cwd,
+        prompt: input.prompt,
+        model: input.model,
+        permissionMode,
+        allowedTools: input.allowedTools,
+        disallowedTools: input.disallowedTools,
+        appendSystemPrompt,
+        files: input.files,
+        extraEnv: input.extraEnv,
+        apiKey: input.qoderApiKey ?? this.qoderApiKey,
       })
 
       return {

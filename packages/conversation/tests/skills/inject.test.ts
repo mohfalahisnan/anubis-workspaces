@@ -51,9 +51,15 @@ describe('composeAppendSystemPrompt', () => {
 
   it('injects project name and id when project is provided', () => {
     const out = composeAppendSystemPrompt(undefined, [], project())
-    expect(out).toContain('# currentProject')
+    expect(out).toContain('# anubisRuntime')
     expect(out).toContain('**My Project**')
     expect(out).toContain('`proj-123`')
+  })
+
+  it('injects the backend URL when provided', () => {
+    const out = composeAppendSystemPrompt(undefined, [], project({ backendUrl: 'http://127.0.0.1:4317' }))
+    expect(out).toContain('http://127.0.0.1:4317')
+    expect(out).toContain('API base URL')
   })
 
   it('includes workspace path when provided', () => {
@@ -69,7 +75,7 @@ describe('composeAppendSystemPrompt', () => {
   it('orders: profile prompt → project block → skills pointer', () => {
     const out = composeAppendSystemPrompt('be helpful', [skill('a', 'does A')], project())!
     const profileIdx = out.indexOf('be helpful')
-    const projectIdx = out.indexOf('# currentProject')
+    const projectIdx = out.indexOf('# anubisRuntime')
     const skillsIdx = out.indexOf('## Available Skills')
     expect(profileIdx).toBeLessThan(projectIdx)
     expect(projectIdx).toBeLessThan(skillsIdx)

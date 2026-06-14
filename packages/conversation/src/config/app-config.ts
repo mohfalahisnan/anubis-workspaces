@@ -50,6 +50,8 @@ export interface AppConfig {
   enableNotifications?: boolean
   enableContextInjection?: boolean
   contextInjectionProfileId?: string
+  /** Qoder personal access token stored in settings. */
+  qoderApiKey?: string
 }
 
 const CONFIG_FILE = 'config.json'
@@ -116,6 +118,9 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   if (contextInjectionProfileId) {
     out.contextInjectionProfileId = contextInjectionProfileId
   }
+
+  const qoderApiKey = typeof obj.qoderApiKey === 'string' ? obj.qoderApiKey.trim() : ''
+  if (qoderApiKey) out.qoderApiKey = qoderApiKey
 
   return out
 }

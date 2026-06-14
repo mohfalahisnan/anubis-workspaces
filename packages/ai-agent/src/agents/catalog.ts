@@ -1,6 +1,6 @@
-export type Agent = 'codex' | 'claude' | 'antigravity' | 'gpt-web' | 'qwen-web'
+export type Agent = 'codex' | 'claude' | 'antigravity' | 'gpt-web' | 'qwen-web' | 'qoder'
 
-export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity', 'gpt-web', 'qwen-web']
+export const AGENTS: readonly Agent[] = ['codex', 'claude', 'antigravity', 'gpt-web', 'qwen-web', 'qoder']
 
 export type ModelCategory =
   | 'recommended'
@@ -104,6 +104,33 @@ export const MODELS: Record<Agent, ModelInfo[]> = {
       description: 'Qwen (chat.qwen.ai) Web interface via crawler CDP automation.',
     },
   ],
+  qoder: [
+    {
+      id: 'auto',
+      category: 'recommended',
+      description: 'Automatic model selection — Qoder picks the best model for the task.',
+    },
+    {
+      id: 'ultimate',
+      category: 'recommended',
+      description: 'Highest-capability model for complex reasoning and large-scale refactoring.',
+    },
+    {
+      id: 'performance',
+      category: 'recommended',
+      description: 'Balanced model for professional coding with strong tool use.',
+    },
+    {
+      id: 'efficient',
+      category: 'alternative',
+      description: 'Cost-efficient model for routine coding tasks.',
+    },
+    {
+      id: 'lite',
+      category: 'alternative',
+      description: 'Lightweight model for fast iteration and simple edits.',
+    },
+  ],
 }
 
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const
@@ -115,6 +142,7 @@ export const DEFAULT_MODEL: Record<Agent, string> = {
   antigravity: 'gemini-3.1-pro',
   'gpt-web': 'chatgpt-web',
   'qwen-web': 'qwen-web',
+  qoder: 'auto',
 }
 
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium'

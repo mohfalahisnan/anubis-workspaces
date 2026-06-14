@@ -7,6 +7,7 @@ beforeEach(() => {
   delete process.env.ANUBIS_CLAUDE_COMMAND
   delete process.env.ANUBIS_CODEX_COMMAND
   delete process.env.ANUBIS_ANTIGRAVITY_COMMAND
+  delete process.env.QODER_PERSONAL_ACCESS_TOKEN
 })
 
 afterEach(() => {

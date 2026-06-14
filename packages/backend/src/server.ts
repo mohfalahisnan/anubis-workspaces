@@ -23,6 +23,11 @@ const server = serve(
     const url = `http://${hostname}:${info.port}`
     const readyMessage = { type: 'backend-ready', url, port: info.port }
 
+    // Expose the resolved URL process-wide so the conversation layer can inject
+    // it into agent system prompts (the port is dynamic in dev). Read lazily via
+    // a getter at send time, so ordering vs. stack construction doesn't matter.
+    process.env.ANUBIS_BACKEND_URL = url
+
     console.log(JSON.stringify(readyMessage))
 
     try {

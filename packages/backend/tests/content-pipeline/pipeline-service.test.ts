@@ -83,6 +83,13 @@ describe('ContentPipelineService.submitHumanReview', () => {
     expect(lessons[0]!.source).toBe('human_review')
     expect(deps.setStatus).toHaveBeenCalledWith('c1', 'brief')
   })
+
+  it('approve advances status to generating', async () => {
+    const { deps } = makeDeps()
+    const svc = new ContentPipelineService(deps as never)
+    await svc.submitHumanReview('c1', { decision: 'approved' })
+    expect(deps.setStatus).toHaveBeenCalledWith('c1', 'generating')
+  })
 })
 
 describe('ContentPipelineService.runAuto loop guard', () => {

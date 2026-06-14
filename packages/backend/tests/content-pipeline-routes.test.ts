@@ -101,10 +101,18 @@ describe('pipeline routes', () => {
     expect(res.status).toBe(400)
   })
 
-  it('POST /content-items/:id/human-review approves', async () => {
+  it('POST /content-items/:id/human-review approves and enqueues generation', async () => {
     const app = await loadApp()
     const { getStack } = await import('../src/services.js')
-    getStack().contentItems.create({ id: 'pc3', projectId: 'default', referenceUrl: 'https://x/p3', title: 'T', status: 'human_review', now: Date.now() })
+    const stack = getStack()
+    stack.contentItems.create({ id: 'pc3', projectId: 'default', referenceUrl: 'https://x/p3', title: 'T', status: 'human_review', now: Date.now() })
+    stack.contentPipeline.patch('pc3', {
+      refinedContent: {
+        caption: 'c', visualBrief: { concept: '', sceneDirection: '', subject: '', layout: '', mood: '', style: '', keyElements: [] },
+        copywriting: { hook: '', body: '', cta: '' }, hashtags: { primary: [], niche: [], brandSafe: [] },
+      },
+      rawIdea: { mediaKind: 'image', assetRefs: [] },
+    })
     const res = await app.request('/content-items/pc3/human-review', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ decision: 'approved' }),
@@ -112,6 +120,8 @@ describe('pipeline routes', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as { review: { decision: string } }
     expect(body.review.decision).toBe('approved')
+    expect(stack.contentItems.findById('pc3')?.status).toBe('generating')
+    expect(stack.contentGenerationTasks.listByContent('pc3').length).toBeGreaterThan(0)
   })
 
   it('rejects an invalid pipeline step', async () => {
@@ -141,5 +151,30 @@ describe('lessons + brand context', () => {
     expect(put.status).toBe(200)
     const get = await app.request('/brand-context?projectId=default').then((r) => r.json()) as { brandContext: { brandGuideline: string } }
     expect(get.brandContext.brandGuideline).toBe('BG')
+  })
+})
+
+describe('generation routes', () => {
+  it('GET /content-items/:id/generation returns tasks and draftOutput', async () => {
+    const app = await loadApp()
+    const { getStack } = await import('../src/services.js')
+    const stack = getStack()
+    stack.contentItems.create({ id: 'g1', projectId: 'default', referenceUrl: 'https://x/g1', title: 'T', status: 'generating', now: Date.now() })
+    stack.contentGenerationTasks.create({ contentId: 'g1', projectId: 'default', type: 'image', capability: 'image', inputPrompt: 'p', status: 'pending' })
+    const res = await app.request('/content-items/g1/generation')
+    expect(res.status).toBe(200)
+    const body = await res.json() as { tasks: unknown[]; draftOutput: unknown }
+    expect(body.tasks).toHaveLength(1)
+  })
+
+  it('cancels a generation task', async () => {
+    const app = await loadApp()
+    const { getStack } = await import('../src/services.js')
+    const stack = getStack()
+    stack.contentItems.create({ id: 'g2', projectId: 'default', referenceUrl: 'https://x/g2', title: 'T', status: 'generating', now: Date.now() })
+    const task = stack.contentGenerationTasks.create({ contentId: 'g2', projectId: 'default', type: 'image', capability: 'image', inputPrompt: 'p', status: 'pending' })
+    const res = await app.request(`/content-items/g2/generation/tasks/${task.id}/cancel`, { method: 'POST' })
+    expect(res.status).toBe(200)
+    expect(stack.contentGenerationTasks.get(task.id)?.status).toBe('cancelled')
   })
 })

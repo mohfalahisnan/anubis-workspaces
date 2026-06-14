@@ -8,10 +8,15 @@ import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 import { jobManager } from './jobs.js'
 import { buildRawIdea, getPipelineService, getTranscriber } from './content-pipeline/index.js'
+import { getGenerationService } from './content-generation/index.js'
 
 let pipelineProvider = getPipelineService
 /** Test seam: override the pipeline service provider with a fake. */
 export function __setPipelineProviderForTests(fn: typeof getPipelineService): void { pipelineProvider = fn }
+
+let generationProvider = getGenerationService
+/** Test seam: override the generation service provider with a fake. */
+export function __setGenerationProviderForTests(fn: typeof getGenerationService): void { generationProvider = fn }
 
 const StatusSchema = z.enum(['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected'])
 
@@ -258,10 +263,44 @@ contentItemRoutes.post('/:id/human-review', async (c) => {
       reason: body.reason,
       type: body.type as never,
     })
+    if (review.decision === 'approved') {
+      generationProvider().enqueue(c.req.param('id'))
+    }
     return c.json({ ok: true, review })
   } catch (err) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: err instanceof Error ? err.message : 'failed' } }, 400)
   }
+})
+
+contentItemRoutes.post('/:id/generation/start', (c) => {
+  const stack = getStack()
+  const id = c.req.param('id')
+  if (!stack.contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
+  const svc = generationProvider()
+  if (stack.contentGenerationTasks.listByContent(id).length === 0) svc.enqueue(id)
+  const job = jobManager.runJob({ kind: 'content-generation', label: `Generate · ${id}` }, async () => svc.runAll(id))
+  return c.json({ ok: true, jobId: job.id })
+})
+
+contentItemRoutes.get('/:id/generation', (c) => {
+  const stack = getStack()
+  const id = c.req.param('id')
+  if (!stack.contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({
+    ok: true,
+    tasks: stack.contentGenerationTasks.listByContent(id),
+    draftOutput: stack.contentPipeline.get(id).draftOutput ?? null,
+  })
+})
+
+contentItemRoutes.post('/:id/generation/tasks/:taskId/retry', async (c) => {
+  const result = await generationProvider().retryTask(c.req.param('id'), c.req.param('taskId'))
+  return c.json({ ok: true, result })
+})
+
+contentItemRoutes.post('/:id/generation/tasks/:taskId/cancel', (c) => {
+  const result = generationProvider().cancelTask(c.req.param('id'), c.req.param('taskId'))
+  return c.json({ ok: true, result })
 })
 
 function toSummary(item: ContentItem): ContentItemSummary {

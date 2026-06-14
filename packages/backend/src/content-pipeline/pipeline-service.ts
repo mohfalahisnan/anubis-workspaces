@@ -125,8 +125,8 @@ export class ContentPipelineService {
       this.deps.setStatus(id, 'brief')
     } else {
       this.deps.pipeline.patch(id, { humanReview: review })
-      // Phase 2 will set 'generating'. Phase 1 leaves status at human_review (approved/ready).
-      this.deps.setStatus(id, 'human_review')
+      // Phase 2: approval advances into generation. The route enqueues tasks.
+      this.deps.setStatus(id, 'generating')
     }
     return review
   }

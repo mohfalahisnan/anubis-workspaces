@@ -6,6 +6,12 @@ import type { CapturedPost, ContentItem, UpdateContentItemPatch } from '@anubis/
 import type { CapturedPostSummary, ContentItemSummary } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
+import { jobManager } from './jobs.js'
+import { buildRawIdea, getPipelineService, getTranscriber } from './content-pipeline/index.js'
+
+let pipelineProvider = getPipelineService
+/** Test seam: override the pipeline service provider with a fake. */
+export function __setPipelineProviderForTests(fn: typeof getPipelineService): void { pipelineProvider = fn }
 
 const StatusSchema = z.enum(['idea', 'brief', 'draft', 'review', 'scheduled', 'published', 'rejected'])
 
@@ -48,6 +54,44 @@ const UpdateBody = z.object({
 }).strict()
 
 export const contentItemRoutes = new Hono()
+
+const FromCandidateBody = z.object({
+  candidateId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+}).strict()
+
+const HumanReviewBody = z.object({
+  decision: z.enum(['approved', 'rejected']),
+  reason: z.string().optional(),
+  type: z.string().optional(),
+}).strict()
+
+const StepParam = z.enum(['breakdown', 'refine', 'ai-review'])
+
+// Static path — must be registered before the `/:id` routes below.
+contentItemRoutes.post('/from-candidate', async (c) => {
+  const stack = getStack()
+  const body = FromCandidateBody.parse(await c.req.json())
+  const candidate = stack.research.getCandidate(body.candidateId)
+  if (!candidate) return c.json({ ok: false, error: 'candidate_not_found' }, 404)
+
+  const post = stack.capturedPosts.findById(candidate.postId)
+  const projectId = body.projectId ?? candidate.projectId ?? 'default'
+  const title = (candidate.caption?.trim() || `Idea from ${candidate.competitorId}`).slice(0, 80)
+
+  const item = stack.contentItems.create({
+    id: randomUUID(),
+    projectId,
+    referencePostId: post ? candidate.postId : undefined,
+    referenceUrl: post ? undefined : candidate.postUrl,
+    title,
+    status: 'idea',
+    sourceCandidateId: candidate.id,
+    rawBrief: candidate.caption ? `Reference: ${candidate.caption}` : undefined,
+    now: Date.now(),
+  })
+  return c.json({ ok: true, item: toSummary(item) }, 201)
+})
 
 contentItemRoutes.get('/', (c) => {
   const parsed = ListQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams))
@@ -165,6 +209,61 @@ contentItemRoutes.post('/:id/sync-metrics', async (c) => {
   return c.json({ ok: true, item: toSummary(next) })
 })
 
+contentItemRoutes.post('/:id/extract', async (c) => {
+  const stack = getStack()
+  const item = stack.contentItems.findById(c.req.param('id'))
+  if (!item) return c.json({ ok: false, error: 'not_found' }, 404)
+  const post = item.referencePostId ? stack.capturedPosts.findById(item.referencePostId) ?? undefined : undefined
+  const raw = await buildRawIdea({ post, referenceUrl: item.referenceUrl, transcribeMedia: getTranscriber() })
+  stack.contentPipeline.patch(item.id, {
+    rawIdea: raw,
+    transcript: raw.transcript,
+    transcriptSource: raw.transcript ? 'extractor' : undefined,
+  })
+  stack.contentItems.update(item.id, { status: 'raw_extracted' })
+  return c.json({ ok: true, pipeline: stack.contentPipeline.get(item.id) })
+})
+
+contentItemRoutes.get('/:id/pipeline', (c) => {
+  const stack = getStack()
+  const id = c.req.param('id')
+  if (!stack.contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
+  return c.json({ ok: true, pipeline: stack.contentPipeline.get(id), lessons: stack.contentLessons.listByContent(id) })
+})
+
+contentItemRoutes.post('/:id/pipeline/run', (c) => {
+  const id = c.req.param('id')
+  if (!getStack().contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
+  const job = jobManager.runJob({ kind: 'content-pipeline', label: `Pipeline · ${id}` }, async () => {
+    return pipelineProvider().runAuto(id)
+  })
+  return c.json({ ok: true, jobId: job.id })
+})
+
+contentItemRoutes.post('/:id/pipeline/step/:step', async (c) => {
+  const id = c.req.param('id')
+  const parsed = StepParam.safeParse(c.req.param('step'))
+  if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', issues: parsed.error.issues } }, 400)
+  const svc = pipelineProvider()
+  if (parsed.data === 'breakdown') return c.json({ ok: true, brief: await svc.runBreakdown(id) })
+  if (parsed.data === 'refine') return c.json({ ok: true, refined: await svc.runRefine(id) })
+  return c.json({ ok: true, review: await svc.runAiReview(id) })
+})
+
+contentItemRoutes.post('/:id/human-review', async (c) => {
+  const body = HumanReviewBody.parse(await c.req.json())
+  try {
+    const review = await pipelineProvider().submitHumanReview(c.req.param('id'), {
+      decision: body.decision,
+      reason: body.reason,
+      type: body.type as never,
+    })
+    return c.json({ ok: true, review })
+  } catch (err) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: err instanceof Error ? err.message : 'failed' } }, 400)
+  }
+})
+
 function toSummary(item: ContentItem): ContentItemSummary {
   const referencePost = item.referencePostId ? getStack().capturedPosts.findById(item.referencePostId) : null
   return {
@@ -187,6 +286,7 @@ function toSummary(item: ContentItem): ContentItemSummary {
     },
     sourceWorkflowRunId: item.sourceWorkflowRunId,
     sourceConversationId: item.sourceConversationId,
+    sourceCandidateId: item.sourceCandidateId,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     referencePost: referencePost ? capturedPostSummary(referencePost) : undefined,

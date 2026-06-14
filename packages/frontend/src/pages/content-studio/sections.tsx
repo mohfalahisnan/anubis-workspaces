@@ -8,9 +8,9 @@ const cardHead = 'border-b border-border px-3 py-2 text-[12px] font-semibold upp
 const cardBody = 'p-3 text-[13px] leading-relaxed text-foreground'
 const fieldLabel = 'text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 
-export function Section({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+export function Section({ title, children, right, id }: { title: string; children: React.ReactNode; right?: React.ReactNode; id?: string }) {
   return (
-    <section className={card}>
+    <section id={id} className={`${card} scroll-mt-20`}>
       <div className='flex items-center justify-between'>
         <div className={cardHead}>{title}</div>
         {right ? <div className='px-3'>{right}</div> : null}
@@ -44,9 +44,9 @@ function Chips({ label, items }: { label: string; items?: string[] }) {
   )
 }
 
-export function RawIdeaSection({ raw }: { raw: RawIdea }) {
+export function RawIdeaSection({ raw, id = 'section-raw' }: { raw: RawIdea; id?: string }) {
   return (
-    <Section title='Raw Idea'>
+    <Section title='Raw Idea' id={id}>
       <Field label='Caption' value={raw.caption} />
       <Field label='Transcript' value={raw.transcript} />
       <Field label='Source URL' value={raw.sourceUrl} />
@@ -57,9 +57,9 @@ export function RawIdeaSection({ raw }: { raw: RawIdea }) {
   )
 }
 
-export function BriefSection({ brief, lessonsUsed }: { brief: ImprovedBrief; lessonsUsed: string[] }) {
+export function BriefSection({ brief, lessonsUsed, id = 'section-brief' }: { brief: ImprovedBrief; lessonsUsed: string[]; id?: string }) {
   return (
-    <Section title='Improved Brief'>
+    <Section title='Improved Brief' id={id}>
       <Field label='Core idea' value={brief.coreIdea} />
       <Field label='Target audience' value={brief.targetAudience} />
       <Field label='Market fit' value={brief.marketFit} />
@@ -76,11 +76,11 @@ export function BriefSection({ brief, lessonsUsed }: { brief: ImprovedBrief; les
   )
 }
 
-export function RefinedSection({ refined }: { refined: RefinedContent }) {
+export function RefinedSection({ refined, id = 'section-refined' }: { refined: RefinedContent; id?: string }) {
   const v = refined.visualBrief
   const c = refined.copywriting
   return (
-    <Section title='Refined Content'>
+    <Section title='Refined Content' id={id}>
       <Field label='Caption' value={refined.caption} />
       <div className='mt-2 rounded border border-border bg-background p-2'>
         <p className={fieldLabel}>Visual brief</p>
@@ -113,13 +113,14 @@ export function RefinedSection({ refined }: { refined: RefinedContent }) {
   )
 }
 
-export function AiReviewSection({ review }: { review: AiReview }) {
+export function AiReviewSection({ review, id = 'section-ai-review' }: { review: AiReview; id?: string }) {
   const tone = review.decision === 'approved'
     ? 'border-[var(--anubis-success)]/45 bg-[var(--anubis-success)]/12 text-[var(--anubis-success)]'
     : 'border-destructive/45 bg-destructive/10 text-destructive'
   return (
     <Section
       title='AI Review'
+      id={id}
       right={<span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${tone}`}>{review.decision}{review.score != null ? ` · ${review.score}` : ''}</span>}
     >
       <Field label='Rejection reason' value={review.rejectionReason} />
@@ -155,7 +156,7 @@ export function HumanReviewSection({
   const [reason, setReason] = useState('')
   const [type, setType] = useState<string>('content_quality')
   return (
-    <Section title='Human Review'>
+    <Section title='Human Review' id='section-human-review'>
       <div className='flex flex-wrap items-center gap-2'>
         <button type='button' disabled={busy} onClick={onApprove} className={approveBtn}>Approve</button>
       </div>
@@ -185,9 +186,9 @@ export function HumanReviewSection({
 }
 
 export function LessonHistorySection({ lessons }: { lessons: ContentLesson[] }) {
-  if (!lessons.length) return <Section title='Lesson History'><p className='text-muted-foreground'>No lessons yet.</p></Section>
+  if (!lessons.length) return <Section title='Lesson History' id='section-lessons'><p className='text-muted-foreground'>No lessons yet.</p></Section>
   return (
-    <Section title='Lesson History'>
+    <Section title='Lesson History' id='section-lessons'>
       <ul className='space-y-2'>
         {lessons.map((l) => (
           <li key={l.id} className='rounded border border-border bg-background p-2'>

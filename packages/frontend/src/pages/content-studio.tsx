@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
-import { PlayIcon, RefreshCwIcon, ScanTextIcon, SparklesIcon, WandSparklesIcon } from 'lucide-react'
-import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline, DraftOutput, GenerationTask } from '@anubis/shared'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { RefreshCwIcon, SparklesIcon, ZapIcon } from 'lucide-react'
+import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline, DraftOutput, GenerationTask, PipelineHistoryEntry, PipelineStepProfileConfig, ProfileSummary } from '@anubis/shared'
 import {
-  cancelGenerationTask, extractRawIdea, getContentPipeline, getGeneration, getJob, listContentItems,
-  retryGenerationTask, runPipeline, runPipelineStep, startGeneration, submitHumanReview,
+  cancelGenerationTask, getAppConfig, getContentPipeline, getGeneration, getJob, listContentItems, listProfiles,
+  retryGenerationTask, runFullAuto, runPipelineStep, startGeneration, submitHumanReview, updateAppConfig,
 } from '@/api'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
-import {
-  AiReviewSection, BriefSection, HumanReviewSection, LessonHistorySection,
-  RawIdeaSection, RefinedSection,
-} from './content-studio/sections'
-import { DraftOutputSection, GenerationQueueSection } from './content-studio/generation-sections'
+import { LessonHistorySection } from './content-studio/sections'
 import { BrandContextDialog } from './content-studio/brand-context-dialog'
+import { PipelineTimeline } from './content-studio/pipeline-timeline'
+import { StepProfilePicker } from './content-studio/step-profile-picker'
 
 const IN_PROGRESS: ContentItemStatus[] = ['raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review', 'generating', 'draft']
 
@@ -26,11 +24,26 @@ export function ContentStudioPage() {
   const projectId = activeProject?.id || 'default'
   const [items, setItems] = useState<ContentItemSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [data, setData] = useState<{ pipeline: ContentPipeline; lessons: ContentLesson[] } | null>(null)
+  const [data, setData] = useState<{ pipeline: ContentPipeline; lessons: ContentLesson[]; history: PipelineHistoryEntry[] } | null>(null)
   const [gen, setGen] = useState<{ tasks: GenerationTask[]; draftOutput: DraftOutput | null }>({ tasks: [], draftOutput: null })
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
   const [brandOpen, setBrandOpen] = useState(false)
+  const [profiles, setProfiles] = useState<ProfileSummary[]>([])
+  const [pageStepProfiles, setPageStepProfiles] = useState<PipelineStepProfileConfig>({})
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [autoRunning, setAutoRunning] = useState(false)
+
+  // Poll for updates while any pipeline step (manual or auto-run) is active
+  useEffect(() => {
+    if ((!autoRunning && !busy) || !selectedId) return
+    const interval = setInterval(() => {
+      void loadPipeline(selectedId)
+      void refreshItems()
+    }, 2000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRunning, busy, selectedId])
 
   async function refreshItems() {
     const next = await listContentItems({ projectId, limit: 200 })
@@ -49,6 +62,10 @@ export function ContentStudioPage() {
     void loadPipeline(selectedId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
+  useEffect(() => { void listProfiles().then(setProfiles) }, [])
+  useEffect(() => {
+    void getAppConfig().then((cfg) => setPageStepProfiles(cfg.pipelineStepProfiles ?? {}))
+  }, [])
 
   const { ideas, inProgress } = useMemo(() => {
     return {
@@ -57,17 +74,25 @@ export function ContentStudioPage() {
     }
   }, [items])
 
-  async function withBusy(label: string, fn: () => Promise<void>) {
+  async function withBusy(action: string, fn: () => Promise<void>) {
     setBusy(true)
     setBanner(null)
     try {
       await fn()
     } catch (err) {
-      setBanner(err instanceof Error ? err.message : `Failed: ${label}`)
+      setBanner(err instanceof Error ? err.message : `Failed: ${action}`)
     } finally {
       setBusy(false)
     }
   }
+
+  const onPageStepProfilesChange = useCallback((next: PipelineStepProfileConfig) => {
+    setPageStepProfiles(next)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      void updateAppConfig({ pipelineStepProfiles: next })
+    }, 500)
+  }, [])
 
   async function pollJob(jobId: string) {
     for (;;) {
@@ -109,14 +134,21 @@ export function ContentStudioPage() {
 
       {/* Main */}
       <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-        <div className='flex items-center justify-between border-b border-border px-6 py-4'>
-          <div>
-            <h1 className='text-[22px] font-semibold tracking-[-0.02em]'>Content Studio</h1>
-            <p className='mt-0.5 text-[12.5px] text-muted-foreground'>Idea → raw → brief → refined → AI review → human review.</p>
+        <div className='flex flex-col gap-3 border-b border-border px-6 py-4'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <h1 className='text-[22px] font-semibold tracking-[-0.02em]'>Content Studio</h1>
+              <p className='mt-0.5 text-[12.5px] text-muted-foreground'>Idea → raw → brief → refined → AI review → human review.</p>
+            </div>
+            <button type='button' onClick={() => setBrandOpen(true)} className={secondaryButton}>
+              <SparklesIcon className='size-4' /> Brand Context
+            </button>
           </div>
-          <button type='button' onClick={() => setBrandOpen(true)} className={secondaryButton}>
-            <SparklesIcon className='size-4' /> Brand Context
-          </button>
+          <StepProfilePicker
+            profiles={profiles}
+            stepProfiles={pageStepProfiles}
+            onChange={onPageStepProfilesChange}
+          />
         </div>
 
         {!selected ? (
@@ -129,76 +161,79 @@ export function ContentStudioPage() {
               <div className='mb-4 rounded-md border border-destructive/35 bg-destructive/10 px-3 py-2 text-[13px] text-destructive'>{banner}</div>
             ) : null}
 
-            {/* Controls */}
-            <div className='mb-5 flex flex-wrap items-center gap-2'>
-              <span className='mr-1 text-[13px] font-medium'>{selected.title}</span>
+            {/* Header: title + status */}
+            <div className='mb-4 flex items-center gap-2'>
+              <span className='text-[15px] font-semibold'>{selected.title}</span>
               <span className='rounded-md border border-border bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground'>{STATUS_LABEL[selected.status] ?? selected.status}</span>
-              <div className='flex-1' />
-              <button type='button' disabled={busy} onClick={() => void withBusy('extract', async () => {
-                await extractRawIdea(selected.id); await reselectAfter(selected.id)
-              })} className={secondaryButton}>
-                <ScanTextIcon className='size-4' /> Extract raw idea
-              </button>
-              <button type='button' disabled={busy} onClick={() => void withBusy('run', async () => {
-                const jobId = await runPipeline(selected.id)
-                await pollJob(jobId)
-                await reselectAfter(selected.id)
-                setBanner('Pipeline finished. Review the result below.')
-              })} className={primaryButton}>
-                <PlayIcon className='size-4' /> Run to human review
-              </button>
             </div>
 
-            <div className='mb-5 flex flex-wrap gap-2'>
-              <StepButton label='Re-run breakdown' disabled={busy} onClick={() => void withBusy('breakdown', async () => {
-                await runPipelineStep(selected.id, 'breakdown'); await reselectAfter(selected.id)
-              })} />
-              <StepButton label='Re-run refine' disabled={busy} onClick={() => void withBusy('refine', async () => {
-                await runPipelineStep(selected.id, 'refine'); await reselectAfter(selected.id)
-              })} />
-              <StepButton label='Re-run AI review' disabled={busy} onClick={() => void withBusy('ai-review', async () => {
-                await runPipelineStep(selected.id, 'ai-review'); await reselectAfter(selected.id)
-              })} />
+            {/* Action buttons */}
+            <div className='mb-5 flex flex-wrap items-center gap-2'>
+              <button type='button' disabled={busy || autoRunning} onClick={() => {
+                setAutoRunning(true)
+                setBusy(true)
+                setBanner(null)
+                void (async () => {
+                  try {
+                    const jobId = await runFullAuto(selected.id)
+                    await pollJob(jobId)
+                    await reselectAfter(selected.id)
+                    setBanner('Auto-run complete. Review the result below.')
+                  } catch (err) {
+                    setBanner(err instanceof Error ? err.message : 'Auto-run failed.')
+                  } finally {
+                    setAutoRunning(false)
+                    setBusy(false)
+                  }
+                })()
+              }} className={primaryButton}>
+                <ZapIcon className='size-4' /> Auto-run
+              </button>
+              {autoRunning ? (
+                <span className='text-[12px] text-[var(--anubis-gold)]'>
+                  Auto-run: {STATUS_LABEL[selected.status] ?? selected.status}…
+                </span>
+              ) : null}
             </div>
 
-            {/* Sections */}
-            <div className='space-y-4'>
-              {data?.pipeline.rawIdea ? <RawIdeaSection raw={data.pipeline.rawIdea} /> : null}
-              {data?.pipeline.improvedBrief ? (
-                <BriefSection brief={data.pipeline.improvedBrief} lessonsUsed={(data.lessons ?? []).map((l) => l.howToImprove)} />
-              ) : null}
-              {data?.pipeline.refinedContent ? <RefinedSection refined={data.pipeline.refinedContent} /> : null}
-              {data?.pipeline.aiReview ? <AiReviewSection review={data.pipeline.aiReview} /> : null}
-              {selected.status === 'human_review' || data?.pipeline.aiReview?.decision === 'approved' ? (
-                <HumanReviewSection
-                  busy={busy}
-                  onApprove={() => void withBusy('approve', async () => {
-                    await submitHumanReview(selected.id, { decision: 'approved' }); await reselectAfter(selected.id)
-                    setBanner('Approved — ready for generation (Phase 2).')
-                  })}
-                  onReject={(reason, type) => void withBusy('reject', async () => {
-                    await submitHumanReview(selected.id, { decision: 'rejected', reason, type }); await reselectAfter(selected.id)
-                    setBanner('Rejected — lesson saved, sent back to brief.')
-                  })}
-                />
-              ) : null}
-              <GenerationQueueSection
-                tasks={gen.tasks}
-                busy={busy}
-                onStart={() => void withBusy('generate', async () => {
+            {/* Vertical pipeline timeline */}
+            {data ? (
+              <PipelineTimeline
+                status={selected.status}
+                pipeline={data.pipeline}
+                history={data.history}
+                lessons={data.lessons ?? []}
+                gen={gen}
+                busy={busy || autoRunning}
+                onRerunStep={(step) => void withBusy(step, async () => {
+                  const profileKey = step === 'ai-review' ? 'ai_review' : step === 'breakdown' ? 'brief' : 'refine'
+                  await runPipelineStep(selected.id, step, pageStepProfiles[profileKey])
+                  await reselectAfter(selected.id)
+                })}
+                onApprove={() => void withBusy('approve', async () => {
+                  await submitHumanReview(selected.id, { decision: 'approved' }); await reselectAfter(selected.id)
+                  setBanner('Approved — generation enqueued.')
+                })}
+                onReject={(reason, type) => void withBusy('reject', async () => {
+                  await submitHumanReview(selected.id, { decision: 'rejected', reason, type }); await reselectAfter(selected.id)
+                  setBanner('Rejected — lesson saved, sent back to brief.')
+                })}
+                onStartGeneration={() => void withBusy('generate', async () => {
                   const jobId = await startGeneration(selected.id)
                   await pollJob(jobId)
                   await reselectAfter(selected.id)
                   setBanner('Generation finished.')
                 })}
-                onRetry={(taskId) => void withBusy('retry', async () => {
+                onRetryTask={(taskId) => void withBusy('retry', async () => {
                   await retryGenerationTask(selected.id, taskId); await reselectAfter(selected.id)
                 })}
-                onCancel={(taskId) => void withBusy('cancel', async () => {
+                onCancelTask={(taskId) => void withBusy('cancel', async () => {
                   await cancelGenerationTask(selected.id, taskId); await reselectAfter(selected.id)
                 })}
               />
-              <DraftOutputSection draft={gen.draftOutput} />
+            ) : null}
+
+            <div className='mt-5'>
               <LessonHistorySection lessons={data?.lessons ?? []} />
             </div>
           </div>
@@ -242,14 +277,6 @@ function RailGroup({
         ))}
       </div>
     </div>
-  )
-}
-
-function StepButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
-  return (
-    <button type='button' disabled={disabled} onClick={onClick} className={cn(secondaryButton, 'text-[12px]')}>
-      <WandSparklesIcon className='size-3.5' /> {label}
-    </button>
   )
 }
 

@@ -11,11 +11,13 @@ interface Row {
   draft_output: string | null
   transcript: string | null
   transcript_source: string | null
+  step_profiles: string | null
+  agent_progress: string | null
   auto_iteration_count: number
   updated_at: number
 }
 
-type JsonFields = Pick<ContentPipeline, 'rawIdea' | 'improvedBrief' | 'refinedContent' | 'aiReview' | 'humanReview' | 'draftOutput'>
+type JsonFields = Pick<ContentPipeline, 'rawIdea' | 'improvedBrief' | 'refinedContent' | 'aiReview' | 'humanReview' | 'draftOutput' | 'stepProfiles' | 'agentProgress'>
 type ScalarFields = Pick<ContentPipeline, 'transcript' | 'transcriptSource'>
 export type PipelinePatch = Partial<JsonFields & ScalarFields>
 
@@ -35,6 +37,8 @@ function toPipeline(row: Row): ContentPipeline {
     draftOutput: parse(row.draft_output),
     transcript: row.transcript ?? undefined,
     transcriptSource: row.transcript_source ?? undefined,
+    stepProfiles: parse(row.step_profiles),
+    agentProgress: parse(row.agent_progress),
     autoIterationCount: row.auto_iteration_count,
     updatedAt: row.updated_at,
   }
@@ -49,6 +53,8 @@ const COLUMN_MAP: Record<keyof PipelinePatch, string> = {
   draftOutput: 'draft_output',
   transcript: 'transcript',
   transcriptSource: 'transcript_source',
+  stepProfiles: 'step_profiles',
+  agentProgress: 'agent_progress',
 }
 
 const SCALAR_KEYS = new Set<keyof PipelinePatch>(['transcript', 'transcriptSource'])

@@ -1,3 +1,4 @@
+import type { PipelineStepProfileConfig } from '@anubis/shared'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -52,6 +53,8 @@ export interface AppConfig {
   contextInjectionProfileId?: string
   /** Qoder personal access token stored in settings. */
   qoderApiKey?: string
+  /** Project-level AI profile assignments for Content Studio pipeline steps. */
+  pipelineStepProfiles?: PipelineStepProfileConfig
 }
 
 const CONFIG_FILE = 'config.json'
@@ -122,7 +125,20 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   const qoderApiKey = typeof obj.qoderApiKey === 'string' ? obj.qoderApiKey.trim() : ''
   if (qoderApiKey) out.qoderApiKey = qoderApiKey
 
+  const pipelineStepProfiles = sanitizeStepProfiles(obj.pipelineStepProfiles)
+  if (pipelineStepProfiles) out.pipelineStepProfiles = pipelineStepProfiles
+
   return out
+}
+
+function sanitizeStepProfiles(raw: unknown): PipelineStepProfileConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const out: PipelineStepProfileConfig = {}
+  if (typeof r.brief === 'string' && r.brief) out.brief = r.brief
+  if (typeof r.refine === 'string' && r.refine) out.refine = r.refine
+  if (typeof r.ai_review === 'string' && r.ai_review) out.ai_review = r.ai_review
+  return Object.keys(out).length ? out : undefined
 }
 
 function sanitizeLevels(raw: unknown): CompetitorLevelsConfig | undefined {

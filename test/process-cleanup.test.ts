@@ -47,6 +47,24 @@ describe('selectAppProcesses', () => {
       .toEqual([])
   })
 
+  it('does NOT select the current app process tree (own GPU / network-service / renderer helpers)', () => {
+    // Electron runs its GPU, utility (network service) and renderer children
+    // from the SAME Anubis.exe under the install dir. They are descendants of
+    // the main process and Electron tears them down on quit — the sweep must
+    // not force-kill them, or every quit logs "GPU process exited" / "Network
+    // service crashed". Escaped/orphaned same-exe binaries (no ancestry to
+    // self) are still fair game.
+    const procs = [
+      proc({ pid: 100, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe' }), // main (self)
+      proc({ pid: 110, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe', parentPid: 100 }), // gpu
+      proc({ pid: 111, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe', parentPid: 100 }), // network service
+      proc({ pid: 112, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe', parentPid: 110 }), // grandchild
+      proc({ pid: 999, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe', parentPid: 1 }), // orphan from a prior run
+    ]
+    expect(selectAppProcesses(procs, { installDir: INSTALL, selfPid: 100, platform: 'win32' }))
+      .toEqual([999])
+  })
+
   it('matches case-insensitively on win32 and handles trailing slash on install dir', () => {
     const p = proc({ pid: 500, name: 'anubis.exe', exePath: 'c:\\users\\user\\appdata\\local\\programs\\anubis\\Anubis.exe' })
     expect(selectAppProcesses([p], { installDir: INSTALL + '\\', selfPid: 1, platform: 'win32' }))

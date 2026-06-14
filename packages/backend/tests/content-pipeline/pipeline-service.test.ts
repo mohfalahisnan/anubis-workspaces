@@ -24,6 +24,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
         incrementIteration: vi.fn(() => (pipeline.autoIterationCount = (pipeline.autoIterationCount as number) + 1)),
         resetIteration: vi.fn(() => { pipeline.autoIterationCount = 0 }),
       },
+      history: { append: vi.fn() },
       lessons: {
         create: vi.fn((l: Record<string, unknown>) => { const x = { id: 'L', createdAt: 1, ...l }; lessons.push(x); return x }),
         listForInjection: vi.fn(() => []),
@@ -31,6 +32,8 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       brand: { get: vi.fn(() => undefined) },
       kbSearch: vi.fn(async () => []),
       runAgent: vi.fn(),
+      extract: vi.fn(async () => ({ caption: 'cap', assetRefs: [] })),
+      appConfig: { get: vi.fn(() => ({})) },
       maxAutoIterations: 3,
       ...overrides,
     },
@@ -45,6 +48,16 @@ describe('ContentPipelineService.runBreakdown', () => {
     await svc.runBreakdown('c1')
     expect(deps.pipeline.patch).toHaveBeenCalledWith('c1', expect.objectContaining({ improvedBrief: expect.any(Object) }))
     expect(deps.setStatus).toHaveBeenCalledWith('c1', 'brief')
+  })
+
+  it('records a history snapshot for the produced brief', async () => {
+    const { deps } = makeDeps()
+    deps.runAgent.mockResolvedValue(JSON.stringify(briefFixture()))
+    const svc = new ContentPipelineService(deps as never)
+    await svc.runBreakdown('c1')
+    expect(deps.history.append).toHaveBeenCalledWith(
+      expect.objectContaining({ contentId: 'c1', step: 'breakdown', iteration: 0, data: expect.any(Object) }),
+    )
   })
 })
 

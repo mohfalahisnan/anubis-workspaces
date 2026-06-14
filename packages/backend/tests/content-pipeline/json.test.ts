@@ -33,9 +33,15 @@ describe('runStructured', () => {
     expect(runner).toHaveBeenCalledTimes(2)
   })
   it('throws after the retry also fails, surfacing the agent output', async () => {
-    const runner = vi.fn().mockResolvedValue('Failed to authenticate. API Error: 401')
+    const runner = vi.fn().mockResolvedValue('I am prose, not JSON')
     await expect(runStructured(runner, { prompt: 'p', schema: Schema }))
-      .rejects.toThrow(/AI step did not return valid JSON.*Failed to authenticate/s)
+      .rejects.toThrow(/AI step did not return valid JSON.*I am prose/s)
     expect(runner).toHaveBeenCalledTimes(2)
+  })
+  it('detects authentication errors and throws a clear message without retrying JSON parsing', async () => {
+    const runner = vi.fn().mockResolvedValue('Failed to authenticate. API Error: 401 Invalid authentication credentials')
+    await expect(runStructured(runner, { prompt: 'p', schema: Schema }))
+      .rejects.toThrow(/Claude authentication failed/)
+    expect(runner).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,7 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, screen, shell, Notification } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import os from 'node:os'
 import { startBackend } from './backend'
 import { update } from './update'
 import { sweepAppProcesses } from './process-cleanup'
@@ -19,7 +18,14 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(APP_ROOT, 'packages/frontend/public')
   : RENDERER_DIST
 
-if (process.platform === 'win32' && os.release().startsWith('6.1')) app.disableHardwareAcceleration()
+// Disable hardware acceleration on Windows. The GPU child process frequently
+// fails to initialise against the Windows GPU sandbox/driver, exiting with
+// exit_code=1 and dragging the network service down with it ("GPU process
+// exited unexpectedly" / "Network service crashed"). Anubis renders a plain
+// React UI with no GPU-heavy compositing, so software rendering costs nothing
+// visible and removes the crashing GPU process entirely. (Was scoped to
+// Windows 7 only by the electron-vite-react template.)
+if (process.platform === 'win32') app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {

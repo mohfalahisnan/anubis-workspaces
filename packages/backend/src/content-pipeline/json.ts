@@ -42,6 +42,10 @@ export interface RunStructuredOpts<T> {
   retryHint?: string
 }
 
+function looksLikeAuthError(text: string): boolean {
+  return /401|invalid authentication credentials|failed to authenticate|authentication failed/i.test(text)
+}
+
 export async function runStructured<T>(
   runner: StructuredRunner,
   opts: RunStructuredOpts<T>,
@@ -52,6 +56,12 @@ export async function runStructured<T>(
   for (let attempt = 0; attempt < 2; attempt++) {
     const prompt = attempt === 0 ? opts.prompt : `${opts.prompt}\n\n${hint}`
     lastText = await runner(prompt)
+    if (looksLikeAuthError(lastText)) {
+      throw new Error(
+        'Claude authentication failed (401). The selected profile is not signed in or its credentials are invalid. '
+        + 'Open Profiles, sign in to the profile, then retry.',
+      )
+    }
     try {
       return extractJson(lastText, opts.schema)
     } catch {

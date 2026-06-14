@@ -37,6 +37,12 @@ const LevelMultipliersSchema = z.object({
   red: MultiplierBandSchema,
 }).strict()
 
+const StepProfilesSchema = z.object({
+  brief: z.string().optional(),
+  refine: z.string().optional(),
+  ai_review: z.string().optional(),
+}).strict()
+
 const PatchBody = z.object({
   chromePath: z.string().optional(),
   crawlerProfileRoot: z.string().optional(),
@@ -48,6 +54,7 @@ const PatchBody = z.object({
   enableContextInjection: z.boolean().optional(),
   contextInjectionProfileId: z.string().optional(),
   qoderApiKey: z.string().optional(),
+  pipelineStepProfiles: StepProfilesSchema.optional(),
 }).strict()
 
 export const configRoutes = new Hono()

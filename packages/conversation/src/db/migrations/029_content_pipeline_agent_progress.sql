@@ -1,0 +1,1 @@
+ALTER TABLE content_pipeline ADD COLUMN agent_progress TEXT;

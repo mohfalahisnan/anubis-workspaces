@@ -21,6 +21,7 @@ import { ResearchService } from './research/research-service.js'
 import { ResearchDocumentsRepo } from './research/research-documents-repo.js'
 import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 import { ContentPipelineRepo } from './db/repositories/content-pipeline-repo.js'
+import { ContentPipelineHistoryRepo } from './db/repositories/content-pipeline-history-repo.js'
 import { ContentLessonsRepo } from './db/repositories/content-lessons-repo.js'
 import { BrandContextRepo } from './db/repositories/brand-context-repo.js'
 import { ContentGenerationTasksRepo } from './db/repositories/content-generation-tasks-repo.js'
@@ -62,6 +63,7 @@ export interface ConversationStack {
   researchDocuments: ResearchDocumentsRepo
   contentItems: ContentItemsRepo
   contentPipeline: ContentPipelineRepo
+  contentPipelineHistory: ContentPipelineHistoryRepo
   contentLessons: ContentLessonsRepo
   brandContext: BrandContextRepo
   contentGenerationTasks: ContentGenerationTasksRepo
@@ -133,6 +135,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const researchDocuments = new ResearchDocumentsRepo(documents)
   const contentItems = new ContentItemsRepo(db, documents)
   const contentPipeline = new ContentPipelineRepo(db)
+  const contentPipelineHistory = new ContentPipelineHistoryRepo(db)
   const contentLessons = new ContentLessonsRepo(db)
   const brandContext = new BrandContextRepo(documents)
   const contentGenerationTasks = new ContentGenerationTasksRepo(db)
@@ -188,7 +191,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   const stack: ConversationStack = {
     conversation, profiles, competitors, capturedPosts, research, researchDocuments, contentItems,
-    contentPipeline, contentLessons, brandContext, contentGenerationTasks, tasks,
+    contentPipeline, contentPipelineHistory, contentLessons, brandContext, contentGenerationTasks, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,

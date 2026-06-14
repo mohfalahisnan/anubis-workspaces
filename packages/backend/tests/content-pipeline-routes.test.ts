@@ -84,10 +84,12 @@ describe('pipeline routes', () => {
     const stack = getStack()
     stack.contentItems.create({ id: 'pc1', projectId: 'default', referenceUrl: 'https://x/p', title: 'T', status: 'raw_extracted', now: Date.now() })
     stack.contentPipeline.patch('pc1', { rawIdea: { caption: 'cap', assetRefs: [] } })
+    stack.contentPipelineHistory.append({ contentId: 'pc1', iteration: 0, step: 'breakdown', data: { coreIdea: 'k' }, agent: 'claude' })
     const res = await app.request('/content-items/pc1/pipeline')
     expect(res.status).toBe(200)
-    const body = await res.json() as { pipeline: { rawIdea?: { caption?: string } } }
+    const body = await res.json() as { pipeline: { rawIdea?: { caption?: string } }; history: Array<{ step: string }> }
     expect(body.pipeline.rawIdea?.caption).toBe('cap')
+    expect(body.history.map((h) => h.step)).toContain('breakdown')
   })
 
   it('POST /content-items/:id/human-review rejects without a reason', async () => {

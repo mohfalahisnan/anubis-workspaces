@@ -5,6 +5,8 @@ export interface ProcInfo {
   name: string
   exePath: string
   commandLine: string
+  /** Parent PID, used to spare the current app's own child tree. 0/undefined = unknown. */
+  parentPid?: number
 }
 
 export interface SelectOptions {
@@ -29,17 +31,49 @@ function isUnder(childPath: string, parentDir: string, platform: NodeJS.Platform
 }
 
 /**
+ * Collect the current process and all its (transitive) descendants from a
+ * snapshot, via parentPid links. These are this app's own live helpers — the
+ * Electron GPU / network-service / renderer children all run the install-dir
+ * binary, so without this they'd match signature (a) and get force-killed on
+ * quit, logging "GPU process exited" / "Network service crashed". Escaped or
+ * reparented processes (and orphans from a prior run) lose this ancestry, so
+ * they're still caught.
+ */
+function selfTree(procs: ProcInfo[], selfPid: number): Set<number> {
+  const childrenByParent = new Map<number, number[]>()
+  for (const p of procs) {
+    if (!p.parentPid) continue
+    const siblings = childrenByParent.get(p.parentPid) ?? []
+    siblings.push(p.pid)
+    childrenByParent.set(p.parentPid, siblings)
+  }
+  const tree = new Set<number>([selfPid])
+  const queue = [selfPid]
+  while (queue.length) {
+    const parent = queue.shift() as number
+    for (const child of childrenByParent.get(parent) ?? []) {
+      if (!tree.has(child)) {
+        tree.add(child)
+        queue.push(child)
+      }
+    }
+  }
+  return tree
+}
+
+/**
  * Pure selector: given a process snapshot, return the PIDs that belong to this
  * app and should be terminated. Matches two signatures and never the current
- * process:
+ * process tree (self + live descendants):
  *   (a) executable path under the install dir (the app binaries), and
  *   (b) Chrome whose --user-data-dir is one of the crawler profile dirs.
  */
 export function selectAppProcesses(procs: ProcInfo[], opts: SelectOptions): number[] {
   const platform = opts.platform ?? process.platform
+  const spare = selfTree(procs, opts.selfPid)
   const targets: number[] = []
   for (const p of procs) {
-    if (p.pid <= 0 || p.pid === opts.selfPid) continue
+    if (p.pid <= 0 || spare.has(p.pid)) continue
     if (p.exePath && isUnder(p.exePath, opts.installDir, platform)) {
       targets.push(p.pid)
       continue
@@ -56,7 +90,7 @@ export function enumerateProcesses(platform: NodeJS.Platform = process.platform)
   if (platform !== 'win32') return []
   try {
     const raw = execSync(
-      'powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Select-Object ProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress"',
+      'powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress"',
       { timeout: 5000, maxBuffer: 64 * 1024 * 1024, windowsHide: true },
     ).toString()
     const parsed = JSON.parse(raw) as unknown
@@ -65,6 +99,7 @@ export function enumerateProcesses(platform: NodeJS.Platform = process.platform)
       const r = row as Record<string, unknown>
       return {
         pid: typeof r.ProcessId === 'number' ? r.ProcessId : Number(r.ProcessId) || 0,
+        parentPid: typeof r.ParentProcessId === 'number' ? r.ParentProcessId : Number(r.ParentProcessId) || 0,
         name: typeof r.Name === 'string' ? r.Name : '',
         exePath: typeof r.ExecutablePath === 'string' ? r.ExecutablePath : '',
         commandLine: typeof r.CommandLine === 'string' ? r.CommandLine : '',

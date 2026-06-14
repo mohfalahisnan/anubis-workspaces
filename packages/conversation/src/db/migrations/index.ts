@@ -102,4 +102,7 @@ export const MIGRATIONS: Migration[] = [
   load(25, '025_markdown_canonical.sql'),
   load(26, '026_content_pipeline.sql'),
   load(27, '027_content_generation.sql'),
+  load(28, '028_content_pipeline_step_profiles.sql'),
+  load(29, '029_content_pipeline_agent_progress.sql'),
+  load(30, '030_content_pipeline_history.sql'),
 ]

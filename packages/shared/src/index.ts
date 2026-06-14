@@ -424,6 +424,8 @@ export interface AppConfig {
   contextInjectionProfileId?: string
   /** Qoder personal access token stored in settings (preferred over QODER_PERSONAL_ACCESS_TOKEN env var). */
   qoderApiKey?: string
+  /** Project-level AI profile assignments for Content Studio pipeline steps. */
+  pipelineStepProfiles?: PipelineStepProfileConfig
 }
 
 /* ============================================================
@@ -1057,6 +1059,27 @@ export interface HumanReview {
   reviewedAt: number
 }
 
+export type PipelineAiStep = 'brief' | 'refine' | 'ai_review'
+
+export interface PipelineStepProfileConfig {
+  brief?: string
+  refine?: string
+  ai_review?: string
+}
+
+export interface PipelineAgentProgress {
+  /** Pipeline step this progress update belongs to (extract, breakdown, refine, ai_review, etc.). */
+  step: string
+  /** Overall state of the step's agent run. */
+  status: 'running' | 'done' | 'error'
+  /** Human-readable description of what the agent is doing right now. */
+  message: string
+  /** ISO timestamp when the step started. */
+  startedAt: string
+  /** ISO timestamp of the most recent progress update. */
+  updatedAt: string
+}
+
 export interface ContentPipeline {
   contentId: string
   rawIdea?: RawIdea
@@ -1069,6 +1092,34 @@ export interface ContentPipeline {
   transcriptSource?: string
   autoIterationCount: number
   updatedAt: number
+  stepProfiles?: PipelineStepProfileConfig
+  /** Live progress of the currently-running AI agent step. */
+  agentProgress?: PipelineAgentProgress
+}
+
+/** Pipeline steps that produce a persisted output snapshot. */
+export type PipelineStep = 'extract' | 'breakdown' | 'refine' | 'ai_review' | 'human_review'
+
+/**
+ * An append-only snapshot of a single step's output for one iteration.
+ *
+ * The {@link ContentPipeline} row keeps only the latest value per step; this
+ * preserves every prior attempt (e.g. a brief that was later rejected and
+ * regenerated) so the full creation history stays accessible at runtime.
+ */
+export interface PipelineHistoryEntry {
+  id: string
+  contentId: string
+  /** 0-based auto-loop iteration this snapshot belongs to. */
+  iteration: number
+  step: PipelineStep
+  /** The step's output (RawIdea, ImprovedBrief, RefinedContent, AiReview, HumanReview). */
+  data: unknown
+  /** Profile id whose agent produced this output (absent for deterministic/human steps). */
+  profileId?: string
+  /** Agent kind that produced this output (absent for deterministic/human steps). */
+  agent?: AgentKind
+  createdAt: number
 }
 
 export interface BrandContext {

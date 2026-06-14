@@ -21,6 +21,7 @@ export function GenerationQueueSection({
 }) {
   return (
     <Section
+      id='section-generation'
       title='Generation Queue'
       right={<button type='button' disabled={busy} onClick={onStart} className='inline-flex h-8 items-center rounded-md bg-[var(--anubis-gold)] px-3 text-[12px] font-semibold text-[#0B0C0F] hover:bg-[var(--anubis-gold-deep)] disabled:opacity-50'>Start generation</button>}
     >

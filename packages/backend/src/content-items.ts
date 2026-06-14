@@ -72,6 +72,14 @@ const HumanReviewBody = z.object({
 }).strict()
 
 const StepParam = z.enum(['breakdown', 'refine', 'ai-review'])
+const StepBody = z.object({ profileId: z.string().optional() }).optional()
+const StepProfilesBody = z.object({
+  stepProfiles: z.object({
+    brief: z.string().optional(),
+    refine: z.string().optional(),
+    ai_review: z.string().optional(),
+  }),
+})
 
 // Static path — must be registered before the `/:id` routes below.
 contentItemRoutes.post('/from-candidate', async (c) => {
@@ -225,6 +233,12 @@ contentItemRoutes.post('/:id/extract', async (c) => {
     transcript: raw.transcript,
     transcriptSource: raw.transcript ? 'extractor' : undefined,
   })
+  stack.contentPipelineHistory.append({
+    contentId: item.id,
+    iteration: stack.contentPipeline.get(item.id).autoIterationCount,
+    step: 'extract',
+    data: raw,
+  })
   stack.contentItems.update(item.id, { status: 'raw_extracted' })
   return c.json({ ok: true, pipeline: stack.contentPipeline.get(item.id) })
 })
@@ -233,7 +247,12 @@ contentItemRoutes.get('/:id/pipeline', (c) => {
   const stack = getStack()
   const id = c.req.param('id')
   if (!stack.contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
-  return c.json({ ok: true, pipeline: stack.contentPipeline.get(id), lessons: stack.contentLessons.listByContent(id) })
+  return c.json({
+    ok: true,
+    pipeline: stack.contentPipeline.get(id),
+    lessons: stack.contentLessons.listByContent(id),
+    history: stack.contentPipelineHistory.listByContent(id),
+  })
 })
 
 contentItemRoutes.post('/:id/pipeline/run', (c) => {
@@ -245,18 +264,38 @@ contentItemRoutes.post('/:id/pipeline/run', (c) => {
   return c.json({ ok: true, jobId: job.id })
 })
 
+contentItemRoutes.post('/:id/pipeline/full-auto', (c) => {
+  const id = c.req.param('id')
+  if (!getStack().contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
+  const job = jobManager.runJob({ kind: 'content-pipeline', label: `Full auto · ${id}` }, async () => {
+    return pipelineProvider().runFullAuto(id)
+  })
+  return c.json({ ok: true, jobId: job.id })
+})
+
 contentItemRoutes.post('/:id/pipeline/step/:step', async (c) => {
   const id = c.req.param('id')
   const parsed = StepParam.safeParse(c.req.param('step'))
   if (!parsed.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', issues: parsed.error.issues } }, 400)
+  const bodyResult = StepBody.safeParse(await c.req.json().catch(() => undefined))
+  const profileId = bodyResult.success ? bodyResult.data?.profileId : undefined
   const svc = pipelineProvider()
   try {
-    if (parsed.data === 'breakdown') return c.json({ ok: true, brief: await svc.runBreakdown(id) })
-    if (parsed.data === 'refine') return c.json({ ok: true, refined: await svc.runRefine(id) })
-    return c.json({ ok: true, review: await svc.runAiReview(id) })
+    if (parsed.data === 'breakdown') return c.json({ ok: true, brief: await svc.runBreakdown(id, profileId) })
+    if (parsed.data === 'refine') return c.json({ ok: true, refined: await svc.runRefine(id, profileId) })
+    return c.json({ ok: true, review: await svc.runAiReview(id, profileId) })
   } catch (err) {
     return c.json({ ok: false, error: { code: 'AI_STEP_FAILED', message: err instanceof Error ? err.message : 'AI step failed' } }, 502)
   }
+})
+
+contentItemRoutes.patch('/:id/pipeline/step-profiles', async (c) => {
+  const id = c.req.param('id')
+  const stack = getStack()
+  if (!stack.contentItems.findById(id)) return c.json({ ok: false, error: 'not_found' }, 404)
+  const body = StepProfilesBody.parse(await c.req.json())
+  stack.contentPipeline.patch(id, { stepProfiles: body.stepProfiles })
+  return c.json({ ok: true, stepProfiles: body.stepProfiles })
 })
 
 contentItemRoutes.post('/:id/human-review', async (c) => {

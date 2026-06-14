@@ -1,23 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PlayIcon, RefreshCwIcon, ScanTextIcon, SparklesIcon, WandSparklesIcon } from 'lucide-react'
-import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline } from '@anubis/shared'
+import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline, DraftOutput, GenerationTask } from '@anubis/shared'
 import {
-  extractRawIdea, getContentPipeline, getJob, listContentItems,
-  runPipeline, runPipelineStep, submitHumanReview,
+  cancelGenerationTask, extractRawIdea, getContentPipeline, getGeneration, getJob, listContentItems,
+  retryGenerationTask, runPipeline, runPipelineStep, startGeneration, submitHumanReview,
 } from '@/api'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
 import {
   AiReviewSection, BriefSection, HumanReviewSection, LessonHistorySection,
-  PhaseTwoPlaceholder, RawIdeaSection, RefinedSection,
+  RawIdeaSection, RefinedSection,
 } from './content-studio/sections'
+import { DraftOutputSection, GenerationQueueSection } from './content-studio/generation-sections'
 import { BrandContextDialog } from './content-studio/brand-context-dialog'
 
-const IN_PROGRESS: ContentItemStatus[] = ['raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review']
+const IN_PROGRESS: ContentItemStatus[] = ['raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review', 'generating', 'draft']
 
 const STATUS_LABEL: Partial<Record<ContentItemStatus, string>> = {
   idea: 'Idea', raw_extracted: 'Raw', brief: 'Brief', content_refined: 'Refined',
-  ai_review: 'AI Review', human_review: 'Human Review',
+  ai_review: 'AI Review', human_review: 'Human Review', generating: 'Generating', draft: 'Draft',
 }
 
 export function ContentStudioPage() {
@@ -26,6 +27,7 @@ export function ContentStudioPage() {
   const [items, setItems] = useState<ContentItemSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [data, setData] = useState<{ pipeline: ContentPipeline; lessons: ContentLesson[] } | null>(null)
+  const [gen, setGen] = useState<{ tasks: GenerationTask[]; draftOutput: DraftOutput | null }>({ tasks: [], draftOutput: null })
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
   const [brandOpen, setBrandOpen] = useState(false)
@@ -36,7 +38,9 @@ export function ContentStudioPage() {
   }
 
   async function loadPipeline(id: string) {
-    setData(await getContentPipeline(id))
+    const [p, g] = await Promise.all([getContentPipeline(id), getGeneration(id)])
+    setData(p)
+    setGen(g)
   }
 
   useEffect(() => { void refreshItems() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projectId])
@@ -178,8 +182,23 @@ export function ContentStudioPage() {
                   })}
                 />
               ) : null}
-              <PhaseTwoPlaceholder title='Generation Queue' note='Asset generation is built in Phase 2.' />
-              <PhaseTwoPlaceholder title='Draft Output' note='The stitched draft package lands here in Phase 2.' />
+              <GenerationQueueSection
+                tasks={gen.tasks}
+                busy={busy}
+                onStart={() => void withBusy('generate', async () => {
+                  const jobId = await startGeneration(selected.id)
+                  await pollJob(jobId)
+                  await reselectAfter(selected.id)
+                  setBanner('Generation finished.')
+                })}
+                onRetry={(taskId) => void withBusy('retry', async () => {
+                  await retryGenerationTask(selected.id, taskId); await reselectAfter(selected.id)
+                })}
+                onCancel={(taskId) => void withBusy('cancel', async () => {
+                  await cancelGenerationTask(selected.id, taskId); await reselectAfter(selected.id)
+                })}
+              />
+              <DraftOutputSection draft={gen.draftOutput} />
               <LessonHistorySection lessons={data?.lessons ?? []} />
             </div>
           </div>

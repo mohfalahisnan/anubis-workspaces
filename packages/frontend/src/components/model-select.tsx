@@ -46,7 +46,7 @@ export function ModelSelect({
       >
         {models.map((m) => (
           <option key={m.id} value={m.id}>
-            {m.id} — {m.description}
+            {(m.displayName ?? m.id)}{m.description ? ` — ${m.description}` : ''}
           </option>
         ))}
         <option value={CUSTOM}>Custom model id…</option>

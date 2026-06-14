@@ -17,6 +17,7 @@ import {
   type ContentPipeline,
   type HumanReview,
   type ImprovedBrief,
+  type PipelineHistoryEntry,
   type RefinedContent,
   type DraftOutput,
   type GenerationTask,
@@ -273,6 +274,8 @@ export interface ModelInfo {
   id: string
   category: 'recommended' | 'recommended_research_preview' | 'alternative'
   description: string
+  /** Human-readable label; falls back to `id` when absent (e.g. Qoder slugs). */
+  displayName?: string
 }
 
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
@@ -1546,11 +1549,11 @@ export async function extractRawIdea(id: string): Promise<ContentPipeline> {
   return r.pipeline
 }
 
-export async function getContentPipeline(id: string): Promise<{ pipeline: ContentPipeline; lessons: ContentLesson[] }> {
-  const r = await api<{ ok: true; pipeline: ContentPipeline; lessons: ContentLesson[] }>(
+export async function getContentPipeline(id: string): Promise<{ pipeline: ContentPipeline; lessons: ContentLesson[]; history: PipelineHistoryEntry[] }> {
+  const r = await api<{ ok: true; pipeline: ContentPipeline; lessons: ContentLesson[]; history?: PipelineHistoryEntry[] }>(
     `/content-items/${encodeURIComponent(id)}/pipeline`,
   )
-  return { pipeline: r.pipeline, lessons: r.lessons }
+  return { pipeline: r.pipeline, lessons: r.lessons, history: r.history ?? [] }
 }
 
 export async function runPipeline(id: string): Promise<string> {
@@ -1561,13 +1564,32 @@ export async function runPipeline(id: string): Promise<string> {
   return r.jobId
 }
 
+export async function runFullAuto(id: string): Promise<string> {
+  const r = await api<{ ok: true; jobId: string }>(
+    `/content-items/${encodeURIComponent(id)}/pipeline/full-auto`,
+    { method: 'POST' },
+  )
+  return r.jobId
+}
+
 export async function runPipelineStep(
   id: string,
   step: 'breakdown' | 'refine' | 'ai-review',
+  profileId?: string,
 ): Promise<{ brief?: ImprovedBrief; refined?: RefinedContent; review?: AiReview }> {
   return api<{ ok: true; brief?: ImprovedBrief; refined?: RefinedContent; review?: AiReview }>(
     `/content-items/${encodeURIComponent(id)}/pipeline/step/${step}`,
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify({ profileId }) },
+  )
+}
+
+export async function savePipelineStepProfiles(
+  id: string,
+  stepProfiles: { brief?: string; refine?: string; ai_review?: string },
+): Promise<void> {
+  await api<{ ok: true }>(
+    `/content-items/${encodeURIComponent(id)}/pipeline/step-profiles`,
+    { method: 'PATCH', body: JSON.stringify({ stepProfiles }) },
   )
 }
 

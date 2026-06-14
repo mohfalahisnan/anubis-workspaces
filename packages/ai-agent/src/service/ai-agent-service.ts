@@ -11,6 +11,8 @@ import { AntigravityAgent } from '../agents/antigravity/runner.js'
 import { GptWebAgent } from '../agents/gpt-web/runner.js'
 import { QwenWebAgent } from '../agents/qwen-web/runner.js'
 import { QoderAgent } from '../agents/qoder/runner.js'
+import { mapQoderModels } from '../agents/qoder/models.js'
+import type { ModelInfo } from '../agents/catalog.js'
 import type { AgentEventMap, AgentStream } from '../events/stream.js'
 import { detectAgents, type AgentAvailability } from './detect-agents.js'
 
@@ -75,6 +77,9 @@ export class AiAgentService {
   private qoder: QoderAgent
   private availability: Record<'claude' | 'codex' | 'antigravity' | 'gpt-web' | 'qwen-web' | 'qoder', AgentAvailability>
   private qoderApiKey: string | undefined
+  /** TTL cache for the live Qoder model catalog (see {@link qoderModels}). */
+  private qoderModelsCache: { models: ModelInfo[]; at: number } | null = null
+  private qoderModelsInflight: Promise<ModelInfo[] | null> | null = null
 
   constructor(private opts: AiAgentServiceOptions = {}) {
     const env = opts.env ?? process.env
@@ -136,6 +141,41 @@ export class AiAgentService {
       defaultReasoningEffort: DEFAULT_REASONING_EFFORT,
       agentAvailability: this.availability,
     }
+  }
+
+  /**
+   * Live Qoder model catalog, mapped into our {@link ModelInfo} shape.
+   *
+   * Qoder's list is server-driven and the ids are opaque slugs, so the
+   * shipped static catalog only carries the stable tiers. This fetches the
+   * full real-time list (named models, credit factors, "New" flags) via the
+   * SDK, cached for `ttlMs` to avoid spawning a subprocess on every catalog
+   * refresh. Returns `null` when Qoder is unavailable/unauthed/offline so the
+   * caller keeps the static fallback.
+   */
+  async qoderModels(ttlMs = 5 * 60_000): Promise<ModelInfo[] | null> {
+    if (!this.availability.qoder.available) return null
+    const now = Date.now()
+    if (this.qoderModelsCache && now - this.qoderModelsCache.at < ttlMs) {
+      return this.qoderModelsCache.models
+    }
+    if (this.qoderModelsInflight) return this.qoderModelsInflight
+
+    this.qoderModelsInflight = (async () => {
+      try {
+        const raw = await this.qoder.listModels({ apiKey: this.qoderApiKey })
+        if (!raw || raw.length === 0) return null
+        const mapped = mapQoderModels(raw)
+        if (mapped.length === 0) return null
+        this.qoderModelsCache = { models: mapped, at: Date.now() }
+        return mapped
+      } catch {
+        return null
+      } finally {
+        this.qoderModelsInflight = null
+      }
+    })()
+    return this.qoderModelsInflight
   }
 
   async streamAgent(input: RunAgentInput): Promise<{

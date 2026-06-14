@@ -49,11 +49,15 @@ export function invalidateAiAgentService(): void {
 
 export const aiAgentRoutes = new Hono()
 
-aiAgentRoutes.get('/catalog', (c) => {
-  return c.json({
-    ok: true,
-    catalog: getAiAgentService().catalog(),
-  })
+aiAgentRoutes.get('/catalog', async (c) => {
+  const service = getAiAgentService()
+  const catalog = service.catalog()
+  // Qoder's model list is server-driven (opaque slugs, credit factors, "New"
+  // flags) and can't be hardcoded — fetch it live and overlay it on the
+  // static fallback. Returns null when Qoder is unavailable/offline.
+  const qoderModels = await service.qoderModels()
+  if (qoderModels) catalog.models = { ...catalog.models, qoder: qoderModels }
+  return c.json({ ok: true, catalog })
 })
 
 aiAgentRoutes.post('/run', async (c) => {

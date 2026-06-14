@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { TypedEmitter, type AgentEventMap } from '../../events/stream.js'
 import type { QoderContentBlock, QoderMessage } from './types.js'
+import type { QoderSdkModel } from './models.js'
 
 export interface QoderRunOpts {
   workspaceId: string
@@ -24,8 +25,68 @@ export interface QoderAgentOpts {
   env?: NodeJS.ProcessEnv
 }
 
+export interface QoderListModelsOpts {
+  /** Qoder personal access token. Falls back to PAT env var → qodercli session. */
+  apiKey?: string
+  extraEnv?: Record<string, string>
+  /** Abort the live fetch after this many ms (default 15s). */
+  timeoutMs?: number
+}
+
 export class QoderAgent {
   constructor(private opts: QoderAgentOpts = {}) {}
+
+  /**
+   * Fetch the live Qoder model catalog via the SDK's `getAvailableModels()`.
+   *
+   * Qoder's model list is server-driven (filtered by scene) and the ids are
+   * opaque slugs, so it cannot be hardcoded — this is the only reliable
+   * source. Spawns a short-lived qodercli subprocess, asks for the catalog,
+   * then aborts. Returns `null` (never throws) when the SDK is missing, auth
+   * is unavailable, or the request times out, so callers can fall back to the
+   * shipped static catalog.
+   */
+  async listModels(opts: QoderListModelsOpts = {}): Promise<QoderSdkModel[] | null> {
+    let sdkModule: any
+    try {
+      sdkModule = await import('@qoder-ai/qoder-agent-sdk')
+    } catch {
+      return null
+    }
+
+    const { query, accessToken, accessTokenFromEnv, qodercliAuth } = sdkModule
+    const env = opts.extraEnv
+      ? { ...(this.opts.env ?? process.env), ...opts.extraEnv }
+      : (this.opts.env ?? process.env)
+    const auth = opts.apiKey
+      ? accessToken(opts.apiKey)
+      : env.QODER_PERSONAL_ACCESS_TOKEN
+        ? accessTokenFromEnv()
+        : qodercliAuth()
+
+    const ac = new AbortController()
+    let q: any
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      q = query({ prompt: 'noop', options: { auth, model: 'auto', abortController: ac } })
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Qoder getAvailableModels timed out')),
+          opts.timeoutMs ?? 15_000,
+        )
+      })
+      const models = await Promise.race([q.getAvailableModels(), timeout])
+      return Array.isArray(models) ? (models as QoderSdkModel[]) : null
+    } catch {
+      return null
+    } finally {
+      if (timer) clearTimeout(timer)
+      ac.abort()
+      if (q && typeof q.close === 'function') {
+        try { q.close() } catch { /* already closed */ }
+      }
+    }
+  }
 
   async run(
     opts: QoderRunOpts,

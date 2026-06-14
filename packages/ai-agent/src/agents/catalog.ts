@@ -11,6 +11,12 @@ export interface ModelInfo {
   id: string
   category: ModelCategory
   description: string
+  /**
+   * Human-readable label for the model. Optional — when absent the UI shows
+   * `id`. Used by agents (e.g. Qoder) whose model `id`s are opaque server
+   * slugs (`qmodel_latest`, `gm51model`) that mean nothing to the user.
+   */
+  displayName?: string
 }
 
 export const MODELS: Record<Agent, ModelInfo[]> = {

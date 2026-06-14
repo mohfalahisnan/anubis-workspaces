@@ -23,6 +23,7 @@ import { ContentItemsRepo } from './db/repositories/content-items-repo.js'
 import { ContentPipelineRepo } from './db/repositories/content-pipeline-repo.js'
 import { ContentLessonsRepo } from './db/repositories/content-lessons-repo.js'
 import { BrandContextRepo } from './db/repositories/brand-context-repo.js'
+import { ContentGenerationTasksRepo } from './db/repositories/content-generation-tasks-repo.js'
 import { TasksRepo } from './db/repositories/tasks-repo.js'
 import { WorkflowsRepo } from './db/repositories/workflows-repo.js'
 import { WorkflowRunsRepo } from './db/repositories/workflow-runs-repo.js'
@@ -61,6 +62,7 @@ export interface ConversationStack {
   contentPipeline: ContentPipelineRepo
   contentLessons: ContentLessonsRepo
   brandContext: BrandContextRepo
+  contentGenerationTasks: ContentGenerationTasksRepo
   tasks: TasksRepo
   workflows: WorkflowsRepo
   workflowRuns: WorkflowRunsRepo
@@ -131,6 +133,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
   const contentPipeline = new ContentPipelineRepo(db)
   const contentLessons = new ContentLessonsRepo(db)
   const brandContext = new BrandContextRepo(documents)
+  const contentGenerationTasks = new ContentGenerationTasksRepo(db)
   const tasks = new TasksRepo(documents)
   const workflowsRepo = new WorkflowsRepo(db)
   workflowsRepo.seedBuiltins()
@@ -182,7 +185,7 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
 
   const stack: ConversationStack = {
     conversation, profiles, competitors, capturedPosts, research, researchDocuments, contentItems,
-    contentPipeline, contentLessons, brandContext, tasks,
+    contentPipeline, contentLessons, brandContext, contentGenerationTasks, tasks,
     workflows: workflowsRepo,
     workflowRuns: workflowRunsRepo,
     workflowTriggers: workflowTriggersRepo,

@@ -16,6 +16,7 @@ import { useJobs } from '@/lib/use-jobs'
 import { ActiveConversationPage } from '@/pages/active-conversation'
 import { ContentPage } from '@/pages/content'
 import { PlannerPage } from '@/pages/planner'
+import { ContentStudioPage } from '@/pages/content-studio'
 import { TasksPage } from '@/pages/tasks'
 import { ConversationsPage } from '@/pages/conversations'
 import { PlaceholderPage } from '@/pages/placeholder'
@@ -47,6 +48,7 @@ const BREADCRUMBS: Record<PageKey, string> = {
   'active-conversation': 'Conversations',
   content: 'Content',
   planner: 'Content Planner',
+  'content-studio': 'Content Studio',
   tasks: 'Tasks',
   profiles: 'Profiles',
   'profile-editor': 'Profiles · Edit',
@@ -222,6 +224,8 @@ function CurrentPage() {
       return <ContentPage />
     case 'planner':
       return <PlannerPage />
+    case 'content-studio':
+      return <ContentStudioPage />
     case 'tasks':
       return <TasksPage />
     case 'profiles':

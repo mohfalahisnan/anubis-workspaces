@@ -17,4 +17,11 @@ describe('BUILTIN_PROFILES', () => {
       expect(ids.has(id), `missing builtin profile ${id}`).toBe(true)
     }
   })
+
+  it('includes the codex media-generation profiles', () => {
+    const ids = new Set(BUILTIN_PROFILES.map(p => p.id))
+    expect(ids.has('codex-image')).toBe(true)
+    expect(ids.has('codex-video')).toBe(true)
+    expect(BUILTIN_PROFILES.find(p => p.id === 'codex-image')!.config.agent).toBe('codex')
+  })
 })

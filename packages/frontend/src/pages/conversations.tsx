@@ -15,10 +15,10 @@ type Row = {
   profile: string
   time: string
   status: 'idle' | 'running' | 'error'
-  source: 'manual' | 'workflow'
+  source: 'manual' | 'workflow' | 'content-generation'
 }
 
-type ConversationFilter = 'all' | 'manual' | 'workflow'
+type ConversationFilter = 'all' | 'manual' | 'workflow' | 'content-generation'
 
 function statusFromConversation(c: ConversationSummary): Row['status'] {
   if (c.status === 'running' || c.status === 'pending') return 'running'
@@ -41,10 +41,13 @@ function shortRelative(updatedAt: number): string {
 function rowFromSummary(c: ConversationSummary): Row {
   const profile = c.profileId ?? `${c.agent}`
   const source = c.extra.source ?? 'manual'
+  const label = source === 'workflow' ? `Workflow · ${profile}`
+    : source === 'content-generation' ? `Generation · ${profile}`
+    : profile
   return {
     id: c.id,
     title: c.title,
-    profile: source === 'workflow' ? `Workflow · ${profile}` : profile,
+    profile: label,
     time: shortRelative(c.updatedAt),
     status: statusFromConversation(c),
     source,
@@ -221,8 +224,8 @@ export function ConversationsPage() {
           </div>
         </div>
         <div className='flex h-10 flex-shrink-0 items-center border-b border-border px-3'>
-          <div className='grid h-7 w-full grid-cols-3 rounded-md border border-border bg-muted/45 p-0.5'>
-            {(['all', 'manual', 'workflow'] as const).map((filter) => (
+          <div className='grid h-7 w-full grid-cols-4 rounded-md border border-border bg-muted/45 p-0.5'>
+            {(['all', 'manual', 'workflow', 'content-generation'] as const).map((filter) => (
               <button
                 key={filter}
                 type='button'
@@ -233,7 +236,7 @@ export function ConversationsPage() {
                     'bg-background text-foreground shadow-[0_1px_0_rgba(0,0,0,0.05)]',
                 )}
               >
-                {filter === 'workflow' ? 'Workflows' : filter}
+                {filter === 'workflow' ? 'Workflows' : filter === 'content-generation' ? 'Generation' : filter}
               </button>
             ))}
           </div>

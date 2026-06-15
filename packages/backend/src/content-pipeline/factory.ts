@@ -5,7 +5,8 @@ import type { ConversationStack } from '@anubis/conversation'
 import type { AgentKind } from '@anubis/shared'
 import { getDataDir, getStack } from '../services.js'
 import { ContentPipelineService, type PipelineDeps } from './pipeline-service.js'
-import { buildRawIdea, makeRealTranscriber, type TranscribeMedia } from './raw-extract.js'
+import { buildRawIdea, makeRealTranscriber, makeRealFetchMedia, type TranscribeMedia, type FetchMedia } from './raw-extract.js'
+import { pipelineItemAssetsDir, type PostMedia } from './assets.js'
 
 function eventToProgressMessage(event: AgentEvent): string | null {
   switch (event.type) {
@@ -199,8 +200,16 @@ export function getPipelineService(): ContentPipelineService {
       const item = stack.contentItems.findById(id)
       if (!item) throw new Error(`content item ${id} not found`)
       const post = item.referencePostId ? stack.capturedPosts.findById(item.referencePostId) ?? undefined : undefined
-      const transcribeMedia = getTranscriber()
-      const raw = await buildRawIdea({ post, referenceUrl: item.referenceUrl, transcribeMedia })
+      const destDir = pipelineItemAssetsDir(dataDir, id)
+      const raw = await buildRawIdea({
+        post: post as never,
+        referenceUrl: item.referenceUrl,
+        media: (post?.raw as Record<string, unknown> | undefined)?.media as PostMedia | undefined,
+        assetPaths: post?.assetPaths,
+        destDir,
+        fetchMedia: getFetchMedia(),
+        transcribeMedia: getTranscriber(),
+      })
       stack.contentPipeline.patch(id, {
         rawIdea: raw,
         transcript: raw.transcript,
@@ -223,4 +232,8 @@ export function getPipelineService(): ContentPipelineService {
 
 export function getTranscriber(): TranscribeMedia {
   return makeRealTranscriber()
+}
+
+export function getFetchMedia(): FetchMedia {
+  return makeRealFetchMedia()
 }

@@ -7,7 +7,7 @@ import type { CapturedPostSummary, ContentItemSummary } from '@anubis/shared'
 import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 import { jobManager } from './jobs.js'
-import { buildRawIdea, getPipelineService, getTranscriber } from './content-pipeline/index.js'
+import { getPipelineService } from './content-pipeline/index.js'
 import { getGenerationService } from './content-generation/index.js'
 
 let pipelineProvider = getPipelineService
@@ -226,20 +226,7 @@ contentItemRoutes.post('/:id/extract', async (c) => {
   const stack = getStack()
   const item = stack.contentItems.findById(c.req.param('id'))
   if (!item) return c.json({ ok: false, error: 'not_found' }, 404)
-  const post = item.referencePostId ? stack.capturedPosts.findById(item.referencePostId) ?? undefined : undefined
-  const raw = await buildRawIdea({ post, referenceUrl: item.referenceUrl, transcribeMedia: getTranscriber() })
-  stack.contentPipeline.patch(item.id, {
-    rawIdea: raw,
-    transcript: raw.transcript,
-    transcriptSource: raw.transcript ? 'extractor' : undefined,
-  })
-  stack.contentPipelineHistory.append({
-    contentId: item.id,
-    iteration: stack.contentPipeline.get(item.id).autoIterationCount,
-    step: 'extract',
-    data: raw,
-  })
-  stack.contentItems.update(item.id, { status: 'raw_extracted' })
+  await pipelineProvider().extract(item.id)
   return c.json({ ok: true, pipeline: stack.contentPipeline.get(item.id) })
 })
 

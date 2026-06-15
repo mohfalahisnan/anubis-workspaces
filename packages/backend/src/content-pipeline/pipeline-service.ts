@@ -164,6 +164,14 @@ export class ContentPipelineService {
     }
   }
 
+  /**
+   * Extract the raw idea for an item: download the reference media + transcript,
+   * patch the pipeline, snapshot history, and advance status to raw_extracted.
+   */
+  async extract(id: string): Promise<RawIdea> {
+    return this.deps.extract(id)
+  }
+
   async runBreakdown(id: string, profileId?: string): Promise<ImprovedBrief> {
     const item = this.requireItem(id)
     const p = this.deps.pipeline.get(id)

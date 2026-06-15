@@ -12,7 +12,7 @@ export const ConversationExtraSchema = z.object({
   skills: z.array(z.string()).default([]),
   overrides: ProfileOverrideSchema.optional(),
   archived: z.boolean().optional(),
-  source: z.enum(['workflow']).optional(),
+  source: z.enum(['workflow', 'content-generation']).optional(),
   workflow: z.object({
     runId: z.string().min(1),
     nodeId: z.string().min(1),

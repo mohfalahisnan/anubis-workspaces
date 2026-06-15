@@ -73,7 +73,7 @@ export interface ConversationExtra {
   skills: string[]
   overrides?: Record<string, unknown>
   archived?: boolean
-  source?: 'workflow'
+  source?: 'workflow' | 'content-generation'
   workflow?: {
     runId: string
     nodeId: string
@@ -1218,6 +1218,8 @@ export interface GenerationTask {
   inputPrompt: string
   status: GenerationTaskStatus
   output?: GenerationOutput
+  /** Conversation that tracks this task's image/video generation agent run, if any. */
+  conversationId?: string
   error?: string
   retryCount: number
   createdAt: number

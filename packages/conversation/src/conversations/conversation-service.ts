@@ -47,7 +47,7 @@ export interface CreateConversationInput {
   override?: ProfileOverride
   workspacePath?: string
   agent?: AgentKind
-  source?: 'workflow'
+  source?: 'workflow' | 'content-generation'
   workflow?: { runId: string; nodeId: string }
 }
 
@@ -65,7 +65,7 @@ export interface CreateAndAwaitFirstTurnInput {
   content: string
   workspacePath?: string
   signal?: AbortSignal
-  source?: 'workflow'
+  source?: 'workflow' | 'content-generation'
   workflow?: { runId: string; nodeId: string }
 }
 
@@ -162,7 +162,7 @@ export class ConversationService {
     this.deps.knownWorkspaces.remember(path)
   }
 
-  list(opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow'; projectId?: string } = {}): Conversation[] {
+  list(opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow' | 'content-generation'; projectId?: string } = {}): Conversation[] {
     return this.deps.conversations.list({
       limit: opts.limit ?? 50,
       archived: opts.archived,
@@ -428,12 +428,65 @@ The improved prompt should:
     return { msgId, messageId: userRowId, done }
   }
 
+  /**
+   * Await a started turn's `done`, honoring an optional abort signal, then return
+   * the final assistant message. Throws if the conversation ended in `error` or if
+   * the turn was cancelled. Shared by createAndAwaitFirstTurn and sendMessageAndAwait.
+   */
+  private async awaitTurn(
+    convId: string,
+    done: Promise<void>,
+    signal?: AbortSignal,
+  ): Promise<{ messageId: string; text: string }> {
+    if (signal?.aborted) {
+      await this.cancel(convId)
+      throw new Error('cancelled before first turn started')
+    }
+    const abortPromise = signal
+      ? new Promise<'aborted'>((resolve) => {
+          const onAbort = () => resolve('aborted')
+          signal.addEventListener('abort', onAbort, { once: true })
+        })
+      : null
+    const result = abortPromise
+      ? await Promise.race([done.then(() => 'done' as const), abortPromise])
+      : await done.then(() => 'done' as const)
+    if (result === 'aborted') {
+      await this.cancel(convId)
+      throw new Error('cancelled during first turn')
+    }
+    const final = this.deps.conversations.findById(convId)
+    if (!final) throw new Error(`Conversation vanished: ${convId}`)
+    if (final.status === 'error') {
+      const messages = this.deps.messages.listForConversation(convId)
+      const last = messages.filter((m) => m.role === 'assistant').pop()
+      const errMsg = (last?.metadata as { error?: { message?: string } } | undefined)?.error?.message
+        ?? 'agent run failed'
+      throw new Error(errMsg)
+    }
+    const messages = this.deps.messages.listForConversation(convId)
+    const last = messages.filter((m) => m.role === 'assistant').pop()
+    if (!last) throw new Error('first turn finished without an assistant message')
+    return { messageId: last.id, text: last.content }
+  }
+
   async sendMessage(id: string, input: SendMessageInput): Promise<{ msgId: string; messageId: string }> {
     const cur = this.deps.conversations.findById(id)
     if (!cur) throw new Error(`Conversation not found: ${id}`)
     const { msgId, messageId, done } = await this.startTurn(cur, input)
     void done
     return { msgId, messageId }
+  }
+
+  async sendMessageAndAwait(
+    id: string,
+    input: SendMessageInput,
+    signal?: AbortSignal,
+  ): Promise<{ messageId: string; text: string }> {
+    const cur = this.deps.conversations.findById(id)
+    if (!cur) throw new Error(`Conversation not found: ${id}`)
+    const { done } = await this.startTurn(cur, input)
+    return this.awaitTurn(id, done, signal)
   }
 
   async createAndAwaitFirstTurn(
@@ -461,39 +514,8 @@ The improved prompt should:
       throw e
     }
 
-    if (input.signal?.aborted) {
-      await this.cancel(conv.id)
-      throw new Error('cancelled before first turn started')
-    }
-    const abortPromise = input.signal
-      ? new Promise<'aborted'>((resolve) => {
-          const onAbort = () => resolve('aborted')
-          input.signal!.addEventListener('abort', onAbort, { once: true })
-        })
-      : null
-
-    const result = abortPromise
-      ? await Promise.race([done.then(() => 'done' as const), abortPromise])
-      : await done.then(() => 'done' as const)
-
-    if (result === 'aborted') {
-      await this.cancel(conv.id)
-      throw new Error('cancelled during first turn')
-    }
-
-    const final = this.deps.conversations.findById(conv.id)
-    if (!final) throw new Error(`Conversation vanished: ${conv.id}`)
-    if (final.status === 'error') {
-      const messages = this.deps.messages.listForConversation(conv.id)
-      const last = messages.filter((m) => m.role === 'assistant').pop()
-      const errMsg = (last?.metadata as { error?: { message?: string } } | undefined)?.error?.message
-        ?? 'agent run failed'
-      throw new Error(errMsg)
-    }
-    const messages = this.deps.messages.listForConversation(conv.id)
-    const last = messages.filter((m) => m.role === 'assistant').pop()
-    if (!last) throw new Error('first turn finished without an assistant message')
-    return { conversationId: conv.id, messageId: last.id, text: last.content }
+    const { messageId, text } = await this.awaitTurn(conv.id, done, input.signal)
+    return { conversationId: conv.id, messageId, text }
   }
 
   async cancel(id: string): Promise<void> {

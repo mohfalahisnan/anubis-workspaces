@@ -148,3 +148,43 @@ describe('createAndAwaitFirstTurn', () => {
     }
   })
 })
+
+describe('sendMessageAndAwait', () => {
+  let cleanup: Array<() => void> = []
+  beforeEach(() => { cleanup = [] })
+
+  it('runs a turn on an existing conversation and returns the assistant text', async () => {
+    const { svc, agentHomeRoot, workspacesRoot } = setupWith((em) => {
+      em.emit('partial', { deltaText: 'second ' })
+      em.emit('partial', { deltaText: 'turn' })
+      em.emit('done', { finishReason: 'stop' })
+    })
+    cleanup.push(
+      () => rmSync(agentHomeRoot, { recursive: true, force: true }),
+      () => rmSync(workspacesRoot, { recursive: true, force: true }),
+    )
+    try {
+      const conv = svc.create({ title: 'gen', profileId: 'claude-coding' })
+      const res = await svc.sendMessageAndAwait(conv.id, { content: 'go' })
+      expect(res.text).toBe('second turn')
+    } finally {
+      cleanup.forEach((fn) => fn())
+    }
+  })
+
+  it('throws on agent error', async () => {
+    const { svc, agentHomeRoot, workspacesRoot } = setupWith((em) => {
+      em.emit('error', { error: new Error('kaboom') })
+    })
+    cleanup.push(
+      () => rmSync(agentHomeRoot, { recursive: true, force: true }),
+      () => rmSync(workspacesRoot, { recursive: true, force: true }),
+    )
+    try {
+      const conv = svc.create({ title: 'gen', profileId: 'claude-coding' })
+      await expect(svc.sendMessageAndAwait(conv.id, { content: 'go' })).rejects.toThrow(/kaboom/)
+    } finally {
+      cleanup.forEach((fn) => fn())
+    }
+  })
+})

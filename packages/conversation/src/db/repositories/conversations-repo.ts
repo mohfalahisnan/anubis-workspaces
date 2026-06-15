@@ -54,7 +54,7 @@ export class ConversationsRepo {
     return r ? toConv(r) : null
   }
 
-  list(opts: { limit: number; archived?: boolean; source?: 'manual' | 'workflow'; projectId?: string }): Conversation[] {
+  list(opts: { limit: number; archived?: boolean; source?: 'manual' | 'workflow' | 'content-generation'; projectId?: string }): Conversation[] {
     const where: string[] = ['deleted_at IS NULL']
     const params: unknown[] = []
     if (opts.projectId) { where.push('project_id = ?'); params.push(opts.projectId) }
@@ -67,6 +67,10 @@ export class ConversationsRepo {
     }
     if (opts.source !== undefined) {
       convs = convs.filter(c => (c.extra.source ?? 'manual') === opts.source)
+    } else {
+      // Keep generation logs out of the default list; they're reachable via an
+      // explicit source filter or a direct link from Content Studio.
+      convs = convs.filter(c => c.extra.source !== 'content-generation')
     }
     return convs.slice(0, opts.limit)
   }

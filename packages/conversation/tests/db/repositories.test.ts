@@ -75,3 +75,37 @@ describe('repositories', () => {
     expect(ctx.ses.findByConversation('c1')!.agentSessionId).toBe('s2')
   })
 })
+
+describe('ConversationsRepo.list source visibility', () => {
+  function seed() {
+    const db = openDatabase(':memory:')
+    runMigrations(db, MIGRATIONS)
+    const repo = new ConversationsRepo(db)
+    const base = {
+      agent: 'codex' as const, status: 'finished' as const,
+      workspacePath: '/w', createdAt: 1, updatedAt: 1,
+    }
+    repo.insert({ ...base, id: 'm1', title: 'manual', extra: { skills: [] } })
+    repo.insert({ ...base, id: 'w1', title: 'wf', extra: { skills: [], source: 'workflow' } })
+    repo.insert({ ...base, id: 'g1', title: 'gen', extra: { skills: [], source: 'content-generation' } })
+    return repo
+  }
+
+  it('excludes content-generation when no source filter is passed', () => {
+    const ids = seed().list({ limit: 50 }).map((c) => c.id)
+    expect(ids).toContain('m1')
+    expect(ids).toContain('w1')
+    expect(ids).not.toContain('g1')
+  })
+
+  it('returns only content-generation when filtered explicitly', () => {
+    const ids = seed().list({ limit: 50, source: 'content-generation' }).map((c) => c.id)
+    expect(ids).toEqual(['g1'])
+  })
+
+  it('still filters manual and workflow exactly', () => {
+    const repo = seed()
+    expect(repo.list({ limit: 50, source: 'manual' }).map((c) => c.id)).toEqual(['m1'])
+    expect(repo.list({ limit: 50, source: 'workflow' }).map((c) => c.id)).toEqual(['w1'])
+  })
+})

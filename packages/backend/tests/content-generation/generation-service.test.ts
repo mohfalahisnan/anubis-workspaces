@@ -62,6 +62,23 @@ describe('GenerationService.runAll', () => {
     expect(deps.pipeline.patch).toHaveBeenCalledWith('c1', expect.objectContaining({ draftOutput: expect.any(Object) }))
   })
 
+  it('passes conversationId + onConversation to the generator and persists the id', async () => {
+    const { deps, tasks } = makeDeps()
+    const svc = new GenerationService(deps as never)
+    svc.enqueue('c1')
+    deps.registry.get.mockReturnValue({
+      name: 'mock', capability: 'image',
+      generate: vi.fn(async (_task, ctx: { conversationId?: string; onConversation?: (id: string) => void }) => {
+        expect(ctx.conversationId).toBeUndefined()
+        ctx.onConversation?.('conv-x')
+        return { assetPaths: ['/a.png'] }
+      }),
+    })
+    await svc.runAll('c1')
+    const imageTask = tasks().find((t) => t.capability === 'image')!
+    expect(imageTask.conversationId).toBe('conv-x')
+  })
+
   it('creates a generation_failure lesson and stays generating when a task fails', async () => {
     const { deps, lessons, statuses } = makeDeps()
     const svc = new GenerationService(deps as never)

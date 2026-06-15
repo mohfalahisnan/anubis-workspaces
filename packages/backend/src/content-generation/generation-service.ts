@@ -84,7 +84,12 @@ export class GenerationService {
       this.deps.taskRepo.update(task.id, { status: 'manual' })
       return
     }
-    const ctx = { contentId: id, assetDir: this.deps.assetDirFor(id) }
+    const ctx = {
+      contentId: id,
+      assetDir: this.deps.assetDirFor(id),
+      conversationId: task.conversationId,
+      onConversation: (cid: string) => { this.deps.taskRepo.update(task.id, { conversationId: cid }) },
+    }
     let lastError = ''
     for (let attempt = 0; attempt <= this.deps.maxRetries; attempt++) {
       this.deps.taskRepo.update(task.id, { status: 'running', generator: generator.name, retryCount: attempt })

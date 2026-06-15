@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { basename, extname, join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { captureInstagramData, silentReporter, type StandardCrawlerOutput } from '@anubis/research-crawler'
@@ -8,7 +10,32 @@ import { getDataDir, getStack } from './services.js'
 import { withCrawlerProfileDefaults } from './chrome-defaults.js'
 import { jobManager } from './jobs.js'
 import { getPipelineService } from './content-pipeline/index.js'
+import { pipelineItemAssetsDir } from './content-pipeline/assets.js'
 import { getGenerationService } from './content-generation/index.js'
+
+const ASSET_IMAGE_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+}
+
+/**
+ * Resolve a requested item-asset filename to an absolute path, or null if it
+ * escapes the item's assets dir or isn't a served image type. Single path
+ * segment only — no slashes, no traversal.
+ */
+export function resolveItemAssetPath(dataDir: string, itemId: string, file: string): string | null {
+  if (!file || file !== basename(file)) return null
+  const ext = extname(file).toLowerCase()
+  if (!ASSET_IMAGE_MIME[ext]) return null
+  const dir = resolve(pipelineItemAssetsDir(dataDir, itemId))
+  const target = resolve(dir, file)
+  if (target !== join(dir, file)) return null
+  if (!target.startsWith(dir)) return null
+  return target
+}
 
 let pipelineProvider = getPipelineService
 /** Test seam: override the pipeline service provider with a fake. */
@@ -240,6 +267,23 @@ contentItemRoutes.get('/:id/pipeline', (c) => {
     lessons: stack.contentLessons.listByContent(id),
     history: stack.contentPipelineHistory.listByContent(id),
   })
+})
+
+contentItemRoutes.get('/:id/asset', (c) => {
+  const file = c.req.query('file')
+  if (!file) return c.json({ error: 'missing_file' }, 400)
+  const target = resolveItemAssetPath(getDataDir(), c.req.param('id'), file)
+  if (!target) return c.json({ error: 'forbidden' }, 403)
+  const contentType = ASSET_IMAGE_MIME[extname(target).toLowerCase()]!
+  try {
+    const stream = createReadStream(target)
+    return c.body(stream as unknown as ReadableStream, 200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'private, max-age=300',
+    })
+  } catch {
+    return c.json({ error: 'not_found' }, 404)
+  }
 })
 
 contentItemRoutes.post('/:id/pipeline/run', (c) => {

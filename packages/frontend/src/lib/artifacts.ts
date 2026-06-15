@@ -14,3 +14,8 @@ export async function conversationFileUrl(conversationId: string, path: string):
   const base = await getApiBaseUrl()
   return `${base}/conversations/${encodeURIComponent(conversationId)}/files?path=${encodeURIComponent(path)}`
 }
+
+export async function pipelineAssetUrl(itemId: string, fileName: string): Promise<string> {
+  const base = await getApiBaseUrl()
+  return `${base}/content-items/${encodeURIComponent(itemId)}/asset?file=${encodeURIComponent(fileName)}`
+}

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   AiReview, ContentLesson, ImprovedBrief, RawIdea, RefinedContent,
 } from '@anubis/shared'
+import { pipelineAssetUrl } from '@/lib/artifacts'
 
 const card = 'rounded-md border border-border bg-card'
 const cardHead = 'border-b border-border px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
@@ -44,7 +45,40 @@ function Chips({ label, items }: { label: string; items?: string[] }) {
   )
 }
 
-export function RawIdeaSection({ raw, id = 'section-raw' }: { raw: RawIdea; id?: string }) {
+function AssetThumb({ itemId, fileName }: { itemId: string; fileName: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    pipelineAssetUrl(itemId, fileName).then((u) => { if (!cancelled) setUrl(u) }).catch(() => { if (!cancelled) setUrl(null) })
+    return () => { cancelled = true }
+  }, [itemId, fileName])
+  if (!url) return <div className='h-20 w-20 animate-pulse rounded bg-muted' />
+  return <img src={url} alt={fileName} className='h-20 w-20 rounded border border-border object-cover' />
+}
+
+export function LocalAssetStrip({ raw, itemId }: { raw: RawIdea; itemId?: string }) {
+  const assets = raw.localAssets ?? []
+  if (!assets.length) return null
+  const images = assets.filter((a) => a.kind === 'image')
+  const hasVideo = assets.some((a) => a.kind === 'video')
+  return (
+    <div className='mt-2'>
+      <p className={fieldLabel}>Analyzed media</p>
+      <div className='mt-1 flex flex-wrap gap-2'>
+        {itemId
+          ? images.map((a) => <AssetThumb key={a.fileName} itemId={itemId} fileName={a.fileName} />)
+          : images.map((a) => (
+            <span key={a.fileName} className='rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground'>{a.fileName}</span>
+          ))}
+        {hasVideo ? (
+          <span className='inline-flex items-center rounded border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground'>🎬 Video (transcript analyzed)</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function RawIdeaSection({ raw, id = 'section-raw', itemId }: { raw: RawIdea; id?: string; itemId?: string }) {
   return (
     <Section title='Raw Idea' id={id}>
       <Field label='Caption' value={raw.caption} />
@@ -53,6 +87,7 @@ export function RawIdeaSection({ raw, id = 'section-raw' }: { raw: RawIdea; id?:
       <Field label='Platform' value={raw.sourcePlatform} />
       <Field label='Competitor' value={raw.sourceCompetitor} />
       <Chips label='Assets' items={raw.assetRefs} />
+      <LocalAssetStrip raw={raw} itemId={itemId} />
     </Section>
   )
 }

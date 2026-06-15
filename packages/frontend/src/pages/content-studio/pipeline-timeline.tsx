@@ -7,7 +7,7 @@ import type {
   GenerationTask, HumanReview, ImprovedBrief, PipelineHistoryEntry, RawIdea, RefinedContent,
 } from '@anubis/shared'
 import { cn } from '@/lib/utils'
-import { AiReviewSection, BriefSection, HumanReviewSection, RawIdeaSection, RefinedSection } from './sections'
+import { AiReviewSection, BriefSection, HumanReviewSection, RawIdeaSection, RefinedSection, LocalAssetStrip } from './sections'
 import { DraftOutputSection, GenerationQueueSection } from './generation-sections'
 
 type StepKey = 'extract' | 'breakdown' | 'refine' | 'ai-review' | 'human-review' | 'generation'
@@ -217,11 +217,16 @@ function StepBody({ stepKey, state, ...props }: { stepKey: StepKey; state: StepS
   switch (stepKey) {
     case 'extract':
       return pipeline.rawIdea
-        ? <RawIdeaSection raw={pipeline.rawIdea} />
+        ? <RawIdeaSection raw={pipeline.rawIdea} itemId={pipeline.contentId} />
         : <Empty text='Not extracted yet. Run Auto-run to pull the raw idea from the reference.' />
     case 'breakdown':
       return pipeline.improvedBrief
-        ? <BriefSection brief={pipeline.improvedBrief} lessonsUsed={lessons.map((l) => l.howToImprove)} />
+        ? (
+          <>
+            {pipeline.rawIdea ? <LocalAssetStrip raw={pipeline.rawIdea as RawIdea} itemId={pipeline.contentId} /> : null}
+            <BriefSection brief={pipeline.improvedBrief} lessonsUsed={lessons.map((l) => l.howToImprove)} />
+          </>
+        )
         : <Empty text='No brief yet.' />
     case 'refine':
       return pipeline.refinedContent
@@ -260,7 +265,7 @@ function HistoryOutput({ entry }: { entry: PipelineHistoryEntry }) {
   const key = historyKey(entry.step)
   const id = `hist-${entry.id}`
   switch (key) {
-    case 'extract': return <RawIdeaSection raw={entry.data as RawIdea} id={id} />
+    case 'extract': return <RawIdeaSection raw={entry.data as RawIdea} id={id} itemId={entry.contentId} />
     case 'breakdown': return <BriefSection brief={entry.data as ImprovedBrief} lessonsUsed={[]} id={id} />
     case 'refine': return <RefinedSection refined={entry.data as RefinedContent} id={id} />
     case 'ai-review': return <AiReviewSection review={entry.data as AiReview} id={id} />

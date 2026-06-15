@@ -1,18 +1,16 @@
 import { join } from 'node:path'
 import { getDataDir, getStack } from '../services.js'
-import { getAiAgentService } from '../ai-agent.js'
-import { runProfileAgent, type RunProfileAgentInput } from '../agent-run.js'
 import { GenerationService, type GenerationDeps } from './generation-service.js'
 import { FlowImageGenerator, GeneratorRegistry, TextGenerator } from './generators.js'
-import { AgentVideoGenerator, ConfigurableImageGenerator } from './agent-generators.js'
+import { AgentVideoGenerator, ConfigurableImageGenerator, type RunAgent } from './agent-generators.js'
+import { runGenerationAgent } from './conversation-runner.js'
 
 const MAX_RETRIES = 2
 
 export function getGenerationService(): GenerationService {
   const stack = getStack()
   const getConfig = () => stack.appConfig.get()
-  const runAgent = (input: RunProfileAgentInput) =>
-    runProfileAgent(stack, getAiAgentService(), input)
+  const runAgent: RunAgent = (input) => runGenerationAgent(stack, input)
 
   const flow = new FlowImageGenerator({ getConfig, getDataDir })
   const registry = new GeneratorRegistry([

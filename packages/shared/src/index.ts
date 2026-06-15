@@ -977,6 +977,17 @@ export interface ContentLesson {
   createdAt: number
 }
 
+/** A reference-post media file downloaded to the item's pipeline working dir. */
+export interface LocalAsset {
+  kind: 'image' | 'video'
+  /** Basename within the item's assets dir, e.g. "0.jpg", "video.mp4". */
+  fileName: string
+  /** Absolute path on the backend host. */
+  path: string
+  /** Original media URL it was downloaded from (absent when reused from cache). */
+  sourceUrl?: string
+}
+
 export interface RawIdea {
   caption?: string
   assetRefs: string[]
@@ -986,6 +997,8 @@ export interface RawIdea {
   mediaKind?: 'image' | 'video' | 'carousel'
   mediaMetadata?: Record<string, unknown>
   transcript?: string
+  /** Media downloaded at extract: all carousel slides / the image / the video. */
+  localAssets?: LocalAsset[]
 }
 
 export interface ImprovedBrief {

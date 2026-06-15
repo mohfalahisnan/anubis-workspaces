@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCwIcon, SlidersHorizontalIcon, ZapIcon } from 'lucide-react'
-import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline, DraftOutput, GenerationTask, PipelineHistoryEntry, PipelineStepProfileConfig, ProfileSummary } from '@anubis/shared'
+import type { ContentItemStatus, ContentItemSummary, ContentLesson, ContentPipeline, DraftOutput, GenerationProfileConfig, GenerationTask, PipelineHistoryEntry, PipelineStepProfileConfig, ProfileSummary } from '@anubis/shared'
 import {
   cancelGenerationTask, getAppConfig, getContentPipeline, getGeneration, getJob, listContentItems, listProfiles,
   retryGenerationTask, runFullAuto, runPipelineStep, startGeneration, submitHumanReview, updateAppConfig,
@@ -11,6 +11,7 @@ import { LessonHistorySection } from './content-studio/sections'
 import { PipelineSettingsDialog } from './content-studio/pipeline-settings-dialog'
 import { PipelineTimeline } from './content-studio/pipeline-timeline'
 import { StepProfilePicker } from './content-studio/step-profile-picker'
+import { GenerationProfilePicker } from './content-studio/generation-profile-picker'
 
 const IN_PROGRESS: ContentItemStatus[] = ['raw_extracted', 'brief', 'content_refined', 'ai_review', 'human_review', 'generating', 'draft']
 
@@ -31,7 +32,9 @@ export function ContentStudioPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [profiles, setProfiles] = useState<ProfileSummary[]>([])
   const [pageStepProfiles, setPageStepProfiles] = useState<PipelineStepProfileConfig>({})
+  const [genProfiles, setGenProfiles] = useState<GenerationProfileConfig>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const genDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [autoRunning, setAutoRunning] = useState(false)
 
   // Poll for updates while any pipeline step (manual or auto-run) is active
@@ -64,7 +67,10 @@ export function ContentStudioPage() {
   }, [selectedId])
   useEffect(() => { void listProfiles().then(setProfiles) }, [])
   useEffect(() => {
-    void getAppConfig().then((cfg) => setPageStepProfiles(cfg.pipelineStepProfiles ?? {}))
+    void getAppConfig().then((cfg) => {
+      setPageStepProfiles(cfg.pipelineStepProfiles ?? {})
+      setGenProfiles(cfg.generationProfiles ?? {})
+    })
   }, [])
 
   const { ideas, inProgress } = useMemo(() => {
@@ -91,6 +97,14 @@ export function ContentStudioPage() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       void updateAppConfig({ pipelineStepProfiles: next })
+    }, 500)
+  }, [])
+
+  const onGenProfilesChange = useCallback((next: GenerationProfileConfig) => {
+    setGenProfiles(next)
+    if (genDebounceRef.current) clearTimeout(genDebounceRef.current)
+    genDebounceRef.current = setTimeout(() => {
+      void updateAppConfig({ generationProfiles: next })
     }, 500)
   }, [])
 
@@ -148,6 +162,11 @@ export function ContentStudioPage() {
             profiles={profiles}
             stepProfiles={pageStepProfiles}
             onChange={onPageStepProfilesChange}
+          />
+          <GenerationProfilePicker
+            profiles={profiles}
+            generationProfiles={genProfiles}
+            onChange={onGenProfilesChange}
           />
         </div>
 

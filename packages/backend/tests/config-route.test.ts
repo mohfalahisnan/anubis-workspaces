@@ -54,4 +54,17 @@ describe('/config route', () => {
     const body = (await patch.json()) as { config: { chromePath?: string } }
     expect(body.config.chromePath).toBeUndefined()
   })
+
+  it('PATCH /config round-trips generationProfiles', async () => {
+    const { default: app } = await import('../src/app.js')
+    const patch = await app.request('/config', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ generationProfiles: { image: 'codex-image', video: 'codex-video' } }),
+    })
+    expect(patch.status).toBe(200)
+    const get = await app.request('/config')
+    const body = (await get.json()) as { config: { generationProfiles?: { image?: string; video?: string } } }
+    expect(body.config.generationProfiles).toEqual({ image: 'codex-image', video: 'codex-video' })
+  })
 })

@@ -43,6 +43,11 @@ const StepProfilesSchema = z.object({
   ai_review: z.string().optional(),
 }).strict()
 
+const GenerationProfilesSchema = z.object({
+  image: z.string().optional(),
+  video: z.string().optional(),
+}).strict()
+
 const PatchBody = z.object({
   chromePath: z.string().optional(),
   crawlerProfileRoot: z.string().optional(),
@@ -55,6 +60,7 @@ const PatchBody = z.object({
   contextInjectionProfileId: z.string().optional(),
   qoderApiKey: z.string().optional(),
   pipelineStepProfiles: StepProfilesSchema.optional(),
+  generationProfiles: GenerationProfilesSchema.optional(),
 }).strict()
 
 export const configRoutes = new Hono()

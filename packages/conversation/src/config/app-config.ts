@@ -1,4 +1,4 @@
-import type { PipelineStepProfileConfig } from '@anubis/shared'
+import type { GenerationProfileConfig, PipelineStepProfileConfig } from '@anubis/shared'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -55,6 +55,8 @@ export interface AppConfig {
   qoderApiKey?: string
   /** Project-level AI profile assignments for Content Studio pipeline steps. */
   pipelineStepProfiles?: PipelineStepProfileConfig
+  /** AI profile assignments for Content Studio generation (image / video). */
+  generationProfiles?: GenerationProfileConfig
 }
 
 const CONFIG_FILE = 'config.json'
@@ -128,7 +130,19 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   const pipelineStepProfiles = sanitizeStepProfiles(obj.pipelineStepProfiles)
   if (pipelineStepProfiles) out.pipelineStepProfiles = pipelineStepProfiles
 
+  const generationProfiles = sanitizeGenerationProfiles(obj.generationProfiles)
+  if (generationProfiles) out.generationProfiles = generationProfiles
+
   return out
+}
+
+function sanitizeGenerationProfiles(raw: unknown): GenerationProfileConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const out: GenerationProfileConfig = {}
+  if (typeof r.image === 'string' && r.image) out.image = r.image
+  if (typeof r.video === 'string' && r.video) out.video = r.video
+  return Object.keys(out).length ? out : undefined
 }
 
 function sanitizeStepProfiles(raw: unknown): PipelineStepProfileConfig | undefined {

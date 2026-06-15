@@ -49,7 +49,7 @@ conversationRoutes.get('/', (c) => {
   const archivedRaw = c.req.query('archived')
   const archived = archivedRaw === undefined ? undefined : archivedRaw === 'true'
   const sourceRaw = c.req.query('source')
-  const source = sourceRaw === 'manual' || sourceRaw === 'workflow' ? sourceRaw : undefined
+  const source = sourceRaw === 'manual' || sourceRaw === 'workflow' || sourceRaw === 'content-generation' ? sourceRaw : undefined
   const projectId = c.req.query('projectId')
   return c.json({ ok: true, items: getStack().conversation.list({ limit, archived, source, projectId }) })
 })

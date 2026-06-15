@@ -34,7 +34,7 @@ const runAgentSchema = z.object({
 // use (or re-created after invalidation when the user saves a new key).
 let _aiAgentService: AiAgentService | null = null
 
-function getAiAgentService(): AiAgentService {
+export function getAiAgentService(): AiAgentService {
   if (!_aiAgentService) {
     const cfg = getStack().appConfig.get()
     _aiAgentService = createAiAgentService({ qoderApiKey: cfg.qoderApiKey })

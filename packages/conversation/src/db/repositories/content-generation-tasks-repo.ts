@@ -12,6 +12,7 @@ interface Row {
   input_prompt: string
   status: GenerationTask['status']
   output: string | null
+  conversation_id: string | null
   error: string | null
   retry_count: number
   created_at: number
@@ -27,7 +28,7 @@ export interface CreateTaskInput {
   status: GenerationTask['status']
 }
 
-export type GenerationTaskPatch = Partial<Pick<GenerationTask, 'status' | 'generator' | 'output' | 'error' | 'retryCount'>>
+export type GenerationTaskPatch = Partial<Pick<GenerationTask, 'status' | 'generator' | 'output' | 'error' | 'retryCount' | 'conversationId'>>
 
 function parseOutput(value: string | null): GenerationOutput | undefined {
   if (value == null) return undefined
@@ -38,7 +39,8 @@ function toTask(r: Row): GenerationTask {
   return {
     id: r.id, contentId: r.content_id, projectId: r.project_id, type: r.type, capability: r.capability,
     generator: r.generator, inputPrompt: r.input_prompt, status: r.status,
-    output: parseOutput(r.output), error: r.error ?? undefined, retryCount: r.retry_count,
+    output: parseOutput(r.output), conversationId: r.conversation_id ?? undefined,
+    error: r.error ?? undefined, retryCount: r.retry_count,
     createdAt: r.created_at, updatedAt: r.updated_at,
   }
 }
@@ -84,12 +86,12 @@ export class ContentGenerationTasksRepo {
     const next: GenerationTask = { ...current, ...patch, updatedAt: Date.now() }
     this.db.prepare(`
       UPDATE content_generation_tasks
-      SET status = ?, generator = ?, output = ?, error = ?, retry_count = ?, updated_at = ?
+      SET status = ?, generator = ?, output = ?, error = ?, retry_count = ?, conversation_id = ?, updated_at = ?
       WHERE id = ?
     `).run(
       next.status, next.generator,
       next.output == null ? null : JSON.stringify(next.output),
-      next.error ?? null, next.retryCount, next.updatedAt, id,
+      next.error ?? null, next.retryCount, next.conversationId ?? null, next.updatedAt, id,
     )
     return next
   }

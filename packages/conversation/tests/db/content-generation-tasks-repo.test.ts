@@ -43,4 +43,13 @@ describe('ContentGenerationTasksRepo', () => {
     r.deleteByContent('c1')
     expect(r.listByContent('c1')).toHaveLength(0)
   })
+
+  it('round-trips conversationId through create and update', () => {
+    const r = repo()
+    const t = r.create(base)
+    expect(t.conversationId).toBeUndefined()
+    const updated = r.update(t.id, { conversationId: 'conv-1' })!
+    expect(updated.conversationId).toBe('conv-1')
+    expect(r.get(t.id)!.conversationId).toBe('conv-1')
+  })
 })

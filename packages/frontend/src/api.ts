@@ -297,7 +297,7 @@ export async function getCatalog(): Promise<AgentCatalog> {
 }
 
 export async function listConversations(
-  opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow'; projectId?: string } = {},
+  opts: { limit?: number; archived?: boolean; source?: 'manual' | 'workflow' | 'content-generation'; projectId?: string } = {},
 ): Promise<ConversationSummary[]> {
   const params = new URLSearchParams()
   if (opts.limit !== undefined) params.set('limit', String(opts.limit))

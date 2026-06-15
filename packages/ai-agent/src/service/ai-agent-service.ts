@@ -210,6 +210,7 @@ export class AiAgentService {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         appendSystemPrompt,
+        files: input.files,
         sandboxMode: input.yolo ? 'danger-full-access' : input.sandboxMode,
         approvalPolicy: input.yolo ? 'never' : input.approvalPolicy,
         extraEnv: input.extraEnv,

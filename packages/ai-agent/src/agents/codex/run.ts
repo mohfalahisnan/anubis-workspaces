@@ -17,8 +17,22 @@ export interface CodexRunOpts {
   sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'
   approvalPolicy?: 'untrusted' | 'on-request' | 'on-failure' | 'never'
   appendSystemPrompt?: string
+  files?: string[]
   extraEnv?: Record<string, string>
   onSession?: (sessionId: string) => void
+}
+
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
+
+/** Build the codex `turn/start` input items: the text prompt plus any local images. */
+export function buildCodexTurnInput(text: string, files?: string[]): Array<Record<string, unknown>> {
+  const items: Array<Record<string, unknown>> = [{ type: 'text', text }]
+  for (const f of files ?? []) {
+    const dot = f.lastIndexOf('.')
+    const ext = dot === -1 ? '' : f.slice(dot).toLowerCase()
+    if (IMAGE_EXTS.has(ext)) items.push({ type: 'localImage', path: f })
+  }
+  return items
 }
 
 export interface SpawnCodexOpts {
@@ -273,12 +287,10 @@ export class CodexAgent {
       await Promise.race([
         client.request('turn/start', {
           threadId,
-          input: [
-            {
-              type: 'text',
-              text: wrapPromptWithSystem(opts.prompt, opts.appendSystemPrompt),
-            },
-          ],
+          input: buildCodexTurnInput(
+            wrapPromptWithSystem(opts.prompt, opts.appendSystemPrompt),
+            opts.files,
+          ),
         }),
         childErrored,
       ])

@@ -3,13 +3,23 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CapturedPostSummary, RawIdea } from '@anubis/shared'
 import { runTranscribe } from '../extractor.js'
+import { materializePostAssets, type PostMedia } from './assets.js'
 
-/** Download `mediaUrl` and return transcript text. Injected so tests stay pure. */
-export type TranscribeMedia = (mediaUrl: string) => Promise<string>
+/** Transcribe a local video file. Injected so tests stay pure. */
+export type TranscribeMedia = (videoPath: string) => Promise<string>
+/** Fetch a media URL into a buffer. Injected so tests stay pure. */
+export type FetchMedia = (url: string) => Promise<Buffer>
 
 export interface BuildRawIdeaInput {
   post?: CapturedPostSummary
   referenceUrl?: string
+  /** Media descriptor from the captured post's `raw.media`, if available. */
+  media?: PostMedia
+  /** Crawler-cached absolute paths from the post's `raw.assetPaths`, if present. */
+  assetPaths?: { absolute: string[]; relative: string[] }
+  /** Where to materialize downloaded media (the item's pipeline assets dir). */
+  destDir: string
+  fetchMedia: FetchMedia
   transcribeMedia: TranscribeMedia
 }
 
@@ -28,26 +38,39 @@ export async function buildRawIdea(input: BuildRawIdeaInput): Promise<RawIdea> {
       : undefined,
   }
 
-  if (post?.mediaKind === 'video' && post.mediaUrl) {
-    // Best-effort: a silent / no-audio-track video makes the extractor's ffmpeg
-    // step fail ("Output file does not contain any stream", exit -22). That must
-    // not kill the whole extract step — fall back to caption-only.
-    try {
-      raw.transcript = await input.transcribeMedia(post.mediaUrl)
-    } catch (err) {
-      console.warn(
-        `[content-pipeline] transcription failed for ${post.mediaUrl}; continuing without a transcript: `
-        + (err instanceof Error ? err.message : String(err)),
-      )
-    }
-  }
-  // image / carousel: no OCR by default (Phase 1).
+  const { assets, transcript } = await materializePostAssets(
+    { media: input.media, assetPaths: input.assetPaths, destDir: input.destDir },
+    { fetchMedia: input.fetchMedia, transcribe: input.transcribeMedia },
+  )
+  if (assets.length) raw.localAssets = assets
+  if (transcript) raw.transcript = transcript
 
   return raw
 }
 
-/** Real transcriber: fetch the media to a temp file, then run whisper via the extractor CLI. */
+/** Real transcriber: run whisper via the extractor CLI on an already-local file. */
 export function makeRealTranscriber(): TranscribeMedia {
+  return async (videoPath: string) => {
+    const result = await runTranscribe(videoPath)
+    return result.text
+  }
+}
+
+/** Real media fetcher: download a URL into a buffer. */
+export function makeRealFetchMedia(): FetchMedia {
+  return async (url: string) => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Failed to download media (${res.status})`)
+    return Buffer.from(await res.arrayBuffer())
+  }
+}
+
+/**
+ * Legacy helper retained for callers that still transcribe a remote URL directly
+ * (downloads to a temp file first). New code uses makeRealFetchMedia +
+ * makeRealTranscriber via materializePostAssets.
+ */
+export function makeUrlTranscriber(): (mediaUrl: string) => Promise<string> {
   return async (mediaUrl: string) => {
     const res = await fetch(mediaUrl)
     if (!res.ok) throw new Error(`Failed to download media (${res.status})`)

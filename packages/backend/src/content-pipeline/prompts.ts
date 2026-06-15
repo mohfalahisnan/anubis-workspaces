@@ -32,6 +32,9 @@ export const DEFAULT_PROMPT_TEMPLATES: PipelinePromptDefaults = {
     '=== SOURCE (raw idea) ===',
     '{{source}}',
     '',
+    '=== REFERENCE MEDIA ===',
+    '{{media}}',
+    '',
     '=== BRAND & KNOWLEDGE CONTEXT ===',
     '{{context}}',
     '',
@@ -98,6 +101,23 @@ function sourceBlock(rawIdea: RawIdea): string {
   ].filter(Boolean).join('\n')
 }
 
+function mediaBlock(rawIdea: RawIdea): string {
+  const assets = rawIdea.localAssets ?? []
+  if (!assets.length) return ''
+  const images = assets.filter((a) => a.kind === 'image')
+  const hasVideo = assets.some((a) => a.kind === 'video')
+  // Video → analyze via transcript only (do not attach the file to the model).
+  if (rawIdea.mediaKind === 'video' || (hasVideo && !images.length)) {
+    return 'This is a VIDEO post. Analyze it from the transcript above only; no frames are attached.'
+  }
+  if (!images.length) return ''
+  const list = images.map((a) => `- assets/${a.fileName}`).join('\n')
+  return [
+    `This is ${rawIdea.mediaKind === 'carousel' ? 'a CAROUSEL' : 'an IMAGE'} post. The following image file(s) are attached and also present in your working directory — open/read them and factor the visuals into the brief:`,
+    list,
+  ].join('\n')
+}
+
 export function buildBriefVars(input: {
   rawIdea: RawIdea
   context: string
@@ -105,6 +125,7 @@ export function buildBriefVars(input: {
 }): Record<string, string> {
   return {
     source: sourceBlock(input.rawIdea),
+    media: mediaBlock(input.rawIdea),
     context: contextBlock(input.context),
     lessons: lessonsBlock(input.lessons),
   }

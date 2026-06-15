@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PROMPT_TEMPLATES, renderPrompt } from '../../src/content-pipeline/prompts.js'
+import { DEFAULT_PROMPT_TEMPLATES, renderPrompt, buildBriefVars } from '../../src/content-pipeline/prompts.js'
 import { buildBriefPrompt } from '../../src/content-pipeline/schemas.js'
 
 describe('renderPrompt', () => {
@@ -40,5 +40,38 @@ describe('prompt builders with overrides', () => {
     expect(DEFAULT_PROMPT_TEMPLATES.brief).toContain('{{context}}')
     expect(DEFAULT_PROMPT_TEMPLATES.refine).toContain('{{brief}}')
     expect(DEFAULT_PROMPT_TEMPLATES.ai_review).toContain('{{content}}')
+  })
+})
+
+describe('buildBriefVars media block', () => {
+  it('lists attached image paths for an image/carousel post', () => {
+    const vars = buildBriefVars({
+      rawIdea: { caption: 'c', assetRefs: [], mediaKind: 'carousel', localAssets: [
+        { kind: 'image', fileName: '0.jpg', path: '/x/assets/0.jpg' },
+        { kind: 'image', fileName: '1.jpg', path: '/x/assets/1.jpg' },
+      ] },
+      context: '',
+      lessons: [],
+    })
+    expect(vars.media).toContain('assets/0.jpg')
+    expect(vars.media).toContain('assets/1.jpg')
+    expect(vars.media.toLowerCase()).toContain('image')
+  })
+
+  it('notes transcript-only analysis for a video post', () => {
+    const vars = buildBriefVars({
+      rawIdea: { caption: 'c', assetRefs: [], mediaKind: 'video', transcript: 'spoken', localAssets: [
+        { kind: 'video', fileName: 'video.mp4', path: '/x/assets/video.mp4' },
+      ] },
+      context: '',
+      lessons: [],
+    })
+    expect(vars.media.toLowerCase()).toContain('transcript')
+    expect(vars.media).not.toContain('assets/video.mp4')
+  })
+
+  it('is empty when there are no local assets', () => {
+    const vars = buildBriefVars({ rawIdea: { caption: 'c', assetRefs: [] }, context: '', lessons: [] })
+    expect(vars.media).toBe('')
   })
 })

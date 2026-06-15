@@ -106,7 +106,7 @@ export function getPipelineService(): ContentPipelineService {
         return ''
       }
     },
-    runAgent: async ({ prompt, cwd, projectId, step, profileId, model: stepModel, reasoningEffort: stepEffort, temperature, onProgress }) => {
+    runAgent: async ({ prompt, cwd, projectId, step, profileId, model: stepModel, reasoningEffort: stepEffort, temperature, files, onProgress }) => {
       const workDir = join(dataDir, 'content-pipeline', cwd.split('/').pop() ?? 'scratch')
       mkdirSync(workDir, { recursive: true })
       // Resolve the profile + its agent. Each step runs on whatever agent the
@@ -138,6 +138,7 @@ export function getPipelineService(): ContentPipelineService {
         agent,
         cwd: workDir,
         prompt,
+        files,
         model,
         reasoningEffort: stepEffort ?? resolved.reasoningEffort,
         // Best-effort: most CLI agents ignore temperature, but plumb it through

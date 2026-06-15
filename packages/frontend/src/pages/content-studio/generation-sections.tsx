@@ -11,13 +11,14 @@ const STATUS_TONE: Record<GenerationTask['status'], string> = {
 }
 
 export function GenerationQueueSection({
-  tasks, busy, onStart, onRetry, onCancel,
+  tasks, busy, onStart, onRetry, onCancel, onOpenConversation,
 }: {
   tasks: GenerationTask[]
   busy: boolean
   onStart: () => void
   onRetry: (taskId: string) => void
   onCancel: (taskId: string) => void
+  onOpenConversation: (conversationId: string) => void
 }) {
   return (
     <Section
@@ -45,6 +46,9 @@ export function GenerationQueueSection({
                 ) : null}
                 {t.status === 'pending' || t.status === 'running' ? (
                   <button type='button' disabled={busy} onClick={() => onCancel(t.id)} className='text-[11px] text-muted-foreground hover:text-destructive disabled:opacity-50'>Cancel</button>
+                ) : null}
+                {t.conversationId ? (
+                  <button type='button' onClick={() => onOpenConversation(t.conversationId!)} className='text-[11px] text-muted-foreground hover:underline'>View generation log</button>
                 ) : null}
               </div>
             </li>

@@ -6,6 +6,7 @@ import {
   retryGenerationTask, runFullAuto, runPipelineStep, startGeneration, submitHumanReview, updateAppConfig,
 } from '@/api'
 import { useProject } from '@/lib/use-project'
+import { useNavigation } from '@/lib/navigation'
 import { cn } from '@/lib/utils'
 import { LessonHistorySection } from './content-studio/sections'
 import { PipelineSettingsDialog } from './content-studio/pipeline-settings-dialog'
@@ -22,6 +23,7 @@ const STATUS_LABEL: Partial<Record<ContentItemStatus, string>> = {
 
 export function ContentStudioPage() {
   const { activeProject } = useProject()
+  const { navigate } = useNavigation()
   const projectId = activeProject?.id || 'default'
   const [items, setItems] = useState<ContentItemSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -246,6 +248,7 @@ export function ContentStudioPage() {
                 onRetryTask={(taskId) => void withBusy('retry', async () => {
                   await retryGenerationTask(selected.id, taskId); await reselectAfter(selected.id)
                 })}
+                onOpenConversation={(conversationId) => navigate({ page: 'active-conversation', conversationId })}
                 onCancelTask={(taskId) => void withBusy('cancel', async () => {
                   await cancelGenerationTask(selected.id, taskId); await reselectAfter(selected.id)
                 })}

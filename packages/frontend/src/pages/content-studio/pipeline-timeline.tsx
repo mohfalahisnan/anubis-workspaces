@@ -63,6 +63,7 @@ export interface PipelineTimelineProps {
   onStartGeneration: () => void
   onRetryTask: (taskId: string) => void
   onCancelTask: (taskId: string) => void
+  onOpenConversation: (conversationId: string) => void
 }
 
 export function PipelineTimeline(props: PipelineTimelineProps) {
@@ -253,6 +254,7 @@ function StepBody({ stepKey, state, ...props }: { stepKey: StepKey; state: StepS
             onStart={props.onStartGeneration}
             onRetry={props.onRetryTask}
             onCancel={props.onCancelTask}
+            onOpenConversation={props.onOpenConversation}
           />
           <DraftOutputSection draft={gen.draftOutput} />
         </div>

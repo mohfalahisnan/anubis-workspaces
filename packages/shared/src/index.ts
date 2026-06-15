@@ -426,6 +426,8 @@ export interface AppConfig {
   qoderApiKey?: string
   /** Project-level AI profile assignments for Content Studio pipeline steps. */
   pipelineStepProfiles?: PipelineStepProfileConfig
+  /** AI profile assignments for Content Studio generation (image / video). */
+  generationProfiles?: GenerationProfileConfig
 }
 
 /* ============================================================
@@ -1078,6 +1080,13 @@ export interface PipelineStepProfileConfig {
   brief?: string
   refine?: string
   ai_review?: string
+}
+
+export interface GenerationProfileConfig {
+  /** Profile id, or the reserved 'google-flow' value, for image generation. */
+  image?: string
+  /** Profile id for video (HyperFrames) generation. */
+  video?: string
 }
 
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'

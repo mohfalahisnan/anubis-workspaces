@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { AgentKind, AppConfig, GenerationCapability, GenerationOutput, GenerationTask } from '@anubis/shared'
-import type { RunProfileAgentInput } from '../agent-run.js'
 import type { GenerateCtx, Generator } from './generators.js'
 
 /** Reserved image-profile value selecting the Google Flow browser generator. */
@@ -10,7 +9,14 @@ export const FLOW_IMAGE_PROFILE_ID = 'google-flow'
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 const VIDEO_EXTS = new Set(['.mp4'])
 
-export type RunAgent = (input: RunProfileAgentInput) => Promise<{ text: string; agent: AgentKind }>
+export type RunAgent = (input: {
+  profileId: string
+  prompt: string
+  cwd: string
+  title: string
+  conversationId?: string
+  onConversation?: (id: string) => void
+}) => Promise<{ text: string; agent: AgentKind }>
 
 /** Files in `dir` whose extension is in `exts` (basenames). */
 function snapshot(dir: string, exts: Set<string>): Set<string> {
@@ -24,11 +30,15 @@ function snapshot(dir: string, exts: Set<string>): Set<string> {
  */
 async function generateViaAgent(
   runAgent: RunAgent, profileId: string, prompt: string, ctx: GenerateCtx,
-  exts: Set<string>, kind: string,
+  exts: Set<string>, kind: string, title: string,
 ): Promise<GenerationOutput> {
   mkdirSync(ctx.assetDir, { recursive: true })
   const before = snapshot(ctx.assetDir, exts)
-  const { agent } = await runAgent({ profileId, prompt, cwd: ctx.assetDir })
+  const { agent } = await runAgent({
+    profileId, prompt, cwd: ctx.assetDir, title,
+    conversationId: ctx.conversationId,
+    onConversation: ctx.onConversation,
+  })
   const after = snapshot(ctx.assetDir, exts)
   const created = [...after].filter((f) => !before.has(f))
   if (created.length === 0) {
@@ -84,7 +94,7 @@ export class ConfigurableImageGenerator implements Generator {
       return this.deps.flow.generate(task, ctx)
     }
     const profileId = selected ?? 'codex-image'
-    return generateViaAgent(this.deps.runAgent, profileId, imagePrompt(task.inputPrompt), ctx, IMAGE_EXTS, 'image')
+    return generateViaAgent(this.deps.runAgent, profileId, imagePrompt(task.inputPrompt), ctx, IMAGE_EXTS, 'image', `Image · ${ctx.contentId}`)
   }
 }
 
@@ -101,6 +111,6 @@ export class AgentVideoGenerator implements Generator {
 
   async generate(task: GenerationTask, ctx: GenerateCtx): Promise<GenerationOutput> {
     const profileId = this.deps.getConfig().generationProfiles?.video ?? 'codex-video'
-    return generateViaAgent(this.deps.runAgent, profileId, videoPrompt(task.inputPrompt), ctx, VIDEO_EXTS, 'video')
+    return generateViaAgent(this.deps.runAgent, profileId, videoPrompt(task.inputPrompt), ctx, VIDEO_EXTS, 'video', `Video · ${ctx.contentId}`)
   }
 }

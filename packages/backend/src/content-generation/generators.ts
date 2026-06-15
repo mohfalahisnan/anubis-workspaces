@@ -6,6 +6,10 @@ import { withCrawlerProfileDefaults } from '../chrome-defaults.js'
 export interface GenerateCtx {
   contentId: string
   assetDir: string
+  /** Existing conversation tracking this task's generation (continue on retry). */
+  conversationId?: string
+  /** Persist a newly-created conversation id back onto the task. */
+  onConversation?: (id: string) => void
 }
 
 export interface Generator {

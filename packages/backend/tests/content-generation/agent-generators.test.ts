@@ -12,8 +12,8 @@ const task = (over: Partial<GenerationTask> = {}): GenerationTask => ({
   generator: '', inputPrompt: 'a red cat', status: 'pending', retryCount: 0, createdAt: 1, updatedAt: 1, ...over,
 })
 
-function ctx() {
-  return { contentId: 'c1', assetDir: join(mkdtempSync(join(tmpdir(), 'anubis-gen-')), 'assets') }
+function ctx(over: Partial<{ conversationId: string; onConversation: (id: string) => void }> = {}) {
+  return { contentId: 'c1', assetDir: join(mkdtempSync(join(tmpdir(), 'anubis-gen-')), 'assets'), ...over }
 }
 
 describe('ConfigurableImageGenerator', () => {
@@ -28,9 +28,25 @@ describe('ConfigurableImageGenerator', () => {
     const out = await gen.generate(task(), ctx())
     expect(out.assetPaths!.length).toBe(1)
     expect(out.assetPaths![0]!.endsWith('out.png')).toBe(true)
-    const input = runAgent.mock.calls[0]![0] as { profileId: string; prompt: string }
+    const input = runAgent.mock.calls[0]![0] as { profileId: string; prompt: string; title: string; cwd: string }
     expect(input.profileId).toBe('codex-image') // default when unset
     expect(input.prompt).toContain('$imagegen')
+    expect(input.title).toContain('c1')
+  })
+
+  it('forwards conversationId and onConversation from ctx to the runner', async () => {
+    const onConversation = vi.fn()
+    const runAgent = vi.fn(async ({ cwd }: { cwd: string }) => {
+      writeFileSync(join(cwd, 'out.png'), 'img')
+      return { text: 'out.png', agent: 'codex' as const }
+    })
+    const gen = new ConfigurableImageGenerator({
+      getConfig: () => ({} as AppConfig), runAgent, flow: { generate: vi.fn() } as never,
+    })
+    await gen.generate(task(), ctx({ conversationId: 'conv-9', onConversation }))
+    const input = runAgent.mock.calls[0]![0] as { conversationId?: string; onConversation?: unknown }
+    expect(input.conversationId).toBe('conv-9')
+    expect(input.onConversation).toBe(onConversation)
   })
 
   it('delegates to Google Flow when the image profile is google-flow', async () => {

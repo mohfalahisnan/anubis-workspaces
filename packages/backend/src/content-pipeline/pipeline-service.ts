@@ -60,6 +60,8 @@ export interface PipelineDeps {
     model?: string
     reasoningEffort?: ReasoningEffort
     temperature?: number
+    /** Absolute paths attached to the agent turn (e.g. reference images). */
+    files?: string[]
     onProgress?: (message: string) => void
   }) => Promise<string>
   /** Extract raw idea from the item's reference post/URL. Returns the raw idea and patches the pipeline. */
@@ -90,6 +92,7 @@ export class ContentPipelineService {
     profileId: string | undefined,
     settings: PipelineStepSettings | undefined,
     onProgress?: (message: string) => void,
+    files?: string[],
   ): StructuredRunner {
     return (prompt: string) => this.deps.runAgent({
       prompt,
@@ -100,6 +103,7 @@ export class ContentPipelineService {
       model: settings?.model,
       reasoningEffort: settings?.reasoningEffort,
       temperature: settings?.temperature,
+      files,
       onProgress,
     })
   }
@@ -176,11 +180,16 @@ export class ContentPipelineService {
     const item = this.requireItem(id)
     const p = this.deps.pipeline.get(id)
     const rawIdea = (p.rawIdea ?? { assetRefs: [] }) as RawIdea
+    // image / carousel → attach the downloaded images for the agent to view.
+    // video → transcript-only (no files); see the {{media}} prompt block.
+    const imageFiles = (rawIdea.mediaKind === 'image' || rawIdea.mediaKind === 'carousel')
+      ? (rawIdea.localAssets ?? []).filter((a) => a.kind === 'image').map((a) => a.path)
+      : []
     const lessons = this.deps.lessons.listForInjection({ projectId: item.projectId, limit: 8 })
     const context = await this.deps.contextPack(item.projectId, briefQuery(rawIdea))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).brief
     const settings = this.stepSettings(item, 'brief')
-    const brief = await this.runAiStep(id, 'breakdown', resolvedId, (onProgress) => runStructured(this.runner(item, 'brief', resolvedId, settings, onProgress), {
+    const brief = await this.runAiStep(id, 'breakdown', resolvedId, (onProgress) => runStructured(this.runner(item, 'brief', resolvedId, settings, onProgress, imageFiles), {
       prompt: buildBriefPrompt({ rawIdea, context, lessons }, settings?.promptTemplate),
       schema: ImprovedBriefSchema,
       maxAttempts: settings?.maxJsonAttempts,

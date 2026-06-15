@@ -60,6 +60,40 @@ describe('ContentPipelineService.runBreakdown', () => {
     )
   })
 
+  it('attaches image files for an image/carousel post', async () => {
+    const { deps } = makeDeps()
+    deps.pipeline.get.mockReturnValue({
+      contentId: 'c1', autoIterationCount: 0,
+      rawIdea: { caption: 'cap', assetRefs: [], mediaKind: 'carousel', localAssets: [
+        { kind: 'image', fileName: '0.jpg', path: '/d/content-pipeline/c1/assets/0.jpg' },
+        { kind: 'image', fileName: '1.jpg', path: '/d/content-pipeline/c1/assets/1.jpg' },
+      ] },
+    })
+    deps.runAgent.mockResolvedValue(JSON.stringify(briefFixture()))
+    const svc = new ContentPipelineService(deps as never)
+    await svc.runBreakdown('c1')
+    const call = deps.runAgent.mock.calls[0]![0] as { files?: string[] }
+    expect(call.files).toEqual([
+      '/d/content-pipeline/c1/assets/0.jpg',
+      '/d/content-pipeline/c1/assets/1.jpg',
+    ])
+  })
+
+  it('does NOT attach files for a video post', async () => {
+    const { deps } = makeDeps()
+    deps.pipeline.get.mockReturnValue({
+      contentId: 'c1', autoIterationCount: 0,
+      rawIdea: { caption: 'cap', assetRefs: [], mediaKind: 'video', transcript: 'spoken', localAssets: [
+        { kind: 'video', fileName: 'video.mp4', path: '/d/content-pipeline/c1/assets/video.mp4' },
+      ] },
+    })
+    deps.runAgent.mockResolvedValue(JSON.stringify(briefFixture()))
+    const svc = new ContentPipelineService(deps as never)
+    await svc.runBreakdown('c1')
+    const call = deps.runAgent.mock.calls[0]![0] as { files?: string[] }
+    expect(call.files ?? []).toEqual([])
+  })
+
   it('applies the per-step prompt template + model/effort override', async () => {
     const { deps } = makeDeps({
       settings: {

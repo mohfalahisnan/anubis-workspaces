@@ -1,35 +1,12 @@
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { createAiAgentService, type AgentEvent } from '@anubis/ai-agent'
+import { createAiAgentService } from '@anubis/ai-agent'
 import type { ConversationStack } from '@anubis/conversation'
 import type { AgentKind } from '@anubis/shared'
 import { getDataDir, getStack } from '../services.js'
+import { runProfileAgent, WEB_AGENTS } from '../agent-run.js'
 import { ContentPipelineService, type PipelineDeps } from './pipeline-service.js'
 import { buildRawIdea, makeRealTranscriber, makeRealFetchMedia, type TranscribeMedia, type FetchMedia } from './raw-extract.js'
 import { pipelineItemAssetsDir, type PostMedia } from './assets.js'
-
-function eventToProgressMessage(event: AgentEvent): string | null {
-  switch (event.type) {
-    case 'partial':
-      return 'Agent is thinking…'
-    case 'tool_call': {
-      const name = (event.data as { toolName?: string }).toolName ?? 'tool'
-      return `Using tool: ${name}…`
-    }
-    case 'tool_result':
-      return 'Tool returned a result.'
-    case 'approval_required': {
-      const name = (event.data as { toolName?: string }).toolName ?? 'tool'
-      return `Waiting for approval: ${name}`
-    }
-    case 'session':
-      return 'Agent session started.'
-    case 'done':
-      return 'Agent finished.'
-    default:
-      return null
-  }
-}
 
 const agentService = createAiAgentService()
 
@@ -46,9 +23,6 @@ const REVIEW_MODEL = 'claude-opus-4-7'
  * same mechanism chat uses. Without it the CLI runs unauthenticated (401).
  */
 const PIPELINE_PROFILE_OVERRIDE = process.env.ANUBIS_PIPELINE_PROFILE_ID
-
-/** Web agents drive a browser session and cannot run headless pipeline steps. */
-const WEB_AGENTS = new Set<AgentKind>(['gpt-web', 'qwen-web'])
 
 /**
  * Resolve the profile id to use for a pipeline step.
@@ -108,94 +82,25 @@ export function getPipelineService(): ContentPipelineService {
     },
     runAgent: async ({ prompt, cwd, projectId, step, profileId, model: stepModel, reasoningEffort: stepEffort, temperature, files, onProgress }) => {
       const workDir = join(dataDir, 'content-pipeline', cwd.split('/').pop() ?? 'scratch')
-      mkdirSync(workDir, { recursive: true })
-      // Resolve the profile + its agent. Each step runs on whatever agent the
-      // selected profile uses (Claude / Codex / Antigravity / Qoder).
-      const resolvedId = resolveProfileId(stack, profileId)
-      const resolved = stack.profiles.resolve(resolvedId)
-      const agent = resolved.agent
-      if (WEB_AGENTS.has(agent)) {
-        throw new Error(
-          `Profile "${resolvedId}" uses the web agent "${agent}", which can't run content-pipeline steps. `
-          + 'Pick a CLI/SDK profile (Claude, Codex, Antigravity, or Qoder).',
-        )
-      }
-      // Authenticate: inject the profile's agent-home env (CLAUDE_CONFIG_DIR /
-      // CODEX_HOME / GEMINI_DIR; Qoder authenticates via its access token below).
-      const home = stack.profileHomes.for(resolvedId, agent)
-      if (!home.hasCredentials()) {
-        throw new Error(
-          `Profile "${resolvedId}" (${agent}) has no credentials for the content pipeline. `
-          + 'Open Profiles, sign in to the profile, then retry.',
-        )
-      }
-      const cfg = stack.appConfig.get()
-      // Model: per-step override wins, then the profile's own config.model; for the
+      // Resolve the profile (default chain) + its agent, then the step model:
+      // per-step override wins, then the profile's own config.model; for the
       // reasoning-heavy ai_review step fall back to a stronger Claude model only
       // when running on Claude.
-      const model = stepModel ?? resolved.model ?? (step === 'ai_review' && agent === 'claude' ? REVIEW_MODEL : undefined)
-      const input = {
-        agent,
-        cwd: workDir,
+      const resolvedId = resolveProfileId(stack, profileId)
+      const resolved = stack.profiles.resolve(resolvedId)
+      const model = stepModel ?? resolved.model ?? (step === 'ai_review' && resolved.agent === 'claude' ? REVIEW_MODEL : undefined)
+      const res = await runProfileAgent(stack, agentService, {
+        profileId: resolvedId,
         prompt,
+        cwd: workDir,
         files,
         model,
-        reasoningEffort: stepEffort ?? resolved.reasoningEffort,
-        // Best-effort: most CLI agents ignore temperature, but plumb it through
-        // for the (e.g. Qoder) ones that accept sampling parameters.
+        reasoningEffort: stepEffort,
         temperature,
-        // Run autonomously regardless of agent: prefer the profile's own setting,
-        // else the most permissive non-interactive default for each knob.
-        sandboxMode: resolved.sandboxMode ?? 'workspace-write' as const,
-        approvalPolicy: resolved.approvalPolicy ?? 'never' as const,
-        permissionMode: resolved.permissionMode ?? 'bypassPermissions' as const,
-        allowedTools: resolved.allowedTools,
-        disallowedTools: resolved.disallowedTools,
-        claudeCliProfile: resolved.claudeCliProfile,
         workspaceId: projectId,
-        extraEnv: { ...home.env(), ...(resolved.env ?? {}) },
-        qoderApiKey: cfg.qoderApiKey,
-      }
-
-      // Fast path: no progress listener needed.
-      if (!onProgress) {
-        const res = await agentService.runAgent(input)
-        return res.text
-      }
-
-      // Streaming path: forward agent events as human-readable progress messages.
-      const { stream } = await agentService.streamAgent(input)
-      let text = ''
-      return new Promise<string>((resolve, reject) => {
-        stream.on('partial', (data) => {
-          text += data.deltaText ?? ''
-          const msg = eventToProgressMessage({ type: 'partial', data })
-          if (msg) onProgress(msg)
-        })
-        stream.on('tool_call', (data) => {
-          const msg = eventToProgressMessage({ type: 'tool_call', data })
-          if (msg) onProgress(msg)
-        })
-        stream.on('tool_result', (data) => {
-          const msg = eventToProgressMessage({ type: 'tool_result', data })
-          if (msg) onProgress(msg)
-        })
-        stream.on('approval_required', (data) => {
-          const msg = eventToProgressMessage({ type: 'approval_required', data })
-          if (msg) onProgress(msg)
-        })
-        stream.on('session', (data) => {
-          const msg = eventToProgressMessage({ type: 'session', data })
-          if (msg) onProgress(msg)
-        })
-        stream.on('done', () => {
-          onProgress('Agent finished.')
-          resolve(text)
-        })
-        stream.on('error', ({ error }) => {
-          reject(error)
-        })
+        onProgress,
       })
+      return res.text
     },
     extract: async (id) => {
       const item = stack.contentItems.findById(id)

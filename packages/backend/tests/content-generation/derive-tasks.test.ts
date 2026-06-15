@@ -30,10 +30,10 @@ describe('deriveTasks', () => {
     expect(tasks.some((t) => t.type === 'text_overlay' && t.inputPrompt === 'BUY NOW')).toBe(true)
   })
 
-  it('video source → manual video task; videoScript → manual voiceover task', () => {
+  it('video source → pending video task; videoScript → manual voiceover task', () => {
     const r = refined({ copywriting: { hook: 'h', body: 'b', cta: 'c', videoScript: 'read this' } })
     const tasks = deriveTasks(r, 'video')
-    expect(tasks.find((t) => t.type === 'video')?.status).toBe('manual')
+    expect(tasks.find((t) => t.type === 'video')?.status).toBe('pending')
     expect(tasks.find((t) => t.type === 'voiceover')?.status).toBe('manual')
   })
 

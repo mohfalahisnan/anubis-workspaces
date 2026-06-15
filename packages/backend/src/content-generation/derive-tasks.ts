@@ -60,8 +60,8 @@ export function deriveTasks(
     tasks.push(spec('image', buildImagePrompt(refined.visualBrief)))
   }
 
-  // Unsupported → manual.
-  if (mediaKind === 'video') tasks.push(spec('video', refined.copywriting.videoScript ?? refined.visualBrief.concept, 'manual'))
+  // Video is generatable via the hyperframes agent generator; voiceover stays manual.
+  if (mediaKind === 'video') tasks.push(spec('video', refined.copywriting.videoScript ?? refined.visualBrief.concept))
   if (refined.copywriting.videoScript) tasks.push(spec('voiceover', refined.copywriting.videoScript, 'manual'))
 
   return tasks

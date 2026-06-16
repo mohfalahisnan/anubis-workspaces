@@ -24,6 +24,33 @@ export interface CodexRunOpts {
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
 
+/**
+ * Build the codex app-server `thread/start` params.
+ *
+ * The sandbox preference MUST be sent as `sandboxPolicy` (a kebab-case preset
+ * string: `read-only` | `workspace-write` | `danger-full-access`). The field is
+ * NOT named `sandbox`, and the value is NOT an object — the app-server silently
+ * ignores unknown fields, so a wrong name means our preference is dropped and
+ * codex falls back to whatever its CODEX_HOME config default is (often
+ * `read-only`). That regression made sandboxed writes — e.g. content-generation
+ * agents copying a generated image into the workspace — fail silently.
+ */
+export function buildThreadStartParams(opts: {
+  model?: string
+  reasoningEffort?: ReasoningEffort
+  cwd: string
+  approvalPolicy?: CodexRunOpts['approvalPolicy']
+  sandboxMode?: CodexRunOpts['sandboxMode']
+}): Record<string, unknown> {
+  return {
+    model: opts.model ?? 'gpt-5.5',
+    modelReasoningEffort: opts.reasoningEffort,
+    cwd: opts.cwd,
+    approvalPolicy: opts.approvalPolicy ?? 'never',
+    sandboxPolicy: opts.sandboxMode ?? 'workspace-write',
+  }
+}
+
 /** Build the codex `turn/start` input items: the text prompt plus any local images. */
 export function buildCodexTurnInput(text: string, files?: string[]): Array<Record<string, unknown>> {
   const items: Array<Record<string, unknown>> = [{ type: 'text', text }]
@@ -259,13 +286,7 @@ export class CodexAgent {
       let threadId = this.threadIds.get(k) ?? opts.codexThreadId
       if (!threadId) {
         const res = await Promise.race([
-          client.request<any>('thread/start', {
-            model: opts.model ?? 'gpt-5.5',
-            modelReasoningEffort: opts.reasoningEffort,
-            cwd: opts.cwd,
-            approvalPolicy: opts.approvalPolicy ?? 'never',
-            sandbox: opts.sandboxMode ?? 'workspace-write',
-          }),
+          client.request<any>('thread/start', buildThreadStartParams(opts)),
           childErrored,
         ])
         threadId = res?.thread?.id ?? res?.threadId ?? res?.conversationId ?? res?.id

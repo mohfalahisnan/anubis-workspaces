@@ -80,4 +80,19 @@ describe('pickBestPath (Windows shim ranking)', () => {
     const stdout = ['C:\\bin\\thing', 'C:\\bin\\thing.ps1', 'C:\\bin\\thing.exe'].join('\n')
     expect(__test__pickBestPath(stdout, true)).toBe('C:\\bin\\thing.exe')
   })
+
+  it('prefers a native .exe over an npm .cmd shim', () => {
+    // Real-world breakage: a broken npm-installed claude (whose .cmd shim
+    // points at a bun-runtime stub) shadowed the working winget claude.exe.
+    // npm never produces a top-level `.exe`, so any `.exe` on PATH is the
+    // canonical native binary and must win over the `.cmd` shim.
+    const stdout = [
+      'C:\\Users\\User\\AppData\\Roaming\\npm\\claude',
+      'C:\\Users\\User\\AppData\\Roaming\\npm\\claude.cmd',
+      'C:\\Users\\User\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Anthropic.ClaudeCode\\claude.exe',
+    ].join('\r\n')
+    expect(__test__pickBestPath(stdout, true)).toBe(
+      'C:\\Users\\User\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Anthropic.ClaudeCode\\claude.exe',
+    )
+  })
 })

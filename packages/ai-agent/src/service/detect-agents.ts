@@ -20,17 +20,24 @@ const lookupCmd = IS_WIN ? 'where.exe' : 'which'
  * shim (a sh script Node can't execute via `spawn`, → ENOENT) AND the
  * `.cmd` shim that Windows actually runs. Pick the executable one.
  *
- * Order of preference: .cmd > .exe > .bat > .ps1 > anything with an
+ * Order of preference: .exe > .cmd > .bat > .ps1 > anything with an
  * extension > extension-less (worst on Windows). On non-Windows we just
  * take the first match.
+ *
+ * A native `.exe` outranks the `.cmd` shim because npm never produces a
+ * top-level `.exe` for these CLIs — so any `.exe` on PATH is the canonical
+ * native binary (e.g. the winget/official Claude Code install). Preferring
+ * it avoids a broken npm `.cmd` shim shadowing a working native binary,
+ * which is exactly what happened when an npm `claude.cmd` pointed at a
+ * bun-runtime stub and hijacked the working winget `claude.exe`.
  */
 function pickBestPath(stdout: string, isWin: boolean): string {
   const paths = stdout.split(/\r?\n/).map((p) => p.trim()).filter(Boolean)
   if (!isWin || paths.length <= 1) return paths[0]!
   const rank = (p: string): number => {
     const ext = extname(p).toLowerCase()
-    if (ext === '.cmd') return 0
-    if (ext === '.exe') return 1
+    if (ext === '.exe') return 0
+    if (ext === '.cmd') return 1
     if (ext === '.bat') return 2
     if (ext === '.ps1') return 3
     if (ext !== '') return 4

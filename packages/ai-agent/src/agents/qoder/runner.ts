@@ -244,10 +244,22 @@ export class QoderAgent {
             }
             case 'result': {
               if (!terminalEmitted) {
-                emitter.emit('done', {
-                  finishReason: m.subtype,
-                  usage: msg,
-                })
+                // The SDK reports failures (e.g. a rejected/invalid API key) as
+                // a result message with is_error:true + errors[], NOT as a
+                // thrown exception. Translate that into an `error` event so the
+                // failure surfaces to the user instead of a silent "finished"
+                // turn with an empty body.
+                if (m.is_error) {
+                  const detail = m.errors?.length
+                    ? m.errors.map(String).join('; ')
+                    : (m.result || m.subtype || 'Qoder run failed')
+                  emitter.emit('error', { error: new Error(detail) })
+                } else {
+                  emitter.emit('done', {
+                    finishReason: m.subtype,
+                    usage: msg,
+                  })
+                }
               }
               break
             }

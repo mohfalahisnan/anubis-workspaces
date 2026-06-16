@@ -33,7 +33,17 @@ export function getGenerationService(): GenerationService {
     taskRepo: stack.contentGenerationTasks,
     lessons: stack.contentLessons,
     registry,
-    assetDirFor: (contentId) => join(getDataDir(), 'content-pipeline', contentId, 'assets'),
+    genDirsFor: (projectId, contentId) => {
+      // Run the generation conversation in the project's workdir when it has one,
+      // so the agent works inside the real project; otherwise fall back to a
+      // per-content scratch workspace under the app data dir. Generated media lands
+      // in the standard `outputs/generated-assets/<contentId>` folder either way.
+      const workdir = stack.projects.findById(projectId)?.workdir?.trim()
+      const workspaceDir = workdir && workdir.length > 0
+        ? workdir
+        : join(getDataDir(), 'content-pipeline', contentId)
+      return { workspaceDir, assetDir: join(workspaceDir, 'outputs', 'generated-assets', contentId) }
+    },
     maxRetries: MAX_RETRIES,
   }
 

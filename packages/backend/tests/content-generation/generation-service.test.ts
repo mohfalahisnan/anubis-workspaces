@@ -35,7 +35,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
       taskRepo: tasksRepo,
       lessons: { create: vi.fn((l: Record<string, unknown>) => { lessons.push(l); return { id: 'L', createdAt: 1, ...l } }) },
       registry: { get: vi.fn(() => ({ name: 'mock', capability: 'text', generate: vi.fn(async () => ({ text: 'ok' })) })) },
-      assetDirFor: vi.fn(() => '/tmp/assets'),
+      genDirsFor: vi.fn(() => ({ workspaceDir: '/tmp/ws', assetDir: '/tmp/ws/outputs/generated-assets/c1' })),
       maxRetries: 2,
       ...over,
     },

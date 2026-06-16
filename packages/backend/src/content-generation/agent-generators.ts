@@ -12,8 +12,10 @@ const VIDEO_EXTS = new Set(['.mp4'])
 export type RunAgent = (input: {
   profileId: string
   prompt: string
+  /** The agent's working directory = the conversation workspace (project workdir). */
   cwd: string
   title: string
+  projectId: string
   conversationId?: string
   onConversation?: (id: string) => void
 }) => Promise<{ text: string; agent: AgentKind }>
@@ -35,7 +37,7 @@ async function generateViaAgent(
   mkdirSync(ctx.assetDir, { recursive: true })
   const before = snapshot(ctx.assetDir, exts)
   const { agent } = await runAgent({
-    profileId, prompt, cwd: ctx.assetDir, title,
+    profileId, prompt, cwd: ctx.workspaceDir, title, projectId: ctx.projectId,
     conversationId: ctx.conversationId,
     onConversation: ctx.onConversation,
   })
@@ -47,10 +49,12 @@ async function generateViaAgent(
   return { assetPaths: created.map((f) => join(ctx.assetDir, f)), meta: { agent, profileId } }
 }
 
-function imagePrompt(brief: string): string {
+function imagePrompt(brief: string, saveDir: string): string {
   return [
-    'You are generating ONE image asset for a social-media post, in the current working directory.',
-    'Use Codex native image generation by including $imagegen, and SAVE the result as a single PNG or JPG file in the current directory.',
+    'You are generating ONE image asset for a social-media post.',
+    'Use Codex native image generation by including $imagegen.',
+    'SAVE the result as a single PNG or JPG file into this exact directory (create it if missing); do not save it anywhere else:',
+    saveDir,
     '',
     '=== IMAGE BRIEF ===',
     brief,
@@ -59,14 +63,18 @@ function imagePrompt(brief: string): string {
   ].join('\n')
 }
 
-function videoPrompt(brief: string): string {
+function videoPrompt(brief: string, saveDir: string): string {
   return [
-    'You are generating ONE short social-media video as a single .mp4 file in the current working directory,',
+    'You are generating ONE short social-media video as a single .mp4 file,',
     'using the open-source "hyperframes" npm package (HeyGen).',
+    'Do all build work (npm install, render.js, scratch files) inside the "runtime/temp" folder of the current',
+    'workspace so you do not clutter the workspace root.',
     'Steps:',
-    '1. If hyperframes is not installed in the current directory, run: npm install hyperframes',
-    '2. Write the HTML/CSS scene(s) and a Node script (render.js) that imports hyperframes and renders the scene(s) to a single MP4 here.',
-    '3. Run it (e.g. node render.js) so a single .mp4 is produced in the current directory.',
+    '1. Create and cd into runtime/temp. If hyperframes is not installed there, run: npm install hyperframes',
+    '2. Write the HTML/CSS scene(s) and a Node script (render.js) that imports hyperframes and renders the scene(s) to a single MP4.',
+    '3. Run it (e.g. node render.js).',
+    '4. SAVE/move the final single .mp4 into this exact directory (create it if missing); do not leave it anywhere else:',
+    saveDir,
     '',
     '=== VIDEO BRIEF / SCRIPT ===',
     brief,
@@ -94,7 +102,7 @@ export class ConfigurableImageGenerator implements Generator {
       return this.deps.flow.generate(task, ctx)
     }
     const profileId = selected ?? 'codex-image'
-    return generateViaAgent(this.deps.runAgent, profileId, imagePrompt(task.inputPrompt), ctx, IMAGE_EXTS, 'image', `Image · ${ctx.contentId}`)
+    return generateViaAgent(this.deps.runAgent, profileId, imagePrompt(task.inputPrompt, ctx.assetDir), ctx, IMAGE_EXTS, 'image', `Image · ${ctx.contentId}`)
   }
 }
 
@@ -111,6 +119,6 @@ export class AgentVideoGenerator implements Generator {
 
   async generate(task: GenerationTask, ctx: GenerateCtx): Promise<GenerationOutput> {
     const profileId = this.deps.getConfig().generationProfiles?.video ?? 'codex-video'
-    return generateViaAgent(this.deps.runAgent, profileId, videoPrompt(task.inputPrompt), ctx, VIDEO_EXTS, 'video', `Video · ${ctx.contentId}`)
+    return generateViaAgent(this.deps.runAgent, profileId, videoPrompt(task.inputPrompt, ctx.assetDir), ctx, VIDEO_EXTS, 'video', `Video · ${ctx.contentId}`)
   }
 }

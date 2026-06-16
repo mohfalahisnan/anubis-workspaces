@@ -6,10 +6,12 @@ export interface RunGenerationAgentInput {
   /** A fully-resolved profile id (caller resolves any default chain). */
   profileId: string
   prompt: string
-  /** Absolute working dir = the conversation workspace; the agent saves assets here. */
+  /** Absolute working dir = the conversation workspace (the project's workdir). The agent runs here. */
   cwd: string
   /** Conversation title shown in the (filterable) conversation list. */
   title: string
+  /** Project the conversation belongs to (so it's scoped to the right project). */
+  projectId?: string
   /** Existing conversation to continue (retry). Omit to start a new one. */
   conversationId?: string
   /** Called with the new conversation id as soon as it's created (before the turn runs). */
@@ -42,6 +44,7 @@ export async function runGenerationAgent(
     const conv = stack.conversation.create({
       title: input.title,
       profileId: input.profileId,
+      projectId: input.projectId,
       workspacePath: input.cwd,
       source: 'content-generation',
       override: { approvalPolicy: 'never', sandboxMode: 'workspace-write', permissionMode: 'bypassPermissions' },

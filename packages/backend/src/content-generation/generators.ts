@@ -5,6 +5,10 @@ import { withCrawlerProfileDefaults } from '../chrome-defaults.js'
 
 export interface GenerateCtx {
   contentId: string
+  projectId: string
+  /** Conversation workspace = the project's workdir (or a per-content fallback). The agent runs here. */
+  workspaceDir: string
+  /** Where generated media is saved + detected: `<workspaceDir>/outputs/generated-assets/<contentId>`. */
   assetDir: string
   /** Existing conversation tracking this task's generation (continue on retry). */
   conversationId?: string

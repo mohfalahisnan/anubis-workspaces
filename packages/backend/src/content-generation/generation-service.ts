@@ -30,7 +30,8 @@ export interface GenerationDeps {
   }
   lessons: { create: (input: Omit<ContentLesson, 'id' | 'createdAt'>) => ContentLesson }
   registry: { get: (capability: GenerationTask['capability']) => Generator | undefined }
-  assetDirFor: (contentId: string) => string
+  /** Resolve the conversation workspace (project workdir) + asset output dir for a task. */
+  genDirsFor: (projectId: string, contentId: string) => { workspaceDir: string; assetDir: string }
   maxRetries: number
 }
 
@@ -84,9 +85,12 @@ export class GenerationService {
       this.deps.taskRepo.update(task.id, { status: 'manual' })
       return
     }
+    const { workspaceDir, assetDir } = this.deps.genDirsFor(task.projectId, id)
     const ctx = {
       contentId: id,
-      assetDir: this.deps.assetDirFor(id),
+      projectId: task.projectId,
+      workspaceDir,
+      assetDir,
       conversationId: task.conversationId,
       onConversation: (cid: string) => { this.deps.taskRepo.update(task.id, { conversationId: cid }) },
     }

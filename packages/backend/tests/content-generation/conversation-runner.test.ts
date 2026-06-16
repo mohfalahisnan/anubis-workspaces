@@ -28,12 +28,12 @@ describe('runGenerationAgent', () => {
     const { stack, created } = fakeStack()
     const onConversation = vi.fn()
     const res = await runGenerationAgent(stack as never, {
-      profileId: 'codex-image', prompt: 'draw', cwd: '/tmp/assets', title: 'Image · c1', onConversation,
+      profileId: 'codex-image', prompt: 'draw', cwd: '/work/dir', title: 'Image · c1', projectId: 'proj-7', onConversation,
     })
     expect(res.conversationId).toBe('conv-1')
     expect(res.text).toBe('ok')
     expect(res.agent).toBe('codex')
-    expect(created[0]).toMatchObject({ source: 'content-generation', workspacePath: '/tmp/assets', profileId: 'codex-image' })
+    expect(created[0]).toMatchObject({ source: 'content-generation', workspacePath: '/work/dir', profileId: 'codex-image', projectId: 'proj-7' })
     expect(onConversation).toHaveBeenCalledWith('conv-1')
     expect(stack.conversation.sendMessageAndAwait).toHaveBeenCalledWith('conv-1', { content: 'draw' })
   })

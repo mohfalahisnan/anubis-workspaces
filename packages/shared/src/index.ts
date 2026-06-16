@@ -422,6 +422,8 @@ export interface AppConfig {
   enableContextInjection?: boolean
   /** The agent profile ID to use for context building and prompt improvement. */
   contextInjectionProfileId?: string
+  /** Whether the prompt-injection details card is shown in conversations. Defaults to true. */
+  showPromptInjectionCard?: boolean
   /** Qoder personal access token stored in settings (preferred over QODER_PERSONAL_ACCESS_TOKEN env var). */
   qoderApiKey?: string
   /** Project-level AI profile assignments for Content Studio pipeline steps. */

@@ -565,8 +565,13 @@ postRoutes.delete('/:id', (c) => {
   const stack = getStack()
   const post = stack.capturedPosts.delete(c.req.param('id'))
   if (!post) return c.json({ ok: false, error: 'not_found' }, 404)
-  const count = stack.capturedPosts.countForCompetitor(post.competitorId)
-  stack.competitors.update(post.competitorId, { postCount: count })
+  // Refresh the owner's post count, but tolerate an orphaned post: competitors
+  // are soft-deleted, so a post can outlive a competitor that get()/findById()
+  // no longer return. refreshCompetitorPostStats() guards on that (no-ops when
+  // the competitor is missing) — inlining an unguarded competitors.update()
+  // here would throw "Competitor not found" *after* the post is already gone,
+  // surfacing the delete as a 500 even though it succeeded.
+  refreshCompetitorPostStats(post.competitorId)
   return c.json({ ok: true })
 })
 

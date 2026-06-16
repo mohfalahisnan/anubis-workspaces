@@ -223,7 +223,18 @@ export class CapturedPostsRepo {
   delete(id: string): CapturedPost | null {
     const current = this.findById(id)
     if (!current) return null
-    this.db.prepare('DELETE FROM captured_posts WHERE id = ?').run(id)
+    // `research_candidates.post_id` is a NOT NULL FK back to this row. Migration
+    // 032 makes that edge ON DELETE CASCADE, so the candidate rows (each a
+    // self-contained snapshot of the post) are dropped automatically. We also
+    // clear them explicitly here as defense-in-depth — both run in one
+    // transaction so the post and its derived rows go together regardless of
+    // whether FK enforcement is on. (`content_items` keeps its intentional
+    // ON DELETE RESTRICT — a post backing a content idea still blocks deletion.)
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM research_candidates WHERE post_id = ?').run(id)
+      this.db.prepare('DELETE FROM captured_posts WHERE id = ?').run(id)
+    })
+    tx()
     return current
   }
 

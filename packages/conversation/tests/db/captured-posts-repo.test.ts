@@ -85,6 +85,47 @@ describe('CapturedPostsRepo', () => {
     expect(repo.countForCompetitor(competitorId)).toBe(0)
   })
 
+  // Insert a research session + a candidate scoring `postId`. The candidate's
+  // post_id / competitor_id are NOT NULL FKs back to captured_posts/competitors.
+  function seedCandidate(candidateId: string, sessionId: string, postId: string): void {
+    db.prepare(`
+      INSERT OR IGNORE INTO research_sessions (id, project_id, controls, status, created_at, updated_at)
+      VALUES (@sessionId, 'default', '{}', 'done', 1, 1)
+    `).run({ sessionId })
+    db.prepare(`
+      INSERT INTO research_candidates (
+        id, project_id, session_id, competitor_id, post_id,
+        validation_status, decision, created_at, updated_at
+      ) VALUES (@id, 'default', @sessionId, @competitorId, @postId, 'valid', 'none', 1, 1)
+    `).run({ id: candidateId, sessionId, competitorId, postId })
+  }
+
+  function candidateCount(): number {
+    return (db.prepare('SELECT COUNT(*) AS n FROM research_candidates').get() as { n: number }).n
+  }
+
+  it('FK cascade: deleting a captured post row drops its research candidates (DB-level)', () => {
+    repo.upsert(post(competitorId, '/p/A', 100))
+    const id = repo.list({ competitorId })[0]!.id
+    seedCandidate('cand-A', 'sess-1', id)
+    expect(candidateCount()).toBe(1)
+    // Raw delete bypasses the repo's transaction — proves the migration's
+    // ON DELETE CASCADE, not just the repo-level cleanup.
+    db.prepare('DELETE FROM captured_posts WHERE id = ?').run(id)
+    expect(candidateCount()).toBe(0)
+  })
+
+  it('FK cascade: deleting a competitor drops posts AND their research candidates', () => {
+    repo.upsert(post(competitorId, '/p/A', 100))
+    const id = repo.list({ competitorId })[0]!.id
+    seedCandidate('cand-A', 'sess-1', id)
+    expect(candidateCount()).toBe(1)
+    // competitor -> captured_posts -> research_candidates must all cascade.
+    db.prepare('DELETE FROM competitors WHERE id = ?').run(competitorId)
+    expect(repo.countForCompetitor(competitorId)).toBe(0)
+    expect(candidateCount()).toBe(0)
+  })
+
   it('upsertMany is wrapped in a single transaction (atomic)', () => {
     repo.upsertMany([
       post(competitorId, '/p/A', 1),
@@ -115,6 +156,33 @@ describe('CapturedPostsRepo', () => {
     expect(repo.delete(id)?.postUrl).toBe('/p/A')
     expect(repo.countForCompetitor(competitorId)).toBe(1)
     expect(repo.delete(id)).toBeNull()
+  })
+
+  it('delete cascades to research candidates that reference the post', () => {
+    // The Research Phase scores every captured post into a research_candidate
+    // row whose post_id is a NOT NULL FK back to captured_posts. Deleting the
+    // post used to fail with "FOREIGN KEY constraint failed" because the
+    // candidate (a self-contained snapshot) still pinned the row.
+    repo.upsert(post(competitorId, '/p/A', 100))
+    const id = repo.list({ competitorId })[0]!.id
+
+    db.prepare(`
+      INSERT INTO research_sessions (id, project_id, controls, status, created_at, updated_at)
+      VALUES ('sess-1', 'default', '{}', 'done', 1, 1)
+    `).run()
+    db.prepare(`
+      INSERT INTO research_candidates (
+        id, project_id, session_id, competitor_id, post_id,
+        validation_status, decision, created_at, updated_at
+      ) VALUES ('cand-1', 'default', 'sess-1', @competitorId, @postId, 'valid', 'none', 1, 1)
+    `).run({ competitorId, postId: id })
+
+    expect(repo.delete(id)?.postUrl).toBe('/p/A')
+    expect(repo.countForCompetitor(competitorId)).toBe(0)
+    const remaining = db
+      .prepare('SELECT COUNT(*) AS n FROM research_candidates WHERE post_id = ?')
+      .get(id) as { n: number }
+    expect(remaining.n).toBe(0)
   })
 
   it('list respects limit and returns the top rows of the requested order', () => {

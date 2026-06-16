@@ -35,6 +35,7 @@ import { useDefaultProfile } from '@/lib/use-default-profile'
 import { useEnsureConversation } from '@/lib/use-ensure-conversation'
 import { useWorkspaces } from '@/lib/use-workspaces'
 import { useProject } from '@/lib/use-project'
+import { usePromptCardExpanded } from '@/lib/use-prompt-card-expanded'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
@@ -239,6 +240,13 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   useEffect(() => {
     getAppConfig().then(setAppConfig).catch(() => {})
   }, [])
+
+  const [promptCardExpanded, setPromptCardExpanded] = usePromptCardExpanded()
+  const showPromptInjectionCard = appConfig?.showPromptInjectionCard ?? true
+  const togglePromptCard = useCallback(
+    () => setPromptCardExpanded(!promptCardExpanded),
+    [promptCardExpanded, setPromptCardExpanded],
+  )
 
   // --- Prompt-optimizer local state (mirrors the pickedEffort pattern) ---
   const [pickedEnableContext, setPickedEnableContext] = useState<boolean | null>(null)
@@ -512,7 +520,14 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       >
         <div className='mx-auto flex max-w-[720px] flex-col gap-6'>
           {messages.map((m) => (
-            <RenderedMessage key={m.id} message={m} conversationId={conversationId ?? ''} />
+            <RenderedMessage
+              key={m.id}
+              message={m}
+              conversationId={conversationId ?? ''}
+              showCard={showPromptInjectionCard}
+              cardExpanded={promptCardExpanded}
+              onToggleCard={togglePromptCard}
+            />
           ))}
           {optimistic.map((m) => (
             <OptimisticUserBubble key={m.id} message={m} />
@@ -626,17 +641,19 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
 function CollapsibleHookCard({
   contextPack,
   improvedPrompt,
+  expanded,
+  onToggle,
 }: {
   contextPack: string
   improvedPrompt: string
+  expanded: boolean
+  onToggle: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-
   return (
     <div className='flex flex-col items-end w-full max-w-[75%]'>
       <button
         type='button'
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
         className='flex items-center gap-1.5 rounded-full border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3 py-1 text-[11.5px] font-medium text-foreground hover:bg-[color-mix(in_oklab,var(--anubis-gold)_18%,transparent)] transition-all cursor-pointer'
       >
         <span className='size-[5px] rounded-full bg-[var(--anubis-gold-hi)]' />
@@ -686,9 +703,15 @@ function CollapsibleHookCard({
 const RenderedMessage = memo(function RenderedMessage({
   message,
   conversationId,
+  showCard,
+  cardExpanded,
+  onToggleCard,
 }: {
   message: MessageSummary
   conversationId: string
+  showCard: boolean
+  cardExpanded: boolean
+  onToggleCard: () => void
 }) {
   if (message.role === 'user') {
     const files = message.metadata?.fileReferences as string[] | undefined
@@ -704,10 +727,12 @@ const RenderedMessage = memo(function RenderedMessage({
           {originalPrompt ?? message.content}
         </div>
 
-        {showHookInfo && (
+        {showCard && showHookInfo && (
           <CollapsibleHookCard
             contextPack={contextPack ?? ''}
             improvedPrompt={improvedPrompt ?? ''}
+            expanded={cardExpanded}
+            onToggle={onToggleCard}
           />
         )}
 

@@ -70,4 +70,20 @@ describe('selectAppProcesses', () => {
     expect(selectAppProcesses([p], { installDir: INSTALL + '\\', selfPid: 1, platform: 'win32' }))
       .toEqual([500])
   })
+
+  it('with spareSelfTree:false, selects the live backend child but still spares the current pid', () => {
+    // The quit-and-install path must kill the backend Anubis.exe (a direct
+    // child of main) BEFORE handing off to NSIS — otherwise it keeps
+    // install-dir DLLs (better-sqlite3.node, node-pty) mapped and the
+    // installer reports "Anubis cannot be closed". Default self-tree sparing
+    // would protect it; this opt-out kills every install-dir process except
+    // the current pid (which is what calls quitAndInstall).
+    const procs = [
+      proc({ pid: 100, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe' }), // main (self)
+      proc({ pid: 101, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe', parentPid: 100 }), // backend child
+      proc({ pid: 110, name: 'Anubis.exe', exePath: INSTALL + '\\Anubis.exe', parentPid: 100 }), // gpu helper
+    ]
+    expect(selectAppProcesses(procs, { installDir: INSTALL, selfPid: 100, platform: 'win32', spareSelfTree: false }).sort())
+      .toEqual([101, 110])
+  })
 })

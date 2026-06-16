@@ -80,11 +80,26 @@ export function update(win: Electron.BrowserWindow) {
   // NOTE: On macOS, electron-updater requires the app to be code-signed and notarized
   // (Apple Developer ID + notarization). Until that is set up, this call will fail
   // silently on Mac. Windows works fine without signing (just shows SmartScreen warnings).
-  ipcMain.handle('quit-and-install', () => {
+  ipcMain.handle('quit-and-install', async () => {
     // Kill the backend Anubis.exe + crawler Chrome now, so NSIS never races a
     // surviving child holding install-dir DLLs. quitAndInstall also fires
     // before-quit, but doing it here guarantees completion before handoff.
-    sweepAppProcesses({ installDir: path.dirname(process.execPath), selfPid: process.pid })
+    //
+    // spareSelfTree:false is load-bearing: the backend is a direct CHILD of
+    // this main process, so the default self-tree sparing would protect it and
+    // leave it locking better-sqlite3.node / node-pty under the install dir —
+    // exactly what makes NSIS report "Anubis cannot be closed". Here we are
+    // about to quit anyway, so killing our own helpers is fine.
+    sweepAppProcesses({
+      installDir: path.dirname(process.execPath),
+      selfPid: process.pid,
+      spareSelfTree: false,
+    })
+    // taskkill returns once the signal is delivered, but Windows does not
+    // release a mapped .node image instantly. Give it a moment so the handles
+    // are gone before the NSIS installer starts overwriting install-dir files
+    // (mirrors the Sleep 500 in build/installer.nsh).
+    await new Promise((resolve) => setTimeout(resolve, 500))
     autoUpdater.quitAndInstall(false, true)
   })
 }

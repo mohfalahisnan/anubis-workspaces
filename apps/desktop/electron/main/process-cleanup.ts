@@ -14,6 +14,18 @@ export interface SelectOptions {
   selfPid: number
   /** Defaults to process.platform; tests pass it explicitly for determinism. */
   platform?: NodeJS.Platform
+  /**
+   * When true (default), spare the current process AND its live descendants
+   * (Electron GPU / network-service / renderer children, and the backend
+   * child). Routine sweeps on `before-quit` / startup use this so they don't
+   * force-kill those helpers and log spurious "GPU process exited" noise.
+   *
+   * Set false on the `quit-and-install` path: there every install-dir process
+   * EXCEPT the current pid must die, because the backend Anubis.exe child keeps
+   * install-dir native modules (better-sqlite3.node, node-pty) mapped and would
+   * make NSIS report "Anubis cannot be closed" while it extracts files.
+   */
+  spareSelfTree?: boolean
 }
 
 /** Path segment unique to this app's crawler Chrome profiles. */
@@ -70,7 +82,9 @@ function selfTree(procs: ProcInfo[], selfPid: number): Set<number> {
  */
 export function selectAppProcesses(procs: ProcInfo[], opts: SelectOptions): number[] {
   const platform = opts.platform ?? process.platform
-  const spare = selfTree(procs, opts.selfPid)
+  const spare = (opts.spareSelfTree ?? true)
+    ? selfTree(procs, opts.selfPid)
+    : new Set<number>([opts.selfPid])
   const targets: number[] = []
   for (const p of procs) {
     if (p.pid <= 0 || spare.has(p.pid)) continue
@@ -132,10 +146,16 @@ export function killTree(pid: number, platform: NodeJS.Platform = process.platfo
  * Enumerate -> select -> kill. Synchronous so it can run in `before-quit`
  * before the process exits. Returns the PIDs it targeted (for logging/tests).
  */
-export function sweepAppProcesses(opts: { installDir: string; selfPid: number }): number[] {
+export function sweepAppProcesses(opts: {
+  installDir: string
+  selfPid: number
+  /** Forwarded to selectAppProcesses; see SelectOptions.spareSelfTree. */
+  spareSelfTree?: boolean
+}): number[] {
   const targets = selectAppProcesses(enumerateProcesses(), {
     installDir: opts.installDir,
     selfPid: opts.selfPid,
+    spareSelfTree: opts.spareSelfTree,
   })
   for (const pid of targets) killTree(pid)
   return targets

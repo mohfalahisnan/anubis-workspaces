@@ -53,7 +53,7 @@ function imagePrompt(brief: string, saveDir: string): string {
   return [
     'You are generating ONE image asset for a social-media post.',
     'Use Codex native image generation by including $imagegen.',
-    'SAVE the result as a single PNG or JPG file into this exact directory (create it if missing); do not save it anywhere else:',
+    'after finish generating the image, COPY and SAVE the result as a single PNG or JPG file into this exact directory (create it if missing); do not save it anywhere else:',
     saveDir,
     '',
     '=== IMAGE BRIEF ===',

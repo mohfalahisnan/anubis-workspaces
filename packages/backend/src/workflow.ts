@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z, ZodError } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
-import { resolve, sep, join, extname } from 'node:path'
+import { resolve, join, extname, relative, isAbsolute } from 'node:path'
 import { getStack, getDataDir } from './services.js'
 import { WorkflowGraphSchema } from '@anubis/workflow-runtime'
 import { WorkflowRunManager } from './workflow-run-manager.js'
@@ -167,16 +167,30 @@ workflowRoutes.get('/', (c) => {
   return c.json({ items })
 })
 
+/** True when `target` is `root` itself or nested inside it, with no `..` escape.
+ *  `relative()` folds Windows drive-letter / segment case, so this is safe on win32. */
+function isPathInside(root: string, target: string): boolean {
+  const rel = relative(root, target)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+/** Filesystem roots the artifact endpoint may serve from: the run-artifact dir
+ *  plus every project workspace. Captured Instagram media and `imageVideo`
+ *  local files live under a project workdir (e.g. {workdir}/runtime/cache/...),
+ *  not under workflow-runs/, so both must be allowed. */
+function artifactRoots(): string[] {
+  const roots = [resolve(join(getDataDir(), 'workflow-runs'))]
+  for (const p of getStack().projects.list()) {
+    if (p.workdir && p.workdir.trim()) roots.push(resolve(p.workdir))
+  }
+  return roots
+}
+
 workflowRoutes.get('/artifacts', (c) => {
   const requested = c.req.query('path')
   if (!requested) return c.json({ error: 'missing_path' }, 400)
-  const root = resolve(join(getDataDir(), 'workflow-runs'))
   const target = resolve(requested)
-  // Allow only paths under {dataDir}/workflow-runs/ with no `..` escape.
-  // On Windows, handle case-insensitivity of drive letters and directories.
-  const rootStr = process.platform === 'win32' ? root.toLowerCase() : root
-  const targetStr = process.platform === 'win32' ? target.toLowerCase() : target
-  if (!targetStr.startsWith(rootStr + sep) && targetStr !== rootStr) {
+  if (!artifactRoots().some((root) => isPathInside(root, target))) {
     return c.json({ error: 'forbidden' }, 403)
   }
   if (!existsSync(target)) return c.json({ error: 'not_found' }, 404)

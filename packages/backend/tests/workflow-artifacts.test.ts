@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 let tmpDir: string
 
@@ -55,5 +55,35 @@ describe('GET /workflows/artifacts', () => {
     const missing = join(tmpDir, 'workflow-runs', 'run-1', 'nope.png')
     const res = await app.request(`/workflows/artifacts?path=${encodeURIComponent(missing)}`)
     expect(res.status).toBe(404)
+  })
+
+  it('streams captured media that lives inside a project workdir', async () => {
+    const app = await loadApp()
+    const workdir = join(tmpDir, 'capture-project')
+    const created = await app.request('/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Capture project', workdir }),
+    })
+    expect(created.status).toBe(201)
+
+    // Mirror where the crawler writes Instagram carousel media:
+    // {workdir}/runtime/cache/instagram/{handle}/{shortcode}/{i}.jpg
+    const media = join(workdir, 'runtime', 'cache', 'instagram', 'someuser', 'ABC123', '0.jpg')
+    await mkdir(dirname(media), { recursive: true })
+    await writeFile(media, Buffer.from([0xff, 0xd8, 0xff, 0xe0]))
+
+    const res = await app.request(`/workflows/artifacts?path=${encodeURIComponent(media)}`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('image/jpeg')
+  })
+
+  it('403s on a data-dir path that is neither a run artifact nor a project workdir', async () => {
+    const app = await loadApp()
+    const stray = join(tmpDir, 'unrelated', 'secret.png')
+    await mkdir(dirname(stray), { recursive: true })
+    await writeFile(stray, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    const res = await app.request(`/workflows/artifacts?path=${encodeURIComponent(stray)}`)
+    expect(res.status).toBe(403)
   })
 })

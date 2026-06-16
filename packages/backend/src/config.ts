@@ -58,6 +58,7 @@ const PatchBody = z.object({
   enableNotifications: z.boolean().optional(),
   enableContextInjection: z.boolean().optional(),
   contextInjectionProfileId: z.string().optional(),
+  showPromptInjectionCard: z.boolean().optional(),
   qoderApiKey: z.string().optional(),
   pipelineStepProfiles: StepProfilesSchema.optional(),
   generationProfiles: GenerationProfilesSchema.optional(),

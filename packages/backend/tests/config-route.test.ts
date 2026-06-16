@@ -55,6 +55,19 @@ describe('/config route', () => {
     expect(body.config.chromePath).toBeUndefined()
   })
 
+  it('PATCH /config round-trips showPromptInjectionCard', async () => {
+    const { default: app } = await import('../src/app.js')
+    const patch = await app.request('/config', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ showPromptInjectionCard: false }),
+    })
+    expect(patch.status).toBe(200)
+    const get = await app.request('/config')
+    const body = (await get.json()) as { config: { showPromptInjectionCard?: boolean } }
+    expect(body.config.showPromptInjectionCard).toBe(false)
+  })
+
   it('PATCH /config round-trips generationProfiles', async () => {
     const { default: app } = await import('../src/app.js')
     const patch = await app.request('/config', {

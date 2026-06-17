@@ -30,6 +30,26 @@ describe('content-studio.workflow.json', () => {
     }
   })
 
+  it('includes the markdown viewer, media viewer, and transcript nodes', () => {
+    const graph = WorkflowGraphSchema.parse(doc.graph)
+    const types = graph.nodes.map((n) => n.type)
+    expect(types).toContain('markdownDisplay')
+    expect(types).toContain('mediaDisplay')
+    expect(types).toContain('transcriber')
+  })
+
+  it('feeds the transcript into breakdown via an imageVideo bridge', () => {
+    const graph = WorkflowGraphSchema.parse(doc.graph)
+    const transcriber = graph.nodes.find((n) => n.type === 'transcriber')!
+    expect(transcriber).toBeDefined()
+    // transcriber is fed by an imageVideo bridge (instagramPost envelope → file)
+    const intoTranscriber = graph.edges.find((e) => e.target === transcriber.id)!
+    expect(graph.nodes.find((n) => n.id === intoTranscriber.source)!.type).toBe('imageVideo')
+    // transcript output flows into the breakdown agent
+    const outOfTranscriber = graph.edges.find((e) => e.source === transcriber.id)!
+    expect(graph.nodes.find((n) => n.id === outOfTranscriber.target)!.type).toBe('aiAgentConversation')
+  })
+
   it('wires the AI review gate, its loop, and its branches correctly', () => {
     const graph = WorkflowGraphSchema.parse(doc.graph)
     const gates = graph.nodes.filter((n) => n.type === 'aiReviewGate')

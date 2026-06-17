@@ -1,0 +1,104 @@
+{
+  "anubisWorkflowExport": 1,
+  "name": "Content Studio",
+  "description": "Idea to reviewed draft: extract a reference post, break it down, refine, AI auto-review (loops up to 3x), human approval, then generate the visual + caption and assemble a draft.",
+  "graph": {
+    "nodes": [
+      {
+        "id": "ig",
+        "type": "instagramPost",
+        "position": { "x": 0, "y": 0 },
+        "data": { "source": "url", "url": "https://www.instagram.com/p/REPLACE_WITH_REFERENCE/" }
+      },
+      {
+        "id": "breakdown",
+        "type": "aiAgentConversation",
+        "position": { "x": 260, "y": 0 },
+        "data": {
+          "profileId": "default",
+          "reasoning": "medium",
+          "titleTemplate": "Breakdown",
+          "prompt": "You are analysing a reference Instagram post to produce a content brief. From the reference post in context (caption, media, metrics), extract what makes it work and produce an improved brief for NEW original content in the same niche. Return JSON in `data` with keys: coreIdea, targetAudience, problem, mainMessage, hook, toneDirection, adaptationStrategy. Put a short human-readable summary in `text`."
+        }
+      },
+      {
+        "id": "refine",
+        "type": "aiAgentConversation",
+        "position": { "x": 520, "y": 0 },
+        "data": {
+          "profileId": "default",
+          "reasoning": "medium",
+          "titleTemplate": "Refine",
+          "prompt": "Turn the brief in context into content-ready material for a single Instagram post. Return JSON in `data` with keys: caption (final caption text), hashtags (array of strings), visualBrief (object: concept, subject, layout, mood, style, keyElements, textOverlay). Put the final caption in `text`. If a lesson from a previous rejected attempt is present in context, incorporate it and fix what it flags."
+        }
+      },
+      {
+        "id": "review",
+        "type": "aiReviewGate",
+        "position": { "x": 780, "y": 0 },
+        "data": {
+          "profileId": "default",
+          "reasoning": "high",
+          "maxIterations": 3,
+          "titleTemplate": "AI Review",
+          "prompt": "Review the refined content in context for publish-readiness. Judge it on: on-brief alignment, hook strength, clarity, originality, and platform fit. Approve ONLY if it is genuinely ready to publish; otherwise reject with a specific, actionable improvement instruction."
+        }
+      },
+      {
+        "id": "lesson",
+        "type": "lessonWriter",
+        "position": { "x": 780, "y": 220 },
+        "data": { "profileId": "default", "lessonType": "mistake", "titleTemplate": "Lesson" }
+      },
+      {
+        "id": "human",
+        "type": "humanApproval",
+        "position": { "x": 1040, "y": 0 },
+        "data": {
+          "title": "Approve content",
+          "instructions": "Approve to generate the visual + final caption, or reject with a comment to send it back to refine."
+        }
+      },
+      {
+        "id": "generate",
+        "type": "aiAgentConversation",
+        "position": { "x": 1300, "y": 0 },
+        "data": {
+          "profileId": "codex-image",
+          "titleTemplate": "Generate assets",
+          "prompt": "You are generating the final assets for the APPROVED Instagram post described in context. 1) Generate the post image from the visual brief using your image tool (e.g. $imagegen) and save the file into the current working directory. 2) Produce the final caption and hashtags. Return the saved image file path(s) in `paths`, the final caption text in `text`, and `{ \"caption\": \"...\", \"hashtags\": [\"...\"] }` in `data`."
+        }
+      },
+      {
+        "id": "preview",
+        "type": "instagramDraftPreview",
+        "position": { "x": 1560, "y": 0 },
+        "data": { "username": "your_brand", "format": "post" }
+      },
+      {
+        "id": "planner",
+        "type": "savePlanner",
+        "position": { "x": 1560, "y": 220 },
+        "data": { "status": "review", "title": "Content Studio draft" }
+      },
+      {
+        "id": "capture",
+        "type": "outputCapturer",
+        "position": { "x": 1820, "y": 0 },
+        "data": { "extension": "json", "filename": "content-studio-draft-{timestamp}" }
+      }
+    ],
+    "edges": [
+      { "id": "e1", "source": "ig", "target": "breakdown" },
+      { "id": "e2", "source": "breakdown", "target": "refine" },
+      { "id": "e3", "source": "refine", "target": "review" },
+      { "id": "e4", "source": "review", "target": "human", "sourceHandle": "approved" },
+      { "id": "e5", "source": "review", "target": "lesson", "sourceHandle": "rejected" },
+      { "id": "e6", "source": "lesson", "target": "refine", "data": { "loop": true } },
+      { "id": "e7", "source": "human", "target": "generate", "sourceHandle": "approved" },
+      { "id": "e8", "source": "generate", "target": "preview" },
+      { "id": "e9", "source": "generate", "target": "planner" },
+      { "id": "e10", "source": "preview", "target": "capture" }
+    ]
+  }
+}

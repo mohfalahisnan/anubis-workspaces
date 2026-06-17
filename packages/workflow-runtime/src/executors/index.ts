@@ -11,6 +11,7 @@ import { flowImageExecutor }            from './flow-image.js'
 import { imageVideoExecutor }           from './image-video.js'
 import { aiAgentConversationExecutor }  from './ai-agent-conversation.js'
 import { humanApprovalExecutor }        from './human-approval.js'
+import { aiReviewGateExecutor }         from './ai-review-gate.js'
 import { lessonWriterExecutor }         from './lesson-writer.js'
 import { markdownDisplayExecutor }      from './markdown-display.js'
 import { mediaDisplayExecutor }         from './media-display.js'
@@ -34,6 +35,7 @@ export const executorRegistry: Record<string, Executor<unknown>> = {
   imageVideo:           imageVideoExecutor as Executor<unknown>,
   aiAgentConversation:  aiAgentConversationExecutor as Executor<unknown>,
   humanApproval:        humanApprovalExecutor as Executor<unknown>,
+  aiReviewGate:         aiReviewGateExecutor as Executor<unknown>,
   lessonWriter:         lessonWriterExecutor as Executor<unknown>,
   markdownDisplay:      markdownDisplayExecutor as Executor<unknown>,
   mediaDisplay:         mediaDisplayExecutor as Executor<unknown>,
@@ -51,7 +53,7 @@ export {
   tableExecutor, transformerBriefExecutor, jsonTransformerExecutor, jsonFilterExecutor,
   instagramPostExecutor, transformerMediaExecutor, ocrExtractorExecutor,
   transcriberExecutor, flowImageExecutor, imageVideoExecutor, aiAgentConversationExecutor,
-  humanApprovalExecutor, lessonWriterExecutor,
+  humanApprovalExecutor, aiReviewGateExecutor, lessonWriterExecutor,
   markdownDisplayExecutor, mediaDisplayExecutor, instagramDraftPreviewExecutor, originalCopyExecutor,
   scheduleTriggerExecutor, fileWatchTriggerExecutor, savePlannerExecutor,
   outputCapturerExecutor,

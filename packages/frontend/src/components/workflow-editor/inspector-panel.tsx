@@ -12,6 +12,7 @@ import { TableConfigForm }            from './inspector/config/table-config'
 import { ImageVideoConfigForm }       from './inspector/config/image-video-config'
 import { AiAgentConversationConfigForm } from './inspector/config/ai-agent-conversation-config'
 import { HumanApprovalConfigForm } from './inspector/config/human-approval-config'
+import { AiReviewGateConfigForm } from './inspector/config/ai-review-gate-config'
 import { LessonWriterConfigForm } from './inspector/config/lesson-writer-config'
 import { MarkdownDisplayConfigForm } from './inspector/config/markdown-display-config'
 import { InstagramDraftPreviewConfigForm } from './inspector/config/instagram-draft-preview-config'
@@ -37,6 +38,7 @@ const CONFIG_FORMS: Record<string, FC<{ nodeId: string }>> = {
   imageVideo:          ImageVideoConfigForm,
   aiAgentConversation: AiAgentConversationConfigForm,
   humanApproval:       HumanApprovalConfigForm,
+  aiReviewGate:        AiReviewGateConfigForm,
   lessonWriter:        LessonWriterConfigForm,
   markdownDisplay:     MarkdownDisplayConfigForm,
   instagramDraftPreview: InstagramDraftPreviewConfigForm,

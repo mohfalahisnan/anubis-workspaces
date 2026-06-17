@@ -11,6 +11,7 @@ import { TableExecutableNode }                  from './table'
 import { ImageVideoExecutableNode }             from './image-video'
 import { AiAgentConversationExecutableNode }    from './ai-agent-conversation'
 import { HumanApprovalExecutableNode }          from './human-approval'
+import { AiReviewGateExecutableNode }           from './ai-review-gate'
 import { LessonWriterExecutableNode }           from './lesson-writer'
 import { MarkdownDisplayExecutableNode }        from './markdown-display'
 import { MediaDisplayExecutableNode }           from './media-display'
@@ -34,6 +35,7 @@ export const executableNodeTypes: NodeTypes = {
   imageVideo:          ImageVideoExecutableNode as never,
   aiAgentConversation: AiAgentConversationExecutableNode as never,
   humanApproval:       HumanApprovalExecutableNode as never,
+  aiReviewGate:        AiReviewGateExecutableNode as never,
   lessonWriter:        LessonWriterExecutableNode as never,
   markdownDisplay:     MarkdownDisplayExecutableNode as never,
   mediaDisplay:        MediaDisplayExecutableNode as never,
@@ -84,6 +86,7 @@ export const NODE_PALETTE = [
   { type: 'flowImage',           label: 'Flow Image',             category: 'tools'     },
   { type: 'aiAgentConversation', label: 'AI Agent · Conversation', category: 'agent'    },
   { type: 'humanApproval',       label: 'Human Review',           category: 'agent'    },
+  { type: 'aiReviewGate',        label: 'AI Review',              category: 'agent'    },
   { type: 'lessonWriter',        label: 'Lesson Writer',          category: 'agent'    },
   { type: 'table',               label: 'Table',                  category: 'output'    },
   { type: 'markdownDisplay',     label: 'Markdown',               category: 'output'    },

@@ -39,6 +39,8 @@ const DOWNSTREAM_CONTRACTS: Record<string, string> = {
     'Populate `data` with the keys the next node\'s JSON template references via {{thisNode.data.key}}. Always include `text`.',
   aiAgentConversation:
     '`text` is folded into the next AI\'s context block. `paths` are attached as files. `data` is JSON-stringified into the next node\'s context.',
+  aiReviewGate:
+    'A reviewer reads your output. Put the content to be judged in `data` and a readable summary in `text`.',
   transformerMedia:
     'Populate `data` with the media-transformer input shape. Include `paths` for any file artifacts you produced.',
   table:

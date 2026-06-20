@@ -108,4 +108,5 @@ export const MIGRATIONS: Migration[] = [
   load(31, '031_content_pipeline_settings.sql'),
   load(32, '032_research_candidates_cascade.sql'),
   load(33, '033_content_generation_conversation.sql'),
+  load(34, '034_content_pipeline_settings_generation.sql'),
 ]

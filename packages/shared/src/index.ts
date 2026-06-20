@@ -1115,6 +1115,8 @@ export interface PipelineStepSettings {
 export interface PipelineSettings {
   projectId: string
   steps: Partial<Record<PipelineAiStep, PipelineStepSettings>>
+  /** Per-project generation-profile overrides (image / video). */
+  generationProfiles?: GenerationProfileConfig
   updatedAt: number
 }
 

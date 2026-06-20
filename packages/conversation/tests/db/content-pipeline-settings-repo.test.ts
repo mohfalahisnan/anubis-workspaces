@@ -13,7 +13,21 @@ function openMigratedDb() {
 describe('ContentPipelineSettingsRepo', () => {
   it('returns empty settings for an unknown project', () => {
     const repo = new ContentPipelineSettingsRepo(openMigratedDb())
-    expect(repo.get('p1')).toEqual({ projectId: 'p1', steps: {}, updatedAt: 0 })
+    expect(repo.get('p1')).toEqual({ projectId: 'p1', steps: {}, generationProfiles: {}, updatedAt: 0 })
+  })
+
+  it('persists and round-trips generation profiles', () => {
+    const repo = new ContentPipelineSettingsRepo(openMigratedDb())
+    repo.put('p1', {}, { image: 'manual', video: 'codex-video' })
+    expect(repo.get('p1').generationProfiles).toEqual({ image: 'manual', video: 'codex-video' })
+  })
+
+  it('keeps steps and generation profiles independent on put', () => {
+    const repo = new ContentPipelineSettingsRepo(openMigratedDb())
+    repo.put('p1', { brief: { model: 'a' } }, { image: 'manual' })
+    const s = repo.get('p1')
+    expect(s.steps.brief).toMatchObject({ model: 'a' })
+    expect(s.generationProfiles).toEqual({ image: 'manual' })
   })
 
   it('persists and round-trips per-step overrides', () => {

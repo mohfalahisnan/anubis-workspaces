@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveTasks, buildImagePrompt } from '../../src/content-generation/derive-tasks.js'
+import { deriveTasks } from '../../src/content-generation/derive-tasks.js'
 import type { RefinedContent } from '@anubis/shared'
 
 function refined(over: Partial<RefinedContent> = {}): RefinedContent {
@@ -62,9 +62,26 @@ describe('deriveTasks', () => {
     expect(tasks.find((t) => t.type === 'image')?.status).toBe('pending')
   })
 
-  it('buildImagePrompt composes the visual brief', () => {
-    const p = buildImagePrompt(refined().visualBrief, 'extra slide copy')
-    expect(p).toContain('Subj')
-    expect(p).toContain('extra slide copy')
+  it('renders a custom image template into the image task prompt', () => {
+    const tasks = deriveTasks(refined(), 'image', {}, { image: 'Make {{subject}} in {{style}}' })
+    expect(tasks.find((t) => t.type === 'image')?.inputPrompt).toBe('Make Subj in St')
+  })
+
+  it('renders the custom image template per carousel slide', () => {
+    const r = refined({ copywriting: { hook: 'h', body: 'b', cta: 'c', carouselSlides: ['one', 'two'] } })
+    const tasks = deriveTasks(r, 'carousel', {}, { image: 'Slide: {{slide}}' })
+    expect(tasks.filter((t) => t.type === 'carousel').map((t) => t.inputPrompt)).toEqual(['Slide: one', 'Slide: two'])
+  })
+
+  it('renders a custom video template; default falls back to concept', () => {
+    const r = refined({ copywriting: { hook: 'h', body: 'b', cta: 'c', videoScript: 'say hi' } })
+    expect(deriveTasks(r, 'video', {}, { video: 'VID: {{videoScript}}' }).find((t) => t.type === 'video')?.inputPrompt).toBe('VID: say hi')
+    expect(deriveTasks(refined(), 'video').find((t) => t.type === 'video')?.inputPrompt).toBe('C')
+  })
+
+  it('uses the default image template when no prompt override is given', () => {
+    const out = deriveTasks(refined(), 'image').find((t) => t.type === 'image')?.inputPrompt ?? ''
+    expect(out).toContain('Subj')
+    expect(out).toContain('St')
   })
 })

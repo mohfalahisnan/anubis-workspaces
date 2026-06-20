@@ -1,4 +1,5 @@
-import type { GenerationCapability, GenerationTaskStatus, GenerationTaskType, RefinedContent, VisualBrief } from '@anubis/shared'
+import type { GenerationCapability, GenerationPromptConfig, GenerationTaskStatus, GenerationTaskType, RefinedContent } from '@anubis/shared'
+import { DEFAULT_GENERATION_TEMPLATES, renderImagePrompt, renderVideoPrompt } from './generation-prompts.js'
 
 /** Reserved generation-profile value selecting manual (prompt-only) media generation. */
 export const MANUAL_PROFILE_ID = 'manual'
@@ -26,22 +27,6 @@ export const TASK_CAPABILITY: Record<GenerationTaskType, GenerationCapability> =
   voiceover: 'voiceover',
 }
 
-export function buildImagePrompt(v: VisualBrief, slideCopy?: string): string {
-  const parts = [
-    v.concept,
-    v.sceneDirection,
-    `Subject: ${v.subject}`,
-    `Layout: ${v.layout}`,
-    `Mood: ${v.mood}`,
-    `Style: ${v.style}`,
-    v.keyElements.length ? `Key elements: ${v.keyElements.join(', ')}` : '',
-    v.textOverlay ? `Text overlay: ${v.textOverlay}` : '',
-    slideCopy ? `Slide: ${slideCopy}` : '',
-    v.negativeDirection ? `Avoid: ${v.negativeDirection}` : '',
-  ]
-  return parts.filter(Boolean).join('. ')
-}
-
 function spec(type: GenerationTaskType, inputPrompt: string, status: GenerationTaskStatus = 'pending'): TaskSpec {
   return { type, capability: TASK_CAPABILITY[type], inputPrompt, status }
 }
@@ -50,6 +35,7 @@ export function deriveTasks(
   refined: RefinedContent,
   mediaKind: 'image' | 'video' | 'carousel' | undefined,
   manual: ManualMediaFlags = {},
+  prompts: GenerationPromptConfig = {},
 ): TaskSpec[] {
   const tasks: TaskSpec[] = []
 
@@ -61,18 +47,20 @@ export function deriveTasks(
   const overlay = refined.visualBrief.textOverlay ?? refined.copywriting.textOverlay
   if (overlay) tasks.push(spec('text_overlay', overlay))
 
-  // Visual. When the project opted out of auto-generation (`manual.image`), derive the
-  // media task as `manual` so it surfaces the prompt but never runs a generator.
+  // Visual. The prompt comes from the per-project template (or the shipped default),
+  // rendered with the Refine step's visual brief. `manual.*` marks the task prompt-only.
+  const imageTpl = prompts.image ?? DEFAULT_GENERATION_TEMPLATES.image
+  const videoTpl = prompts.video ?? DEFAULT_GENERATION_TEMPLATES.video
   const imageStatus: GenerationTaskStatus = manual.image ? 'manual' : 'pending'
   if (mediaKind === 'carousel') {
     const slides = refined.copywriting.carouselSlides?.length ? refined.copywriting.carouselSlides : ['']
-    for (const slide of slides) tasks.push(spec('carousel', buildImagePrompt(refined.visualBrief, slide), imageStatus))
+    for (const slide of slides) tasks.push(spec('carousel', renderImagePrompt(imageTpl, refined.visualBrief, slide), imageStatus))
   } else {
-    tasks.push(spec('image', buildImagePrompt(refined.visualBrief), imageStatus))
+    tasks.push(spec('image', renderImagePrompt(imageTpl, refined.visualBrief), imageStatus))
   }
 
-  // Video is generatable via the hyperframes agent generator unless opted out; voiceover stays manual.
-  if (mediaKind === 'video') tasks.push(spec('video', refined.copywriting.videoScript ?? refined.visualBrief.concept, manual.video ? 'manual' : 'pending'))
+  // Video via the hyperframes agent generator unless opted out; voiceover stays manual.
+  if (mediaKind === 'video') tasks.push(spec('video', renderVideoPrompt(videoTpl, refined), manual.video ? 'manual' : 'pending'))
   if (refined.copywriting.videoScript) tasks.push(spec('voiceover', refined.copywriting.videoScript, 'manual'))
 
   return tasks

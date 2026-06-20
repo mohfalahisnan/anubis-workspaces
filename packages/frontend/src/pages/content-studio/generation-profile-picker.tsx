@@ -38,7 +38,7 @@ const MANUAL_OPTION: ProfileSummary = {
 }
 
 function resolveProfile(profiles: ProfileSummary[], id: string | undefined): ProfileSummary | null {
-  if (!id) return null
+  if (!id) return profiles.find((p) => p.id === MANUAL_PROFILE_ID) ?? null
   return profiles.find((p) => p.id === id) ?? null
 }
 

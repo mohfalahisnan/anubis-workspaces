@@ -22,6 +22,7 @@ import {
   type PipelineStepSettings,
   type RefinedContent,
   type DraftOutput,
+  type GenerationProfileConfig,
   type GenerationTask,
   type CapturePreviewPayload,
   type CaptureResultPayload,
@@ -1625,10 +1626,11 @@ export async function getPipelineSettings(
 export async function updatePipelineSettings(
   projectId: string,
   steps: PipelineSettings['steps'],
+  generationProfiles?: GenerationProfileConfig,
 ): Promise<PipelineSettings> {
   const r = await api<{ ok: true; settings: PipelineSettings }>(
     `/pipeline-settings?projectId=${encodeURIComponent(projectId)}`,
-    { method: 'PUT', body: JSON.stringify({ steps }) },
+    { method: 'PUT', body: JSON.stringify({ steps, generationProfiles: generationProfiles ?? {} }) },
   )
   return r.settings
 }

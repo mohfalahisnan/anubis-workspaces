@@ -262,7 +262,7 @@ export function ContentStudioPage() {
         )}
       </div>
 
-      <PipelineSettingsDialog open={settingsOpen} projectId={projectId} onClose={() => setSettingsOpen(false)} />
+      <PipelineSettingsDialog open={settingsOpen} projectId={projectId} profiles={profiles} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

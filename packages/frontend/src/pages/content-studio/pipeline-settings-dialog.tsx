@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { RotateCcw, FileDown } from 'lucide-react'
-import type { PipelineAiStep, PipelinePromptDefaults, PipelineStepSettings, ReasoningEffort } from '@anubis/shared'
+import type { GenerationProfileConfig, PipelineAiStep, PipelinePromptDefaults, PipelineStepSettings, ProfileSummary, ReasoningEffort } from '@anubis/shared'
 import { getPipelineSettings, updatePipelineSettings } from '@/api'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { GenerationProfilePicker } from './generation-profile-picker'
 
 type Steps = Partial<Record<PipelineAiStep, PipelineStepSettings>>
 
@@ -34,14 +35,17 @@ function clean(steps: Steps): Steps {
 export function PipelineSettingsDialog({
   open,
   projectId,
+  profiles,
   onClose,
 }: {
   open: boolean
   projectId: string
+  profiles: ProfileSummary[]
   onClose: () => void
 }) {
   const [steps, setSteps] = useState<Steps>({})
   const [defaults, setDefaults] = useState<PipelinePromptDefaults | null>(null)
+  const [genProfiles, setGenProfiles] = useState<GenerationProfileConfig>({})
   const [active, setActive] = useState<PipelineAiStep>('brief')
   const [busy, setBusy] = useState(false)
 
@@ -51,6 +55,7 @@ export function PipelineSettingsDialog({
     void getPipelineSettings(projectId).then(({ settings, defaults: d }) => {
       if (cancelled) return
       setSteps(settings.steps ?? {})
+      setGenProfiles(settings.generationProfiles ?? {})
       setDefaults(d)
     })
     return () => { cancelled = true }
@@ -64,7 +69,7 @@ export function PipelineSettingsDialog({
   async function save() {
     setBusy(true)
     try {
-      await updatePipelineSettings(projectId, clean(steps))
+      await updatePipelineSettings(projectId, clean(steps), genProfiles)
       onClose()
     } finally {
       setBusy(false)
@@ -194,6 +199,23 @@ export function PipelineSettingsDialog({
               />
               <span className='mt-0.5 block text-[10.5px] text-muted-foreground'>Auto-retries when the agent returns malformed/truncated JSON.</span>
             </label>
+          </div>
+
+          {/* Media generation */}
+          <div className='border-t border-border pt-3'>
+            <div className='mb-1 flex items-center justify-between'>
+              <span className='text-[12px] font-medium text-muted-foreground'>Media generation</span>
+              <button
+                type='button'
+                onClick={() => setGenProfiles({})}
+                className='inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground'
+                title='Clear the per-project override (falls back to the global picker / Manual)'
+              >
+                <RotateCcw className='size-3' /> Reset to default
+              </button>
+            </div>
+            <GenerationProfilePicker profiles={profiles} generationProfiles={genProfiles} onChange={setGenProfiles} />
+            <p className='mt-1 text-[11px] text-muted-foreground'>Per-project override. Unset = global default (Manual).</p>
           </div>
         </div>
 

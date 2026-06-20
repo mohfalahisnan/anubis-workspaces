@@ -1,10 +1,11 @@
-import type { GenerationProfileConfig, PipelineAiStep, PipelineSettings, PipelineStepSettings } from '@anubis/shared'
+import type { GenerationProfileConfig, GenerationPromptConfig, PipelineAiStep, PipelineSettings, PipelineStepSettings } from '@anubis/shared'
 import type { Db } from '../client.js'
 
 interface Row {
   project_id: string
   steps: string | null
   generation_profiles: string | null
+  generation_prompts: string | null
   updated_at: number
 }
 
@@ -32,29 +33,36 @@ export class ContentPipelineSettingsRepo {
     const row = this.db
       .prepare('SELECT * FROM content_pipeline_settings WHERE project_id = ?')
       .get(projectId) as Row | undefined
-    if (!row) return { projectId, steps: {}, generationProfiles: {}, updatedAt: 0 }
+    if (!row) return { projectId, steps: {}, generationProfiles: {}, generationPrompts: {}, updatedAt: 0 }
     return {
       projectId,
       steps: parseJson<Steps>(row.steps, {}),
       generationProfiles: parseJson<GenerationProfileConfig>(row.generation_profiles, {}),
+      generationPrompts: parseJson<GenerationPromptConfig>(row.generation_prompts, {}),
       updatedAt: row.updated_at,
     }
   }
 
-  /** Replace the per-step overrides and generation profiles for a project. */
-  put(projectId: string, steps: Steps, generationProfiles: GenerationProfileConfig = {}): PipelineSettings {
+  /** Replace the per-step overrides, generation profiles, and generation prompts for a project. */
+  put(
+    projectId: string,
+    steps: Steps,
+    generationProfiles: GenerationProfileConfig = {},
+    generationPrompts: GenerationPromptConfig = {},
+  ): PipelineSettings {
     const now = Date.now()
     this.db.prepare(`
-      INSERT INTO content_pipeline_settings (project_id, steps, generation_profiles, updated_at)
-      VALUES (@projectId, @steps, @generationProfiles, @updatedAt)
+      INSERT INTO content_pipeline_settings (project_id, steps, generation_profiles, generation_prompts, updated_at)
+      VALUES (@projectId, @steps, @generationProfiles, @generationPrompts, @updatedAt)
       ON CONFLICT(project_id) DO UPDATE SET
-        steps = @steps, generation_profiles = @generationProfiles, updated_at = @updatedAt
+        steps = @steps, generation_profiles = @generationProfiles, generation_prompts = @generationPrompts, updated_at = @updatedAt
     `).run({
       projectId,
       steps: JSON.stringify(steps ?? {}),
       generationProfiles: JSON.stringify(generationProfiles ?? {}),
+      generationPrompts: JSON.stringify(generationPrompts ?? {}),
       updatedAt: now,
     })
-    return { projectId, steps: steps ?? {}, generationProfiles: generationProfiles ?? {}, updatedAt: now }
+    return { projectId, steps: steps ?? {}, generationProfiles: generationProfiles ?? {}, generationPrompts: generationPrompts ?? {}, updatedAt: now }
   }
 }

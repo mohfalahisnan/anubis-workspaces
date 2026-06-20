@@ -13,7 +13,21 @@ function openMigratedDb() {
 describe('ContentPipelineSettingsRepo', () => {
   it('returns empty settings for an unknown project', () => {
     const repo = new ContentPipelineSettingsRepo(openMigratedDb())
-    expect(repo.get('p1')).toEqual({ projectId: 'p1', steps: {}, generationProfiles: {}, updatedAt: 0 })
+    expect(repo.get('p1')).toEqual({ projectId: 'p1', steps: {}, generationProfiles: {}, generationPrompts: {}, updatedAt: 0 })
+  })
+
+  it('persists and round-trips generation prompts', () => {
+    const repo = new ContentPipelineSettingsRepo(openMigratedDb())
+    repo.put('p1', {}, {}, { image: 'IMG {{concept}}', video: 'VID {{videoScript}}' })
+    expect(repo.get('p1').generationPrompts).toEqual({ image: 'IMG {{concept}}', video: 'VID {{videoScript}}' })
+  })
+
+  it('keeps profiles and prompts independent on put', () => {
+    const repo = new ContentPipelineSettingsRepo(openMigratedDb())
+    repo.put('p1', {}, { image: 'manual' }, { image: 'IMG' })
+    const s = repo.get('p1')
+    expect(s.generationProfiles).toEqual({ image: 'manual' })
+    expect(s.generationPrompts).toEqual({ image: 'IMG' })
   })
 
   it('persists and round-trips generation profiles', () => {

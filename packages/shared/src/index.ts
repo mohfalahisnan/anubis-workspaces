@@ -1091,6 +1091,19 @@ export interface GenerationProfileConfig {
   video?: string
 }
 
+export interface GenerationPromptConfig {
+  /** Per-project image/carousel generation prompt template override. */
+  image?: string
+  /** Per-project video generation prompt template override. */
+  video?: string
+}
+
+/** Shipped default generation-prompt templates, surfaced so the UI can show/reset them. */
+export interface GenerationPromptDefaults {
+  image: string
+  video: string
+}
+
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high'
 
 /** Per-step prompt + agent-behaviour overrides for a Content Studio pipeline step. */
@@ -1117,6 +1130,8 @@ export interface PipelineSettings {
   steps: Partial<Record<PipelineAiStep, PipelineStepSettings>>
   /** Per-project generation-profile overrides (image / video). */
   generationProfiles?: GenerationProfileConfig
+  /** Per-project generation-prompt template overrides (image / video). */
+  generationPrompts?: GenerationPromptConfig
   updatedAt: number
 }
 

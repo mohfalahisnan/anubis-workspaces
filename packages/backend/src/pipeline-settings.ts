@@ -11,12 +11,18 @@ const StepSettingsSchema = z.object({
   maxJsonAttempts: z.number().int().min(1).max(6).optional(),
 }).strict()
 
+const GenerationProfilesSchema = z.object({
+  image: z.string().optional(),
+  video: z.string().optional(),
+}).strict()
+
 const SettingsBody = z.object({
   steps: z.object({
     brief: StepSettingsSchema.optional(),
     refine: StepSettingsSchema.optional(),
     ai_review: StepSettingsSchema.optional(),
   }),
+  generationProfiles: GenerationProfilesSchema.optional(),
 }).strict()
 
 export const pipelineSettingsRoutes = new Hono()
@@ -33,5 +39,5 @@ pipelineSettingsRoutes.get('/', (c) => {
 pipelineSettingsRoutes.put('/', async (c) => {
   const projectId = new URL(c.req.url).searchParams.get('projectId') ?? 'default'
   const body = SettingsBody.parse(await c.req.json())
-  return c.json({ ok: true, settings: getStack().contentPipelineSettings.put(projectId, body.steps) })
+  return c.json({ ok: true, settings: getStack().contentPipelineSettings.put(projectId, body.steps, body.generationProfiles ?? {}) })
 })

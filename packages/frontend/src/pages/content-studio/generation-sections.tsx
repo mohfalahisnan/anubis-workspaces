@@ -36,7 +36,20 @@ export function GenerationQueueSection({
                 <span className='text-[12.5px] font-medium'>{t.type} <span className='text-[11px] text-muted-foreground'>· {t.capability}{t.generator ? ` · ${t.generator}` : ''}</span></span>
                 <span className={`text-[11px] font-medium ${STATUS_TONE[t.status]}`}>{t.status}{t.retryCount ? ` (retry ${t.retryCount})` : ''}</span>
               </div>
-              <p className='mt-1 line-clamp-2 text-[11.5px] text-muted-foreground'>{t.inputPrompt}</p>
+              {t.status === 'manual' ? (
+                <div className='mt-1'>
+                  <p className='whitespace-pre-wrap text-[11.5px] text-muted-foreground'>{t.inputPrompt}</p>
+                  <button
+                    type='button'
+                    onClick={() => { void navigator.clipboard?.writeText(t.inputPrompt) }}
+                    className='mt-1 text-[11px] text-[var(--anubis-gold)] hover:underline'
+                  >
+                    Copy prompt
+                  </button>
+                </div>
+              ) : (
+                <p className='mt-1 line-clamp-2 text-[11.5px] text-muted-foreground'>{t.inputPrompt}</p>
+              )}
               {t.error ? <p className='mt-1 text-[11.5px] text-destructive'>{t.error}</p> : null}
               {t.output?.assetPaths?.length ? <p className='mt-1 text-[11px] text-muted-foreground'>{t.output.assetPaths.length} asset(s)</p> : null}
               {t.output?.text ? <p className='mt-1 text-[11.5px] text-foreground/80'>{t.output.text}</p> : null}

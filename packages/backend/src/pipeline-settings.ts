@@ -36,6 +36,9 @@ pipelineSettingsRoutes.get('/', (c) => {
   })
 })
 
+// Full-replace: both `steps` and `generationProfiles` are overwritten on every PUT,
+// so callers must send both (an absent field resets to {}). The Content Studio
+// settings dialog always sends both.
 pipelineSettingsRoutes.put('/', async (c) => {
   const projectId = new URL(c.req.url).searchParams.get('projectId') ?? 'default'
   const body = SettingsBody.parse(await c.req.json())

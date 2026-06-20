@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import type { GenerationProfileConfig } from '@anubis/shared'
 import { getDataDir, getStack } from '../services.js'
 import { GenerationService, type GenerationDeps } from './generation-service.js'
 import { FlowImageGenerator, GeneratorRegistry, TextGenerator } from './generators.js'
@@ -12,11 +13,17 @@ export function getGenerationService(): GenerationService {
   const getConfig = () => stack.appConfig.get()
   const runAgent: RunAgent = (input) => runGenerationAgent(stack, input)
 
+  const effectiveProfiles = (projectId: string): GenerationProfileConfig => {
+    const project = stack.contentPipelineSettings.get(projectId).generationProfiles
+    const global = stack.appConfig.get().generationProfiles
+    return { image: project?.image ?? global?.image, video: project?.video ?? global?.video }
+  }
+
   const flow = new FlowImageGenerator({ getConfig, getDataDir })
   const registry = new GeneratorRegistry([
     new TextGenerator(),
-    new ConfigurableImageGenerator({ getConfig, runAgent, flow }),
-    new AgentVideoGenerator({ getConfig, runAgent }),
+    new ConfigurableImageGenerator({ getProfiles: effectiveProfiles, runAgent, flow }),
+    new AgentVideoGenerator({ getProfiles: effectiveProfiles, runAgent }),
   ])
 
   const deps: GenerationDeps = {
@@ -45,7 +52,7 @@ export function getGenerationService(): GenerationService {
       return { workspaceDir, assetDir: join(workspaceDir, 'outputs', 'generated-assets', contentId) }
     },
     maxRetries: MAX_RETRIES,
-    getConfig,
+    getGenerationProfiles: effectiveProfiles,
   }
 
   return new GenerationService(deps)

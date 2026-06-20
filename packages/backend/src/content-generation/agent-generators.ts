@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { extname, join } from 'node:path'
-import type { AgentKind, AppConfig, GenerationCapability, GenerationOutput, GenerationTask } from '@anubis/shared'
+import type { AgentKind, GenerationCapability, GenerationOutput, GenerationProfileConfig, GenerationTask } from '@anubis/shared'
 import type { GenerateCtx, Generator } from './generators.js'
 
 /** Reserved image-profile value selecting the Google Flow browser generator. */
@@ -84,7 +84,8 @@ function videoPrompt(brief: string, saveDir: string): string {
 }
 
 export interface ImageGeneratorDeps {
-  getConfig: () => AppConfig
+  /** Resolve the effective generation profiles (project override → global) for a project. */
+  getProfiles: (projectId: string) => GenerationProfileConfig
   runAgent: RunAgent
   /** The Google Flow generator, used when the image profile is google-flow. */
   flow: Generator
@@ -97,7 +98,7 @@ export class ConfigurableImageGenerator implements Generator {
   constructor(private readonly deps: ImageGeneratorDeps) {}
 
   async generate(task: GenerationTask, ctx: GenerateCtx): Promise<GenerationOutput> {
-    const selected = this.deps.getConfig().generationProfiles?.image
+    const selected = this.deps.getProfiles(ctx.projectId).image
     if (selected === FLOW_IMAGE_PROFILE_ID) {
       return this.deps.flow.generate(task, ctx)
     }
@@ -107,7 +108,8 @@ export class ConfigurableImageGenerator implements Generator {
 }
 
 export interface VideoGeneratorDeps {
-  getConfig: () => AppConfig
+  /** Resolve the effective generation profiles (project override → global) for a project. */
+  getProfiles: (projectId: string) => GenerationProfileConfig
   runAgent: RunAgent
 }
 
@@ -118,7 +120,7 @@ export class AgentVideoGenerator implements Generator {
   constructor(private readonly deps: VideoGeneratorDeps) {}
 
   async generate(task: GenerationTask, ctx: GenerateCtx): Promise<GenerationOutput> {
-    const profileId = this.deps.getConfig().generationProfiles?.video ?? 'codex-video'
+    const profileId = this.deps.getProfiles(ctx.projectId).video ?? 'codex-video'
     return generateViaAgent(this.deps.runAgent, profileId, videoPrompt(task.inputPrompt, ctx.assetDir), ctx, VIDEO_EXTS, 'video', `Video · ${ctx.contentId}`)
   }
 }

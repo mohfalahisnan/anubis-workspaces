@@ -37,7 +37,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
       registry: { get: vi.fn(() => ({ name: 'mock', capability: 'text', generate: vi.fn(async () => ({ text: 'ok' })) })) },
       genDirsFor: vi.fn(() => ({ workspaceDir: '/tmp/ws', assetDir: '/tmp/ws/outputs/generated-assets/c1' })),
       maxRetries: 2,
-      getConfig: vi.fn(() => ({})),
+      getGenerationProfiles: vi.fn(() => ({})),
       ...over,
     },
   }
@@ -54,7 +54,7 @@ describe('GenerationService.enqueue', () => {
 
 describe('GenerationService.runAll', () => {
   it('runs pending tasks, stitches draft, sets status draft', async () => {
-    const { deps, statuses } = makeDeps()
+    const { deps, statuses } = makeDeps({ getGenerationProfiles: vi.fn(() => ({ image: 'codex-image' })) })
     const svc = new GenerationService(deps as never)
     svc.enqueue('c1')
     deps.registry.get.mockReturnValue({ name: 'mock', capability: 'image', generate: vi.fn(async () => ({ assetPaths: ['/a.png'] })) })
@@ -64,7 +64,7 @@ describe('GenerationService.runAll', () => {
   })
 
   it('passes conversationId + onConversation to the generator and persists the id', async () => {
-    const { deps, tasks } = makeDeps()
+    const { deps, tasks } = makeDeps({ getGenerationProfiles: vi.fn(() => ({ image: 'codex-image' })) })
     const svc = new GenerationService(deps as never)
     svc.enqueue('c1')
     deps.registry.get.mockReturnValue({
@@ -81,7 +81,7 @@ describe('GenerationService.runAll', () => {
   })
 
   it('creates a generation_failure lesson and stays generating when a task fails', async () => {
-    const { deps, lessons, statuses } = makeDeps()
+    const { deps, lessons, statuses } = makeDeps({ getGenerationProfiles: vi.fn(() => ({ image: 'codex-image' })) })
     const svc = new GenerationService(deps as never)
     svc.enqueue('c1')
     deps.registry.get.mockReturnValue({ name: 'mock', capability: 'image', generate: vi.fn(async () => { throw new Error('boom') }) })
@@ -91,14 +91,20 @@ describe('GenerationService.runAll', () => {
   })
 })
 
-describe('GenerationService.enqueue with manual media', () => {
-  it('image profile = manual → image task is manual and never runs, item still reaches draft', async () => {
-    const { deps, tasks, statuses } = makeDeps({ getConfig: vi.fn(() => ({ generationProfiles: { image: 'manual' } })) })
+describe('GenerationService.enqueue with generation profiles', () => {
+  it('defaults image to manual when no profiles are configured', async () => {
+    const { deps, tasks, statuses } = makeDeps()
     const svc = new GenerationService(deps as never)
     svc.enqueue('c1')
     expect(tasks().find((t) => t.type === 'image')!.status).toBe('manual')
     await svc.runAll('c1')
     expect(statuses).toContain('draft')
     expect(tasks().find((t) => t.type === 'image')!.status).toBe('manual')
+  })
+
+  it('a project override re-enables auto image generation (pending)', () => {
+    const { deps, tasks } = makeDeps({ getGenerationProfiles: vi.fn(() => ({ image: 'codex-image' })) })
+    new GenerationService(deps as never).enqueue('c1')
+    expect(tasks().find((t) => t.type === 'image')!.status).toBe('pending')
   })
 })

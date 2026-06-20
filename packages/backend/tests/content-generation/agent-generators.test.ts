@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { AppConfig, GenerationTask } from '@anubis/shared'
+import type { GenerationTask } from '@anubis/shared'
 import {
   AgentVideoGenerator, ConfigurableImageGenerator, FLOW_IMAGE_PROFILE_ID,
 } from '../../src/content-generation/agent-generators.js'
@@ -32,7 +32,7 @@ describe('ConfigurableImageGenerator', () => {
       return { text: 'out.png', agent: 'codex' as const }
     })
     const gen = new ConfigurableImageGenerator({
-      getConfig: () => ({} as AppConfig), runAgent, flow: { generate: vi.fn() } as never,
+      getProfiles: () => ({}), runAgent, flow: { generate: vi.fn() } as never,
     })
     const out = await gen.generate(task(), c)
     expect(out.assetPaths!.length).toBe(1)
@@ -56,7 +56,7 @@ describe('ConfigurableImageGenerator', () => {
       return { text: 'out.png', agent: 'codex' as const }
     })
     const gen = new ConfigurableImageGenerator({
-      getConfig: () => ({} as AppConfig), runAgent, flow: { generate: vi.fn() } as never,
+      getProfiles: () => ({}), runAgent, flow: { generate: vi.fn() } as never,
     })
     await gen.generate(task(), c)
     const input = runAgent.mock.calls[0]![0] as { conversationId?: string; onConversation?: unknown }
@@ -68,7 +68,7 @@ describe('ConfigurableImageGenerator', () => {
     const flowGenerate = vi.fn(async () => ({ assetPaths: ['/x/flow.png'] }))
     const runAgent = vi.fn()
     const gen = new ConfigurableImageGenerator({
-      getConfig: () => ({ generationProfiles: { image: FLOW_IMAGE_PROFILE_ID } } as AppConfig),
+      getProfiles: () => ({ image: FLOW_IMAGE_PROFILE_ID }),
       runAgent, flow: { generate: flowGenerate } as never,
     })
     const out = await gen.generate(task(), ctx())
@@ -80,7 +80,7 @@ describe('ConfigurableImageGenerator', () => {
   it('throws when the agent produces no image file', async () => {
     const runAgent = vi.fn(async () => ({ text: 'done', agent: 'codex' as const }))
     const gen = new ConfigurableImageGenerator({
-      getConfig: () => ({} as AppConfig), runAgent, flow: { generate: vi.fn() } as never,
+      getProfiles: () => ({}), runAgent, flow: { generate: vi.fn() } as never,
     })
     await expect(gen.generate(task(), ctx())).rejects.toThrow(/no .*image/i)
   })
@@ -94,7 +94,7 @@ describe('AgentVideoGenerator', () => {
       writeFileSync(join(c.assetDir, 'reel.mp4'), 'vid')
       return { text: 'reel.mp4', agent: 'codex' as const }
     })
-    const gen = new AgentVideoGenerator({ getConfig: () => ({} as AppConfig), runAgent })
+    const gen = new AgentVideoGenerator({ getProfiles: () => ({}), runAgent })
     const out = await gen.generate(task({ type: 'video', capability: 'video', inputPrompt: 'a 5s promo' }), c)
     expect(out.assetPaths!.length).toBe(1)
     expect(out.assetPaths![0]!.endsWith('.mp4')).toBe(true)

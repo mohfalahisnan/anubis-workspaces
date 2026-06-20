@@ -23,6 +23,20 @@ const FLOW_OPTION: ProfileSummary = {
   updatedAt: 0,
 }
 
+/** Must match MANUAL_PROFILE_ID in the backend derive-tasks module. */
+const MANUAL_PROFILE_ID = 'manual'
+
+const MANUAL_OPTION: ProfileSummary = {
+  id: MANUAL_PROFILE_ID,
+  name: "Manual (I'll generate it)",
+  description: 'Produce the prompt only — generate the media yourself, no agent run.',
+  source: 'builtin',
+  config: { agent: 'codex' },
+  sortOrder: -1,
+  createdAt: 0,
+  updatedAt: 0,
+}
+
 function resolveProfile(profiles: ProfileSummary[], id: string | undefined): ProfileSummary | null {
   if (!id) return null
   return profiles.find((p) => p.id === id) ?? null
@@ -34,7 +48,8 @@ export function GenerationProfilePicker({ profiles, generationProfiles, onChange
     () => profiles.filter((p) => p.config.agent !== 'gpt-web' && p.config.agent !== 'qwen-web'),
     [profiles],
   )
-  const imageProfiles = useMemo(() => [FLOW_OPTION, ...agentProfiles], [agentProfiles])
+  const imageProfiles = useMemo(() => [MANUAL_OPTION, FLOW_OPTION, ...agentProfiles], [agentProfiles])
+  const videoProfiles = useMemo(() => [MANUAL_OPTION, ...agentProfiles], [agentProfiles])
 
   return (
     <div className='flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border/60 bg-card/50 px-3 py-2'>
@@ -52,8 +67,8 @@ export function GenerationProfilePicker({ profiles, generationProfiles, onChange
       <div className='flex items-center gap-2'>
         <span className='flex items-center gap-1 text-[11.5px] text-muted-foreground'><VideoIcon className='size-3.5' /> Video</span>
         <ProfilePicker
-          profiles={agentProfiles}
-          value={resolveProfile(agentProfiles, generationProfiles.video)}
+          profiles={videoProfiles}
+          value={resolveProfile(videoProfiles, generationProfiles.video)}
           onChange={(p) => onChange({ ...generationProfiles, video: p.id })}
         />
       </div>

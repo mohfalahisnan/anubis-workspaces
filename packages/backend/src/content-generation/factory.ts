@@ -5,6 +5,7 @@ import { GenerationService, type GenerationDeps } from './generation-service.js'
 import { FlowImageGenerator, GeneratorRegistry, TextGenerator } from './generators.js'
 import { AgentVideoGenerator, ConfigurableImageGenerator, type RunAgent } from './agent-generators.js'
 import { runGenerationAgent } from './conversation-runner.js'
+import { resolveGenerationProfiles } from './resolve-profiles.js'
 
 const MAX_RETRIES = 2
 
@@ -13,11 +14,11 @@ export function getGenerationService(): GenerationService {
   const getConfig = () => stack.appConfig.get()
   const runAgent: RunAgent = (input) => runGenerationAgent(stack, input)
 
-  const effectiveProfiles = (projectId: string): GenerationProfileConfig => {
-    const project = stack.contentPipelineSettings.get(projectId).generationProfiles
-    const global = stack.appConfig.get().generationProfiles
-    return { image: project?.image ?? global?.image, video: project?.video ?? global?.video }
-  }
+  const effectiveProfiles = (projectId: string): GenerationProfileConfig =>
+    resolveGenerationProfiles(
+      stack.contentPipelineSettings.get(projectId).generationProfiles,
+      stack.appConfig.get().generationProfiles,
+    )
 
   const flow = new FlowImageGenerator({ getConfig, getDataDir })
   const registry = new GeneratorRegistry([

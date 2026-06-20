@@ -1,7 +1,7 @@
 import type {
-  ContentLesson, ContentPipeline, DraftOutput, GenerationTask, LessonType,
+  ContentLesson, ContentPipeline, DraftOutput, GenerationProfileConfig, GenerationTask, LessonType,
 } from '@anubis/shared'
-import { deriveTasks } from './derive-tasks.js'
+import { deriveTasks, MANUAL_PROFILE_ID } from './derive-tasks.js'
 import type { Generator } from './generators.js'
 import { stitchDraft } from './stitch.js'
 
@@ -32,6 +32,8 @@ export interface GenerationDeps {
   registry: { get: (capability: GenerationTask['capability']) => Generator | undefined }
   /** Resolve the conversation workspace (project workdir) + asset output dir for a task. */
   genDirsFor: (projectId: string, contentId: string) => { workspaceDir: string; assetDir: string }
+  /** Read app config to resolve the project's generation profiles (manual / flow / agent). */
+  getConfig: () => { generationProfiles?: GenerationProfileConfig }
   maxRetries: number
 }
 
@@ -50,7 +52,9 @@ export class GenerationService {
     const pipeline = this.deps.pipeline.get(id)
     if (!pipeline.refinedContent) throw new Error('Cannot generate before refined content exists.')
     const mediaKind = pipeline.rawIdea?.mediaKind
-    const specs = deriveTasks(pipeline.refinedContent, mediaKind)
+    const gp = this.deps.getConfig().generationProfiles
+    const manual = { image: gp?.image === MANUAL_PROFILE_ID, video: gp?.video === MANUAL_PROFILE_ID }
+    const specs = deriveTasks(pipeline.refinedContent, mediaKind, manual)
     this.deps.taskRepo.deleteByContent(id)
     return specs.map((s) => this.deps.taskRepo.create({ contentId: id, projectId: item.projectId, ...s }))
   }

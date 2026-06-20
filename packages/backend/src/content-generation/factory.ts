@@ -45,6 +45,7 @@ export function getGenerationService(): GenerationService {
       return { workspaceDir, assetDir: join(workspaceDir, 'outputs', 'generated-assets', contentId) }
     },
     maxRetries: MAX_RETRIES,
+    getConfig,
   }
 
   return new GenerationService(deps)

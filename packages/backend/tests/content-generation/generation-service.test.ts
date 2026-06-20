@@ -37,6 +37,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
       registry: { get: vi.fn(() => ({ name: 'mock', capability: 'text', generate: vi.fn(async () => ({ text: 'ok' })) })) },
       genDirsFor: vi.fn(() => ({ workspaceDir: '/tmp/ws', assetDir: '/tmp/ws/outputs/generated-assets/c1' })),
       maxRetries: 2,
+      getConfig: vi.fn(() => ({})),
       ...over,
     },
   }
@@ -87,5 +88,17 @@ describe('GenerationService.runAll', () => {
     await svc.runAll('c1')
     expect(lessons.some((l) => l.source === 'generation_failure')).toBe(true)
     expect(statuses).not.toContain('draft')
+  })
+})
+
+describe('GenerationService.enqueue with manual media', () => {
+  it('image profile = manual → image task is manual and never runs, item still reaches draft', async () => {
+    const { deps, tasks, statuses } = makeDeps({ getConfig: vi.fn(() => ({ generationProfiles: { image: 'manual' } })) })
+    const svc = new GenerationService(deps as never)
+    svc.enqueue('c1')
+    expect(tasks().find((t) => t.type === 'image')!.status).toBe('manual')
+    await svc.runAll('c1')
+    expect(statuses).toContain('draft')
+    expect(tasks().find((t) => t.type === 'image')!.status).toBe('manual')
   })
 })

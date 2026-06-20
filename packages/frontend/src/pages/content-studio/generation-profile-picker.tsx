@@ -42,15 +42,26 @@ function resolveProfile(profiles: ProfileSummary[], id: string | undefined): Pro
   return profiles.find((p) => p.id === id) ?? null
 }
 
-export function GenerationProfilePicker({ profiles, generationProfiles, onChange }: GenerationProfilePickerProps) {
+/** Single-media generation profile picker (Manual / Flow [image] / agent profiles). */
+export function MediaProfilePicker({ media, profiles, value, onChange }: {
+  media: 'image' | 'video'
+  profiles: ProfileSummary[]
+  value: string | undefined
+  onChange: (id: string) => void
+}) {
   // Agent profiles that can run headless generation (exclude web agents).
   const agentProfiles = useMemo(
     () => profiles.filter((p) => p.config.agent !== 'gpt-web' && p.config.agent !== 'qwen-web'),
     [profiles],
   )
-  const imageProfiles = useMemo(() => [MANUAL_OPTION, FLOW_OPTION, ...agentProfiles], [agentProfiles])
-  const videoProfiles = useMemo(() => [MANUAL_OPTION, ...agentProfiles], [agentProfiles])
+  const list = useMemo(
+    () => (media === 'image' ? [MANUAL_OPTION, FLOW_OPTION, ...agentProfiles] : [MANUAL_OPTION, ...agentProfiles]),
+    [agentProfiles, media],
+  )
+  return <ProfilePicker profiles={list} value={resolveProfile(list, value)} onChange={(p) => onChange(p.id)} />
+}
 
+export function GenerationProfilePicker({ profiles, generationProfiles, onChange }: GenerationProfilePickerProps) {
   return (
     <div className='flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border/60 bg-card/50 px-3 py-2'>
       <span className='flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'>
@@ -58,19 +69,11 @@ export function GenerationProfilePicker({ profiles, generationProfiles, onChange
       </span>
       <div className='flex items-center gap-2'>
         <span className='flex items-center gap-1 text-[11.5px] text-muted-foreground'><ImageIcon className='size-3.5' /> Image</span>
-        <ProfilePicker
-          profiles={imageProfiles}
-          value={resolveProfile(imageProfiles, generationProfiles.image)}
-          onChange={(p) => onChange({ ...generationProfiles, image: p.id })}
-        />
+        <MediaProfilePicker media='image' profiles={profiles} value={generationProfiles.image} onChange={(id) => onChange({ ...generationProfiles, image: id })} />
       </div>
       <div className='flex items-center gap-2'>
         <span className='flex items-center gap-1 text-[11.5px] text-muted-foreground'><VideoIcon className='size-3.5' /> Video</span>
-        <ProfilePicker
-          profiles={videoProfiles}
-          value={resolveProfile(videoProfiles, generationProfiles.video)}
-          onChange={(p) => onChange({ ...generationProfiles, video: p.id })}
-        />
+        <MediaProfilePicker media='video' profiles={profiles} value={generationProfiles.video} onChange={(id) => onChange({ ...generationProfiles, video: id })} />
       </div>
     </div>
   )

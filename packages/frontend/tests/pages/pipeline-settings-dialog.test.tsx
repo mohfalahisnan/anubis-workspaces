@@ -18,17 +18,26 @@ const PROFILES = [
 ]
 
 describe('<PipelineSettingsDialog> media generation', () => {
-  it('loads, displays, and saves the per-project generation profiles', async () => {
+  it('shows Image/Video tabs and saves the generation profile + prompt', async () => {
     mocks.getPipelineSettings.mockResolvedValue({
-      settings: { projectId: 'p1', steps: {}, generationProfiles: { image: 'google-flow' }, updatedAt: 1 },
+      settings: { projectId: 'p1', steps: {}, generationProfiles: { image: 'google-flow' }, generationPrompts: {}, updatedAt: 1 },
       defaults: { brief: 'B', refine: 'R', ai_review: 'A' },
+      generationDefaults: { image: 'IMG {{concept}}', video: 'VID {{videoScript}}' },
     })
     render(<PipelineSettingsDialog open projectId='p1' profiles={PROFILES as never} onClose={() => {}} />)
 
-    expect(await screen.findByText('Generation AI Profiles')).toBeInTheDocument()
-    expect(screen.getByText('Google Flow (browser)')).toBeInTheDocument() // image picker shows loaded value
+    // Switch to the Image tab
+    await userEvent.click(await screen.findByRole('button', { name: 'Image' }))
+    // The loaded image profile shows in the picker
+    expect(await screen.findByText('Google Flow (browser)')).toBeInTheDocument()
+    // Type a custom generation prompt. NOTE: avoid `{`/`}` here — user-event's
+    // type() treats `{{` as an escape. Placeholder rendering is covered by the
+    // backend unit tests; here we only verify the typed prompt is saved.
+    const textarea = screen.getByPlaceholderText('IMG {{concept}}')
+    await userEvent.clear(textarea)
+    await userEvent.type(textarea, 'Make it pop')
 
     await userEvent.click(screen.getByText('Save'))
-    expect(mocks.updatePipelineSettings).toHaveBeenCalledWith('p1', {}, { image: 'google-flow' })
+    expect(mocks.updatePipelineSettings).toHaveBeenCalledWith('p1', {}, { image: 'google-flow' }, { image: 'Make it pop' })
   })
 })

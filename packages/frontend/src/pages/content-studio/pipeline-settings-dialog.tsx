@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react'
 import { RotateCcw, FileDown } from 'lucide-react'
-import type { GenerationProfileConfig, PipelineAiStep, PipelinePromptDefaults, PipelineStepSettings, ProfileSummary, ReasoningEffort } from '@anubis/shared'
+import type { GenerationProfileConfig, GenerationPromptConfig, GenerationPromptDefaults, PipelineAiStep, PipelinePromptDefaults, PipelineStepSettings, ProfileSummary, ReasoningEffort } from '@anubis/shared'
 import { getPipelineSettings, updatePipelineSettings } from '@/api'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { GenerationProfilePicker } from './generation-profile-picker'
+import { MediaGenerationTab } from './media-generation-tab'
 
 type Steps = Partial<Record<PipelineAiStep, PipelineStepSettings>>
+type MediaType = 'image' | 'video'
+type TabKey = PipelineAiStep | MediaType
 
 const STEP_TABS: { key: PipelineAiStep; label: string; placeholders: string }[] = [
   { key: 'brief', label: 'Breakdown', placeholders: '{{source}} · {{brand}} · {{lessons}} · {{kb}}' },
   { key: 'refine', label: 'Refine', placeholders: '{{brief}} · {{brand}}' },
   { key: 'ai_review', label: 'AI Review', placeholders: '{{content}} · {{brand}} · {{niche}}' },
+]
+
+const MEDIA_TABS: { key: MediaType; label: string }[] = [
+  { key: 'image', label: 'Image' },
+  { key: 'video', label: 'Video' },
 ]
 
 const EFFORTS: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high']
@@ -46,37 +53,43 @@ export function PipelineSettingsDialog({
   const [steps, setSteps] = useState<Steps>({})
   const [defaults, setDefaults] = useState<PipelinePromptDefaults | null>(null)
   const [genProfiles, setGenProfiles] = useState<GenerationProfileConfig>({})
-  const [active, setActive] = useState<PipelineAiStep>('brief')
+  const [genPrompts, setGenPrompts] = useState<GenerationPromptConfig>({})
+  const [genDefaults, setGenDefaults] = useState<GenerationPromptDefaults | null>(null)
+  const [active, setActive] = useState<TabKey>('brief')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    void getPipelineSettings(projectId).then(({ settings, defaults: d }) => {
+    void getPipelineSettings(projectId).then(({ settings, defaults: d, generationDefaults }) => {
       if (cancelled) return
       setSteps(settings.steps ?? {})
       setGenProfiles(settings.generationProfiles ?? {})
+      setGenPrompts(settings.generationPrompts ?? {})
       setDefaults(d)
+      setGenDefaults(generationDefaults)
     })
     return () => { cancelled = true }
   }, [open, projectId])
 
-  const cur = steps[active] ?? {}
+  const isMedia = active === 'image' || active === 'video'
+  const stepKey = (isMedia ? 'brief' : active) as PipelineAiStep
+  const cur = steps[stepKey] ?? {}
   function patch(p: Partial<PipelineStepSettings>) {
-    setSteps((s) => ({ ...s, [active]: { ...s[active], ...p } }))
+    setSteps((s) => ({ ...s, [stepKey]: { ...s[stepKey], ...p } }))
   }
 
   async function save() {
     setBusy(true)
     try {
-      await updatePipelineSettings(projectId, clean(steps), genProfiles)
+      await updatePipelineSettings(projectId, clean(steps), genProfiles, genPrompts)
       onClose()
     } finally {
       setBusy(false)
     }
   }
 
-  const tab = STEP_TABS.find((t) => t.key === active)!
+  const tab = STEP_TABS.find((t) => t.key === stepKey)!
   const usingDefault = !cur.promptTemplate?.trim()
 
   return (
@@ -92,7 +105,7 @@ export function PipelineSettingsDialog({
 
         {/* Step tabs */}
         <div className='flex gap-1 border-b border-border'>
-          {STEP_TABS.map((t) => (
+          {[...STEP_TABS, ...MEDIA_TABS].map((t) => (
             <button
               key={t.key}
               type='button'
@@ -110,6 +123,18 @@ export function PipelineSettingsDialog({
         </div>
 
         <div className='max-h-[58vh] space-y-4 overflow-y-auto pr-1'>
+          {isMedia ? (
+            <MediaGenerationTab
+              media={active as MediaType}
+              profiles={profiles}
+              profileValue={genProfiles[active as MediaType]}
+              onProfileChange={(id) => setGenProfiles({ ...genProfiles, [active]: id })}
+              prompt={genPrompts[active as MediaType]}
+              onPromptChange={(v) => setGenPrompts({ ...genPrompts, [active]: v })}
+              defaultPrompt={genDefaults ? genDefaults[active as MediaType] : ''}
+            />
+          ) : (
+          <>
           {/* Prompt template */}
           <div>
             <div className='mb-1 flex items-center justify-between'>
@@ -119,7 +144,7 @@ export function PipelineSettingsDialog({
               <div className='flex items-center gap-2'>
                 <button
                   type='button'
-                  onClick={() => defaults && patch({ promptTemplate: defaults[active] })}
+                  onClick={() => defaults && patch({ promptTemplate: defaults[stepKey] })}
                   className='inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground'
                   title='Load the default template into the editor so you can tweak it'
                 >
@@ -140,7 +165,7 @@ export function PipelineSettingsDialog({
               value={cur.promptTemplate ?? ''}
               onChange={(e) => patch({ promptTemplate: e.target.value })}
               rows={12}
-              placeholder={defaults ? defaults[active] : '(loading default…)'}
+              placeholder={defaults ? defaults[stepKey] : '(loading default…)'}
               className='w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-[12px] leading-relaxed outline-none focus:border-[var(--anubis-gold)]/60'
             />
             <p className='mt-1 text-[11px] text-muted-foreground'>
@@ -201,22 +226,8 @@ export function PipelineSettingsDialog({
             </label>
           </div>
 
-          {/* Media generation */}
-          <div className='border-t border-border pt-3'>
-            <div className='mb-1 flex items-center justify-between'>
-              <span className='text-[12px] font-medium text-muted-foreground'>Media generation</span>
-              <button
-                type='button'
-                onClick={() => setGenProfiles({})}
-                className='inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground'
-                title='Clear the per-project override (falls back to the global picker / Manual)'
-              >
-                <RotateCcw className='size-3' /> Reset to default
-              </button>
-            </div>
-            <GenerationProfilePicker profiles={profiles} generationProfiles={genProfiles} onChange={setGenProfiles} />
-            <p className='mt-1 text-[11px] text-muted-foreground'>Per-project override. Unset = inherit the global picker (Manual if unset there too).</p>
-          </div>
+          </>
+          )}
         </div>
 
         <DialogFooter>

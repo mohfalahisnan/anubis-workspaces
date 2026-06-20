@@ -38,6 +38,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
       genDirsFor: vi.fn(() => ({ workspaceDir: '/tmp/ws', assetDir: '/tmp/ws/outputs/generated-assets/c1' })),
       maxRetries: 2,
       getGenerationProfiles: vi.fn(() => ({})),
+      getGenerationPrompts: vi.fn(() => ({})),
       ...over,
     },
   }
@@ -106,5 +107,14 @@ describe('GenerationService.enqueue with generation profiles', () => {
     const { deps, tasks } = makeDeps({ getGenerationProfiles: vi.fn(() => ({ image: 'codex-image' })) })
     new GenerationService(deps as never).enqueue('c1')
     expect(tasks().find((t) => t.type === 'image')!.status).toBe('pending')
+  })
+
+  it('applies a per-project image prompt template to the image task', () => {
+    const { deps, tasks } = makeDeps({
+      getGenerationProfiles: vi.fn(() => ({ image: 'codex-image' })),
+      getGenerationPrompts: vi.fn(() => ({ image: 'Make {{subject}}' })),
+    })
+    new GenerationService(deps as never).enqueue('c1')
+    expect(tasks().find((t) => t.type === 'image')!.inputPrompt).toBe('Make s')
   })
 })

@@ -54,6 +54,7 @@ export function getGenerationService(): GenerationService {
     },
     maxRetries: MAX_RETRIES,
     getGenerationProfiles: effectiveProfiles,
+    getGenerationPrompts: (projectId) => stack.contentPipelineSettings.get(projectId).generationPrompts ?? {},
   }
 
   return new GenerationService(deps)

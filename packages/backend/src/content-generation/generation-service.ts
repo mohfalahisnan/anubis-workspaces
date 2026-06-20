@@ -1,5 +1,5 @@
 import type {
-  ContentLesson, ContentPipeline, DraftOutput, GenerationProfileConfig, GenerationTask, LessonType,
+  ContentLesson, ContentPipeline, DraftOutput, GenerationProfileConfig, GenerationPromptConfig, GenerationTask, LessonType,
 } from '@anubis/shared'
 import { deriveTasks, MANUAL_PROFILE_ID } from './derive-tasks.js'
 import type { Generator } from './generators.js'
@@ -34,6 +34,8 @@ export interface GenerationDeps {
   genDirsFor: (projectId: string, contentId: string) => { workspaceDir: string; assetDir: string }
   /** Resolve the effective generation profiles (project override → global) for a project. */
   getGenerationProfiles: (projectId: string) => GenerationProfileConfig
+  /** Resolve the per-project image/video generation prompt templates. */
+  getGenerationPrompts: (projectId: string) => GenerationPromptConfig
   maxRetries: number
 }
 
@@ -57,7 +59,8 @@ export class GenerationService {
       image: (gp.image ?? MANUAL_PROFILE_ID) === MANUAL_PROFILE_ID,
       video: (gp.video ?? MANUAL_PROFILE_ID) === MANUAL_PROFILE_ID,
     }
-    const specs = deriveTasks(pipeline.refinedContent, mediaKind, manual)
+    const prompts = this.deps.getGenerationPrompts(item.projectId)
+    const specs = deriveTasks(pipeline.refinedContent, mediaKind, manual, prompts)
     this.deps.taskRepo.deleteByContent(id)
     return specs.map((s) => this.deps.taskRepo.create({ contentId: id, projectId: item.projectId, ...s }))
   }

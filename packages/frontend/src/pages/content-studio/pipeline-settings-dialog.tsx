@@ -215,7 +215,7 @@ export function PipelineSettingsDialog({
               </button>
             </div>
             <GenerationProfilePicker profiles={profiles} generationProfiles={genProfiles} onChange={setGenProfiles} />
-            <p className='mt-1 text-[11px] text-muted-foreground'>Per-project override. Unset = global default (Manual).</p>
+            <p className='mt-1 text-[11px] text-muted-foreground'>Per-project override. Unset = inherit the global picker (Manual if unset there too).</p>
           </div>
         </div>
 

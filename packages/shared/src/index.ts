@@ -1085,9 +1085,9 @@ export interface PipelineStepProfileConfig {
 }
 
 export interface GenerationProfileConfig {
-  /** Profile id, or the reserved 'google-flow' value, for image generation. */
+  /** Profile id, or the reserved 'google-flow' / 'manual' value, for image generation. */
   image?: string
-  /** Profile id for video (HyperFrames) generation. */
+  /** Profile id, or the reserved 'manual' value, for video (HyperFrames) generation. */
   video?: string
 }
 

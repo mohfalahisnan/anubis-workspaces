@@ -1,5 +1,13 @@
 import type { GenerationCapability, GenerationTaskStatus, GenerationTaskType, RefinedContent, VisualBrief } from '@anubis/shared'
 
+/** Reserved generation-profile value selecting manual (prompt-only) media generation. */
+export const MANUAL_PROFILE_ID = 'manual'
+
+export interface ManualMediaFlags {
+  image?: boolean
+  video?: boolean
+}
+
 export interface TaskSpec {
   type: GenerationTaskType
   capability: GenerationCapability
@@ -41,6 +49,7 @@ function spec(type: GenerationTaskType, inputPrompt: string, status: GenerationT
 export function deriveTasks(
   refined: RefinedContent,
   mediaKind: 'image' | 'video' | 'carousel' | undefined,
+  manual: ManualMediaFlags = {},
 ): TaskSpec[] {
   const tasks: TaskSpec[] = []
 
@@ -52,16 +61,18 @@ export function deriveTasks(
   const overlay = refined.visualBrief.textOverlay ?? refined.copywriting.textOverlay
   if (overlay) tasks.push(spec('text_overlay', overlay))
 
-  // Visual.
+  // Visual. When the project opted out of auto-generation (`manual.image`), derive the
+  // media task as `manual` so it surfaces the prompt but never runs a generator.
+  const imageStatus: GenerationTaskStatus = manual.image ? 'manual' : 'pending'
   if (mediaKind === 'carousel') {
     const slides = refined.copywriting.carouselSlides?.length ? refined.copywriting.carouselSlides : ['']
-    for (const slide of slides) tasks.push(spec('carousel', buildImagePrompt(refined.visualBrief, slide)))
+    for (const slide of slides) tasks.push(spec('carousel', buildImagePrompt(refined.visualBrief, slide), imageStatus))
   } else {
-    tasks.push(spec('image', buildImagePrompt(refined.visualBrief)))
+    tasks.push(spec('image', buildImagePrompt(refined.visualBrief), imageStatus))
   }
 
-  // Video is generatable via the hyperframes agent generator; voiceover stays manual.
-  if (mediaKind === 'video') tasks.push(spec('video', refined.copywriting.videoScript ?? refined.visualBrief.concept))
+  // Video is generatable via the hyperframes agent generator unless opted out; voiceover stays manual.
+  if (mediaKind === 'video') tasks.push(spec('video', refined.copywriting.videoScript ?? refined.visualBrief.concept, manual.video ? 'manual' : 'pending'))
   if (refined.copywriting.videoScript) tasks.push(spec('voiceover', refined.copywriting.videoScript, 'manual'))
 
   return tasks

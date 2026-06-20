@@ -37,6 +37,31 @@ describe('deriveTasks', () => {
     expect(tasks.find((t) => t.type === 'voiceover')?.status).toBe('manual')
   })
 
+  it('manual.image → image task is manual (prompt-only)', () => {
+    const tasks = deriveTasks(refined(), 'image', { image: true })
+    expect(tasks.find((t) => t.type === 'image')?.status).toBe('manual')
+  })
+
+  it('manual.image → every carousel task is manual', () => {
+    const r = refined({ copywriting: { hook: 'h', body: 'b', cta: 'c', carouselSlides: ['s1', 's2'] } })
+    const tasks = deriveTasks(r, 'carousel', { image: true })
+    const carousel = tasks.filter((t) => t.type === 'carousel')
+    expect(carousel).toHaveLength(2)
+    expect(carousel.every((t) => t.status === 'manual')).toBe(true)
+  })
+
+  it('manual.video → video task is manual; text tasks stay pending', () => {
+    const r = refined({ copywriting: { hook: 'h', body: 'b', cta: 'c', videoScript: 'read this' } })
+    const tasks = deriveTasks(r, 'video', { video: true })
+    expect(tasks.find((t) => t.type === 'video')?.status).toBe('manual')
+    expect(tasks.find((t) => t.type === 'final_caption')?.status).toBe('pending')
+  })
+
+  it('no manual arg → media stays pending (unchanged default)', () => {
+    const tasks = deriveTasks(refined(), 'image')
+    expect(tasks.find((t) => t.type === 'image')?.status).toBe('pending')
+  })
+
   it('buildImagePrompt composes the visual brief', () => {
     const p = buildImagePrompt(refined().visualBrief, 'extra slide copy')
     expect(p).toContain('Subj')

@@ -30,4 +30,23 @@ describe('/pipeline-settings route', () => {
     const body = (await get.json()) as { settings: { generationProfiles?: { image?: string; video?: string } } }
     expect(body.settings.generationProfiles).toEqual({ image: 'manual', video: 'codex-video' })
   })
+
+  it('persists generationPrompts and GET returns generationDefaults', async () => {
+    const { default: app } = await import('../src/app.js')
+    const put = await app.request('/pipeline-settings?projectId=p2', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ steps: {}, generationProfiles: {}, generationPrompts: { image: 'IMG {{concept}}' } }),
+    })
+    expect(put.status).toBe(200)
+
+    const get = await app.request('/pipeline-settings?projectId=p2')
+    const body = (await get.json()) as {
+      settings: { generationPrompts?: { image?: string } }
+      generationDefaults: { image: string; video: string }
+    }
+    expect(body.settings.generationPrompts).toEqual({ image: 'IMG {{concept}}' })
+    expect(typeof body.generationDefaults.image).toBe('string')
+    expect(body.generationDefaults.image.length).toBeGreaterThan(0)
+  })
 })

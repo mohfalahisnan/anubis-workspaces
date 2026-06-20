@@ -23,6 +23,8 @@ import {
   type RefinedContent,
   type DraftOutput,
   type GenerationProfileConfig,
+  type GenerationPromptConfig,
+  type GenerationPromptDefaults,
   type GenerationTask,
   type CapturePreviewPayload,
   type CaptureResultPayload,
@@ -1617,20 +1619,21 @@ export async function listLessons(projectId?: string): Promise<ContentLesson[]> 
 
 export async function getPipelineSettings(
   projectId?: string,
-): Promise<{ settings: PipelineSettings; defaults: PipelinePromptDefaults }> {
+): Promise<{ settings: PipelineSettings; defaults: PipelinePromptDefaults; generationDefaults: GenerationPromptDefaults }> {
   const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
-  const r = await api<{ ok: true; settings: PipelineSettings; defaults: PipelinePromptDefaults }>(`/pipeline-settings${qs}`)
-  return { settings: r.settings, defaults: r.defaults }
+  const r = await api<{ ok: true; settings: PipelineSettings; defaults: PipelinePromptDefaults; generationDefaults: GenerationPromptDefaults }>(`/pipeline-settings${qs}`)
+  return { settings: r.settings, defaults: r.defaults, generationDefaults: r.generationDefaults }
 }
 
 export async function updatePipelineSettings(
   projectId: string,
   steps: PipelineSettings['steps'],
   generationProfiles?: GenerationProfileConfig,
+  generationPrompts?: GenerationPromptConfig,
 ): Promise<PipelineSettings> {
   const r = await api<{ ok: true; settings: PipelineSettings }>(
     `/pipeline-settings?projectId=${encodeURIComponent(projectId)}`,
-    { method: 'PUT', body: JSON.stringify({ steps, generationProfiles: generationProfiles ?? {} }) },
+    { method: 'PUT', body: JSON.stringify({ steps, generationProfiles: generationProfiles ?? {}, generationPrompts: generationPrompts ?? {} }) },
   )
   return r.settings
 }

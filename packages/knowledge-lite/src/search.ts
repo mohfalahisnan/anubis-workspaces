@@ -200,6 +200,8 @@ export function searchIndex(sourceRoot: string, dbPath: string, query: string, c
       source: meta.sourcePath,
       startLine: meta.startLine,
       endLine: meta.endLine,
+      excerptStartLine: 0,
+      excerptEndLine: 0,
       heading: meta.heading,
       rawScore: final,
       coverage: totalTerms ? (matchedCounts.get(cid) as number) / totalTerms : 0,
@@ -214,8 +216,8 @@ export function searchIndex(sourceRoot: string, dbPath: string, query: string, c
   for (const r of trimmed) {
     r.score = topRaw ? r.rawScore / topRaw : 0
     const [start, end, excerpt] = excerptForResult(sourceRoot, r, config)
-    r.startLine = start
-    r.endLine = end
+    r.excerptStartLine = start
+    r.excerptEndLine = end
     r.excerpt = excerpt
   }
   return trimmed
@@ -248,7 +250,7 @@ export function renderSearchResult(query: string, results: SearchResult[]): stri
     lines.push(
       `## Result ${idx + 1}`, '',
       `Source: ${result.source}  `,
-      `Lines: ${result.startLine}-${result.endLine}  `,
+      `Lines: ${result.excerptStartLine}-${result.excerptEndLine}  `,
       `Score: ${result.score.toFixed(2)}`, '',
       'Excerpt:', '', '```md', result.excerpt, '```', '',
     )

@@ -19,8 +19,10 @@ export interface DocumentRow {
 
 export interface SearchResult {
   source: string
-  startLine: number
-  endLine: number
+  startLine: number        // chunk start (stable, used for ranking/identity)
+  endLine: number          // chunk end
+  excerptStartLine: number // expanded excerpt window start
+  excerptEndLine: number   // expanded excerpt window end
   heading: string | null
   rawScore: number
   coverage: number

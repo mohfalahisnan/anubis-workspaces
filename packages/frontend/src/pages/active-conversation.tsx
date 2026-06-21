@@ -39,14 +39,6 @@ import { usePromptCardExpanded } from '@/lib/use-prompt-card-expanded'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
-import { BudgetPicker } from '@/components/composer/budget-picker'
-
-/**
- * Default context-pack token budget used when neither the conversation override
- * nor the profile config specifies one. Keep in sync with the backend default in
- * `packages/conversation/src/conversations/conversation-service.ts`.
- */
-const DEFAULT_CONTEXT_PACK_BUDGET = 1000
 
 /** Friendly install target per agent, used in the composer's "not on PATH" hint. */
 const AGENT_INSTALL_LABEL: Record<AgentKind, string> = {
@@ -250,7 +242,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
 
   // --- Prompt-optimizer local state (mirrors the pickedEffort pattern) ---
   const [pickedEnableContext, setPickedEnableContext] = useState<boolean | null>(null)
-  const [pickedBudget, setPickedBudget] = useState<number | undefined | null>(null)
 
   const overrides = conv?.extra?.overrides || {}
   const convOverrideEnableContext =
@@ -264,20 +255,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
 
   const effectiveEnableContext: boolean =
     pickedEnableContext ?? convOverrideEnableContext ?? profileDefaultEnableContext
-
-  const convOverrideBudget =
-    overrides.contextPackBudget !== undefined
-      ? (overrides.contextPackBudget as number)
-      : undefined
-  const profileDefaultBudget =
-    selectedProfile?.config.contextPackBudget !== undefined
-      ? (selectedProfile.config.contextPackBudget as number)
-      : undefined
-
-  const effectiveBudget: number | undefined =
-    pickedBudget !== null
-      ? pickedBudget
-      : (convOverrideBudget ?? profileDefaultBudget ?? DEFAULT_CONTEXT_PACK_BUDGET)
 
   const onEnableContextChange = useCallback(async (next: boolean) => {
     setPickedEnableContext(next)
@@ -294,28 +271,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
       setConv(updated)
     } catch (e) {
       setPickedEnableContext(null)
-      setSendError(e instanceof Error ? e.message : String(e))
-    }
-  }, [conversationId, conv])
-
-  const onBudgetChange = useCallback(async (next: number | undefined) => {
-    setPickedBudget(next === undefined ? undefined : next)
-    setSendError(null)
-    if (!conversationId) return
-    const currentOverrides = conv?.extra?.overrides || {}
-    const nextOverrides = { ...currentOverrides }
-    if (next === undefined) {
-      delete nextOverrides.contextPackBudget
-    } else {
-      nextOverrides.contextPackBudget = next
-    }
-    try {
-      const updated = await updateConversation(conversationId, {
-        override: nextOverrides
-      })
-      setConv(updated)
-    } catch (e) {
-      setPickedBudget(null)
       setSendError(e instanceof Error ? e.message : String(e))
     }
   }, [conversationId, conv])
@@ -576,8 +531,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
         conversationId={conversationId ?? ''}
         enableContextInjection={effectiveEnableContext}
         onEnableContextInjectionChange={onEnableContextChange}
-        contextPackBudget={effectiveBudget}
-        onContextPackBudgetChange={onBudgetChange}
       />
 
       {selectionPopup && (
@@ -639,12 +592,10 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
 }
 
 function CollapsibleHookCard({
-  contextPack,
   improvedPrompt,
   expanded,
   onToggle,
 }: {
-  contextPack: string
   improvedPrompt: string
   expanded: boolean
   onToggle: () => void
@@ -668,16 +619,6 @@ function CollapsibleHookCard({
 
       {expanded && (
         <div className='mt-2 w-full rounded-lg border border-border bg-card p-3 shadow-md text-left flex flex-col gap-3 animate-in fade-in duration-200'>
-          {contextPack && (
-            <div>
-              <div className='mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground'>
-                Retrieved Context Pack
-              </div>
-              <div className='max-h-40 overflow-y-auto rounded border border-border bg-muted/30 p-2 font-mono text-[11px] text-muted-foreground/90 whitespace-pre-wrap break-all scrollbar-thin'>
-                {contextPack}
-              </div>
-            </div>
-          )}
           {improvedPrompt && (
             <div>
               <div className='mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground'>
@@ -716,10 +657,9 @@ const RenderedMessage = memo(function RenderedMessage({
   if (message.role === 'user') {
     const files = message.metadata?.fileReferences as string[] | undefined
     const originalPrompt = message.metadata?.originalPrompt as string | undefined
-    const contextPack = message.metadata?.contextPack as string | undefined
     const improvedPrompt = message.metadata?.improvedPrompt as string | undefined
 
-    const showHookInfo = !!(originalPrompt || contextPack || improvedPrompt)
+    const showHookInfo = !!(originalPrompt || improvedPrompt)
 
     return (
       <div className='flex flex-col items-end gap-1.5 w-full'>
@@ -729,7 +669,6 @@ const RenderedMessage = memo(function RenderedMessage({
 
         {showCard && showHookInfo && (
           <CollapsibleHookCard
-            contextPack={contextPack ?? ''}
             improvedPrompt={improvedPrompt ?? ''}
             expanded={cardExpanded}
             onToggle={onToggleCard}
@@ -1113,8 +1052,6 @@ function Composer({
   conversationId,
   enableContextInjection,
   onEnableContextInjectionChange,
-  contextPackBudget,
-  onContextPackBudgetChange,
 }: {
   onSend: (content: string, files?: string[]) => void
   onStop: () => void
@@ -1138,8 +1075,6 @@ function Composer({
   conversationId: string
   enableContextInjection: boolean
   onEnableContextInjectionChange: (next: boolean) => void
-  contextPackBudget: number | undefined
-  onContextPackBudgetChange: (next: number | undefined) => void
 }) {
   const [value, setValue] = useState('')
   const [quotes, setQuotes] = useState<string[]>([])
@@ -1292,7 +1227,7 @@ function Composer({
           className='block max-h-[160px] min-h-[28px] w-full resize-none bg-transparent px-1 py-1.5 text-[14.5px] leading-[1.5] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60'
         />
 
-        <div className={cn('mt-1 flex items-center gap-2', enableContextInjection ? 'pr-[240px]' : 'pr-[135px]')}>
+        <div className='mt-1 flex items-center gap-2 pr-[135px]'>
           <button
             type='button'
             aria-label='Attach'
@@ -1343,14 +1278,6 @@ function Composer({
           >
             <BrainIcon className='size-[16px]' strokeWidth={2} />
           </button>
-
-          {enableContextInjection && (
-            <BudgetPicker
-              value={contextPackBudget}
-              onChange={onContextPackBudgetChange}
-              disabled={streaming}
-            />
-          )}
 
           {streaming ? (
             <button

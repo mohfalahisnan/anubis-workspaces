@@ -44,12 +44,6 @@ export interface PipelineDeps {
     create: (input: Omit<ContentLesson, 'id' | 'createdAt'>) => ContentLesson
     listForInjection: (q: { projectId: string; types?: LessonType[]; limit?: number }) => ContentLesson[]
   }
-  /**
-   * Retrieve the project knowledge-base context pack (brand guideline, niche,
-   * similar winning content, …) for a query. Returns '' when nothing is indexed
-   * or the engine is unavailable — the pipeline still runs without it.
-   */
-  contextPack: (projectId: string, query: string) => Promise<string>
   runAgent: (input: {
     prompt: string
     cwd: string
@@ -186,11 +180,10 @@ export class ContentPipelineService {
       ? (rawIdea.localAssets ?? []).filter((a) => a.kind === 'image').map((a) => a.path)
       : []
     const lessons = this.deps.lessons.listForInjection({ projectId: item.projectId, limit: 8 })
-    const context = await this.deps.contextPack(item.projectId, briefQuery(rawIdea))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).brief
     const settings = this.stepSettings(item, 'brief')
     const brief = await this.runAiStep(id, 'breakdown', resolvedId, (onProgress) => runStructured(this.runner(item, 'brief', resolvedId, settings, onProgress, imageFiles), {
-      prompt: buildBriefPrompt({ rawIdea, context, lessons }, settings?.promptTemplate),
+      prompt: buildBriefPrompt({ rawIdea, lessons }, settings?.promptTemplate),
       schema: ImprovedBriefSchema,
       maxAttempts: settings?.maxJsonAttempts,
     }))
@@ -205,11 +198,10 @@ export class ContentPipelineService {
     const p = this.deps.pipeline.get(id)
     const brief = p.improvedBrief
     if (!brief) throw new Error('Cannot refine before a brief exists.')
-    const context = await this.deps.contextPack(item.projectId, refineQuery(brief))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).refine
     const settings = this.stepSettings(item, 'refine')
     const refined = await this.runAiStep(id, 'refine', resolvedId, (onProgress) => runStructured(this.runner(item, 'refine', resolvedId, settings, onProgress), {
-      prompt: buildRefinePrompt({ brief, context }, settings?.promptTemplate),
+      prompt: buildRefinePrompt({ brief }, settings?.promptTemplate),
       schema: RefinedContentSchema,
       maxAttempts: settings?.maxJsonAttempts,
     }))
@@ -224,11 +216,10 @@ export class ContentPipelineService {
     const p = this.deps.pipeline.get(id)
     const refined = p.refinedContent
     if (!refined) throw new Error('Cannot review before refined content exists.')
-    const context = await this.deps.contextPack(item.projectId, reviewQuery(refined))
     const resolvedId = profileId ?? this.resolveStepProfiles(item).ai_review
     const settings = this.stepSettings(item, 'ai_review')
     const review = await this.runAiStep(id, 'ai-review', resolvedId, (onProgress) => runStructured(this.runner(item, 'ai_review', resolvedId, settings, onProgress), {
-      prompt: buildReviewPrompt({ refined, context }, settings?.promptTemplate),
+      prompt: buildReviewPrompt({ refined }, settings?.promptTemplate),
       schema: AiReviewSchema,
       maxAttempts: settings?.maxJsonAttempts,
     }))
@@ -327,19 +318,3 @@ export class ContentPipelineService {
   }
 }
 
-/* Per-step knowledge-base queries: pack context relevant to THIS item's content.
-   Fall back to a brand-oriented query when the content has nothing to search on. */
-
-const BRAND_FALLBACK_QUERY = 'brand guideline tone of voice niche positioning'
-
-function briefQuery(rawIdea: RawIdea): string {
-  return (rawIdea.caption || rawIdea.transcript || rawIdea.sourceCompetitor || BRAND_FALLBACK_QUERY).slice(0, 400)
-}
-
-function refineQuery(brief: ImprovedBrief): string {
-  return [brief.coreIdea, brief.mainMessage].filter(Boolean).join(' — ').slice(0, 400) || BRAND_FALLBACK_QUERY
-}
-
-function reviewQuery(refined: RefinedContent): string {
-  return (refined.caption || refined.copywriting?.hook || BRAND_FALLBACK_QUERY).slice(0, 400)
-}

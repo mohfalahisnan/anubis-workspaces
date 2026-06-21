@@ -51,7 +51,6 @@ export interface CreateConversationServiceOpts {
   backendUrl?: () => string | undefined
   idleMs?: number
   cronActionRunner?: (job: CronJob, stack: ConversationStack) => Promise<void>
-  contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
 }
 
 export interface ConversationStack {
@@ -183,7 +182,6 @@ export function createConversationService(opts: CreateConversationServiceOpts): 
     profileHomes,
     workspacesRoot,
     appConfig,
-    contextPacker: opts.contextPacker,
     backendUrl: opts.backendUrl,
   })
 

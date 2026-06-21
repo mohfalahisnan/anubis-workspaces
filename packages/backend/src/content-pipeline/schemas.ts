@@ -67,7 +67,6 @@ export const AiReviewSchema = z.object({
 
 export function buildBriefPrompt(input: {
   rawIdea: RawIdea
-  context: string
   lessons: Array<Pick<ContentLesson, 'type' | 'howToImprove'>>
 }, template?: string): string {
   return renderPrompt(template || DEFAULT_PROMPT_TEMPLATES.brief, buildBriefVars(input))
@@ -75,14 +74,12 @@ export function buildBriefPrompt(input: {
 
 export function buildRefinePrompt(input: {
   brief: ImprovedBrief
-  context: string
 }, template?: string): string {
   return renderPrompt(template || DEFAULT_PROMPT_TEMPLATES.refine, buildRefineVars(input))
 }
 
 export function buildReviewPrompt(input: {
   refined: RefinedContent
-  context: string
 }, template?: string): string {
   return renderPrompt(template || DEFAULT_PROMPT_TEMPLATES.ai_review, buildReviewVars(input))
 }

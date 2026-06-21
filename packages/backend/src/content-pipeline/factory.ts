@@ -66,10 +66,6 @@ export function getPipelineService(): ContentPipelineService {
     lessons: stack.contentLessons,
     appConfig: { get: () => stack.appConfig.get() },
     settings: { get: (projectId) => stack.contentPipelineSettings.get(projectId) },
-    // context-pack stubbed: the old CLI-backed contextPack is removed (Task B1).
-    // Task C2 will wire up the new in-process engine search here.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    contextPack: async (_projectId, _query) => '',
     runAgent: async ({ prompt, cwd, projectId, step, profileId, model: stepModel, reasoningEffort: stepEffort, temperature, files, onProgress }) => {
       const workDir = join(dataDir, 'content-pipeline', cwd.split('/').pop() ?? 'scratch')
       // Resolve the profile (default chain) + its agent, then the step model:

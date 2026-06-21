@@ -1,5 +1,4 @@
 import { join, relative, isAbsolute, resolve } from 'node:path'
-import { existsSync } from 'node:fs'
 import type { AiAgentService } from '@anubis/ai-agent'
 import { NO_CREDENTIALS_ERROR_CODE } from '@anubis/shared'
 import type { Db } from '../db/client.js'
@@ -32,13 +31,6 @@ import type { CronService } from '../cron/cron-service.js'
 import type { TaskManager } from './task-manager.js'
 import type { Conversation, ConversationExtra, Message } from './types.js'
 import { StreamRelay } from './stream-relay.js'
-
-/**
- * Default context-pack token budget used when neither the conversation override
- * nor the profile config specifies one. Keep in sync with the frontend default in
- * `packages/frontend/src/pages/active-conversation.tsx`.
- */
-const DEFAULT_CONTEXT_PACK_BUDGET = 1000
 
 export interface CreateConversationInput {
   title: string
@@ -98,7 +90,6 @@ export interface ConversationServiceDeps {
   knownWorkspaces: KnownWorkspacesRepo
   projects: ProjectsRepo
   appConfig: AppConfigService
-  contextPacker?: (projectId: string, query: string, budget?: number) => Promise<string>
   /** Resolver for the live backend base URL, injected into agent system prompts. */
   backendUrl?: () => string | undefined
   /**
@@ -248,80 +239,12 @@ export class ConversationService {
     const msgId = newId()
     const userRowId = newId()
 
-    let finalPrompt = input.content
-    let contextPackText = ''
-    let hookUsed = false
+    const finalPrompt = input.content
 
     const appConfig = this.deps.appConfig.get()
-    const proj = cur.projectId ? this.deps.projects.findById(cur.projectId) : null
-
-    // Per-conversation or profile-level override, falling back to global appConfig
-    const enableContext = resolved.enableContextInjection !== undefined
-      ? resolved.enableContextInjection
-      : (appConfig.enableContextInjection ?? false)
-
-    if (enableContext && this.deps.contextPacker && proj && proj.workdir && existsSync(proj.workdir)) {
-      try {
-        const improverProfileId = appConfig.contextInjectionProfileId || 'antigravity-context-builder'
-        const improverProfile = this.deps.profiles.get(improverProfileId)
-        if (improverProfile) {
-          const budget = resolved.contextPackBudget ?? DEFAULT_CONTEXT_PACK_BUDGET
-          contextPackText = await this.deps.contextPacker(cur.projectId!, input.content, budget)
-          if (contextPackText && contextPackText.trim()) {
-            const improverResolved = this.deps.profiles.resolve(improverProfileId)
-            const builderPrompt = `Here is the user's original prompt:
----
-${input.content}
----
-
-Here is the context pack from the project knowledge base:
----
-${contextPackText}
----
-
-Please generate the improved prompt.`
-
-            // Fetch custom system prompt instructions from builder profile's config
-            const customInstruction = improverProfile.config.appendSystemPrompt?.trim()
-            const improverSystemPrompt = customInstruction || `You are an expert prompt engineer and context builder.
-Your task is to take the user's original query/prompt and a set of context-pack text from the project's knowledge base, and output an improved, enriched, and more specific prompt.
-This improved prompt will be sent to another AI agent to solve.
-The improved prompt should:
-1. Clearly specify the goal of the original query.
-2. Incorporate relevant details, file structures, schemas, API contracts, or documentation from the context pack.
-3. Be direct, clear, and structured.
-4. DO NOT add any greeting, preamble, or explanation. Only output the final improved prompt.`
-
-            const runRes = await this.deps.aiAgent.runAgent({
-              agent: improverResolved.agent,
-              model: improverResolved.model,
-              cwd: cur.workspacePath,
-              prompt: builderPrompt,
-              appendSystemPrompt: improverSystemPrompt,
-              sandboxMode: 'read-only',
-              approvalPolicy: 'never',
-              reasoningEffort: improverResolved.reasoningEffort,
-            })
-
-            if (runRes.ok && runRes.text) {
-              finalPrompt = runRes.text.trim()
-              hookUsed = true
-            }
-          }
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[context-injection-hook] Error running prompt improver:', err)
-      }
-    }
 
     const metadata = {
       ...(input.fileReferences?.length ? { fileReferences: input.fileReferences } : {}),
-      ...(hookUsed ? {
-        originalPrompt: input.content,
-        contextPack: contextPackText,
-        improvedPrompt: finalPrompt,
-      } : {}),
     }
 
     this.deps.messages.insert({

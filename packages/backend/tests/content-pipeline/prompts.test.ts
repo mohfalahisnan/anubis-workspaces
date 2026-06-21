@@ -11,7 +11,6 @@ describe('renderPrompt', () => {
 describe('prompt builders with overrides', () => {
   const input = {
     rawIdea: { caption: 'CAP', assetRefs: [] },
-    context: 'Brand guideline: BE BOLD',
     lessons: [{ type: 'tone_of_voice' as const, howToImprove: 'punchier' }],
   }
 
@@ -19,25 +18,18 @@ describe('prompt builders with overrides', () => {
     const p = buildBriefPrompt(input)
     expect(p).toContain('IMPROVED BRIEF')
     expect(p).toContain('CAP')
-    expect(p).toContain('BE BOLD')
     expect(p).toContain('punchier')
   })
 
   it('renders a custom template with the same step variables', () => {
-    const p = buildBriefPrompt(input, 'ONLY THIS: {{source}} || ctx={{context}}')
+    const p = buildBriefPrompt(input, 'ONLY THIS: {{source}}')
     expect(p).toContain('ONLY THIS:')
     expect(p).toContain('Caption: CAP')
-    expect(p).toContain('ctx=Brand guideline: BE BOLD')
     expect(p).not.toContain('IMPROVED BRIEF') // default text is gone
   })
 
-  it('falls back to a placeholder when no context is indexed', () => {
-    const p = buildBriefPrompt({ ...input, context: '' })
-    expect(p).toContain('(no project knowledge indexed for this item)')
-  })
-
   it('ships default templates for all three steps', () => {
-    expect(DEFAULT_PROMPT_TEMPLATES.brief).toContain('{{context}}')
+    expect(DEFAULT_PROMPT_TEMPLATES.brief).toContain('{{source}}')
     expect(DEFAULT_PROMPT_TEMPLATES.refine).toContain('{{brief}}')
     expect(DEFAULT_PROMPT_TEMPLATES.ai_review).toContain('{{content}}')
   })
@@ -50,7 +42,6 @@ describe('buildBriefVars media block', () => {
         { kind: 'image', fileName: '0.jpg', path: '/x/assets/0.jpg' },
         { kind: 'image', fileName: '1.jpg', path: '/x/assets/1.jpg' },
       ] },
-      context: '',
       lessons: [],
     })
     expect(vars.media).toContain('assets/0.jpg')
@@ -63,7 +54,6 @@ describe('buildBriefVars media block', () => {
       rawIdea: { caption: 'c', assetRefs: [], mediaKind: 'video', transcript: 'spoken', localAssets: [
         { kind: 'video', fileName: 'video.mp4', path: '/x/assets/video.mp4' },
       ] },
-      context: '',
       lessons: [],
     })
     expect(vars.media.toLowerCase()).toContain('transcript')
@@ -71,7 +61,7 @@ describe('buildBriefVars media block', () => {
   })
 
   it('is empty when there are no local assets', () => {
-    const vars = buildBriefVars({ rawIdea: { caption: 'c', assetRefs: [] }, context: '', lessons: [] })
+    const vars = buildBriefVars({ rawIdea: { caption: 'c', assetRefs: [] }, lessons: [] })
     expect(vars.media).toBe('')
   })
 })

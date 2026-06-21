@@ -32,8 +32,6 @@ export function getStack(): ConversationStack {
     },
     backendUrl: () => process.env.ANUBIS_BACKEND_URL,
     cronActionRunner: (job, services) => runCronActionJob(job, services, dataDir),
-    // contextPacker removed: context-pack is no longer provided by the knowledge-base
-    // (Task C2 will wire up the new in-process engine search here).
   })
   return stack
 }

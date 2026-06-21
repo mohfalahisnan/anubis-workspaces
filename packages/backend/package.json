@@ -12,6 +12,7 @@
   "dependencies": {
     "@anubis/ai-agent": "workspace:*",
     "@anubis/conversation": "workspace:*",
+    "@anubis/knowledge-lite": "workspace:*",
     "@anubis/research-crawler": "workspace:*",
     "@anubis/shared": "workspace:*",
     "@anubis/workflow-runtime": "workspace:*",

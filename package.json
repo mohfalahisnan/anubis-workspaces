@@ -18,14 +18,15 @@
   "scripts": {
     "predev": "node scripts/ensure-dev-sqlite.mjs",
     "dev": "node scripts/dev.mjs",
-    "build": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-rebuild -f --only better-sqlite3 && electron-builder --config electron-builder.json",
+    "build": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/knowledge-lite build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build && electron-rebuild -f --only better-sqlite3 && electron-builder --config electron-builder.json",
     "preview": "pnpm --filter @anubis/frontend preview",
-    "pretest": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build --mode=test",
+    "pretest": "pnpm --filter @anubis/shared build && pnpm --filter @anubis/research-crawler build && pnpm --filter @anubis/ai-agent build && pnpm --filter @anubis/workflow-runtime build && pnpm --filter @anubis/conversation build && pnpm --filter @anubis/knowledge-lite build && pnpm --filter @anubis/backend build && pnpm --filter @anubis/frontend build && vite build --mode=test",
     "test": "vitest run && pnpm --filter @anubis/frontend test",
     "test:e2e": "pnpm pretest && playwright test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "dependencies": {
+    "@anubis/knowledge-lite": "workspace:*",
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.3.1",
     "@qoder-ai/qoder-agent-sdk": "^1.0.0",

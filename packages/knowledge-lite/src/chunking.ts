@@ -58,7 +58,7 @@ function paragraphBlocks(section: Section): Block[] {
     if (line.trim() === '') {
       if (blockLines.length) {
         blockLines.push(line)
-        blocks.push([blockStart as number, lineNumber, [...blockLines]])
+        blocks.push([blockStart!, lineNumber, [...blockLines]])
         blockLines = []
         blockStart = null
       }
@@ -68,7 +68,7 @@ function paragraphBlocks(section: Section): Block[] {
     blockLines.push(line)
     lastLine = lineNumber
   })
-  if (blockLines.length) blocks.push([blockStart as number, lastLine, [...blockLines]])
+  if (blockLines.length) blocks.push([blockStart!, lastLine, [...blockLines]])
   if (blocks.length === 0) blocks.push([section.startLine, section.endLine, lines])
   return blocks
 }

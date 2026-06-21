@@ -53,7 +53,6 @@ const PatchBody = z.object({
   crawlerProfileRoot: z.string().optional(),
   competitorLevels: CompetitorLevelsSchema.optional(),
   levelMultipliers: LevelMultipliersSchema.optional(),
-  engineBinaryPath: z.string().optional(),
   extractorBinaryPath: z.string().optional(),
   enableNotifications: z.boolean().optional(),
   enableContextInjection: z.boolean().optional(),

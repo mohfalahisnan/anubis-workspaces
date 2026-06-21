@@ -50,8 +50,6 @@ export function SettingsPage() {
     form.levelMultipliers ?? config?.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS
 
   const chromePathDirty = config !== null && (form.chromePath ?? '') !== (config.chromePath ?? '')
-  const engineBinaryPathDirty =
-    config !== null && (form.engineBinaryPath ?? '') !== (config.engineBinaryPath ?? '')
   const extractorBinaryPathDirty =
     config !== null && (form.extractorBinaryPath ?? '') !== (config.extractorBinaryPath ?? '')
   const levelsDirty =
@@ -78,7 +76,7 @@ export function SettingsPage() {
     config !== null &&
     (form.qoderApiKey ?? '') !== (config.qoderApiKey ?? '')
 
-  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty || promptCardDirty || qoderApiKeyDirty
+  const dirty = chromePathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty || promptCardDirty || qoderApiKeyDirty
   const canSave = dirty && levelsValid && multipliersValid
 
   async function handleSave() {
@@ -86,7 +84,6 @@ export function SettingsPage() {
     try {
       const next = await updateAppConfig({
         chromePath: form.chromePath ?? '',
-        engineBinaryPath: form.engineBinaryPath ?? '',
         extractorBinaryPath: form.extractorBinaryPath ?? '',
         competitorLevels: form.competitorLevels ?? config?.competitorLevels,
         levelMultipliers: form.levelMultipliers ?? config?.levelMultipliers,
@@ -98,7 +95,6 @@ export function SettingsPage() {
       setForm((f) => ({
         ...f,
         chromePath: next.chromePath ?? '',
-        engineBinaryPath: next.engineBinaryPath ?? '',
         extractorBinaryPath: next.extractorBinaryPath ?? '',
         competitorLevels: next.competitorLevels,
         levelMultipliers: next.levelMultipliers,
@@ -201,19 +197,6 @@ export function SettingsPage() {
           <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
             Paths to user-installed CLI tools Anubis operates but does not bundle. Leave blank to disable that feature; errors surface at first use.
           </p>
-
-          <div className='mt-4 flex flex-col gap-1.5'>
-            <label className='text-[12.5px] font-medium text-foreground'>Anubis Engine (Knowledge Base)</label>
-            <BinaryPathField
-              value={form.engineBinaryPath ?? ''}
-              onChange={(v) => setForm((f) => ({ ...f, engineBinaryPath: v }))}
-              placeholder='C:\Path\To\anubis-engine.exe'
-              pickerTitle='Select anubis-engine binary'
-            />
-            <p className='text-[12px] text-muted-foreground'>
-              Required for indexing and searching each Project's Knowledge Base.
-            </p>
-          </div>
 
           <div className='mt-4 flex flex-col gap-1.5'>
             <label className='text-[12.5px] font-medium text-foreground'>Anubis Extractor (OCR &amp; Transcribe)</label>

@@ -412,8 +412,6 @@ export interface AppConfig {
   competitorLevels?: CompetitorLevelsConfig
   /** Viral-multiplier thresholds (post likes ÷ avgLikes) per competitor level. */
   levelMultipliers?: LevelMultipliersConfig
-  /** Path to the `anubis-engine` binary that backs Knowledge Base. */
-  engineBinaryPath?: string
   /** Path to the `anubis-extractor` binary used for OCR and audio/video transcription. */
   extractorBinaryPath?: string
   /** Whether local notifications are enabled. */

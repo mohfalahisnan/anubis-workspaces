@@ -46,7 +46,6 @@ export interface AppConfig {
   crawlerProfileRoot?: string
   competitorLevels?: CompetitorLevelsConfig
   levelMultipliers?: LevelMultipliersConfig
-  engineBinaryPath?: string
   extractorBinaryPath?: string
   enableNotifications?: boolean
   enableContextInjection?: boolean
@@ -102,8 +101,6 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
   if (chromePath) out.chromePath = chromePath
   const crawlerProfileRoot = typeof obj.crawlerProfileRoot === 'string' ? obj.crawlerProfileRoot.trim() : ''
   if (crawlerProfileRoot) out.crawlerProfileRoot = crawlerProfileRoot
-  const engineBinaryPath = typeof obj.engineBinaryPath === 'string' ? obj.engineBinaryPath.trim() : ''
-  if (engineBinaryPath) out.engineBinaryPath = engineBinaryPath
   const extractorBinaryPath = typeof obj.extractorBinaryPath === 'string' ? obj.extractorBinaryPath.trim() : ''
   if (extractorBinaryPath) out.extractorBinaryPath = extractorBinaryPath
   const levels = sanitizeLevels(obj.competitorLevels)

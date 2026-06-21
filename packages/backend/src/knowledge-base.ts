@@ -48,17 +48,6 @@ export function deleteKnowledgeBaseForProject(projectId: string): void {
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
 }
 
-/**
- * @deprecated Use deleteKnowledgeBaseForProject instead.
- * Kept as a no-op stub for backward compatibility while projects.ts is
- * still on the old call site; Task B2 will remove this and rewire projects.ts.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function deleteKnowledgeBaseForWorkdir(_workdir: string | undefined): void {
-  // No-op: the new engine is keyed by projectId, not workdir.
-  // Task B2 will update projects.ts to call deleteKnowledgeBaseForProject.
-}
-
 /* -----------------------------------------------------------
    HTTP routes
    ----------------------------------------------------------- */

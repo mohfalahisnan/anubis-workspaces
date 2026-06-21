@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { getStack } from './services.js'
 import { newId } from '@anubis/conversation'
-import { deleteKnowledgeBaseForWorkdir } from './knowledge-base.js'
+import { deleteKnowledgeBaseForProject } from './knowledge-base.js'
 
 const CreateBody = z.object({
   name: z.string().min(1),
@@ -69,7 +69,7 @@ projectRoutes.delete('/:id', (c) => {
     const project = getStack().projects.findById(id)
     getStack().projects.softDelete(id)
     try {
-      deleteKnowledgeBaseForWorkdir(project?.workdir)
+      deleteKnowledgeBaseForProject(id)
     } catch (cleanupErr) {
       console.warn('[projects] knowledge-base cleanup failed:', cleanupErr)
     }

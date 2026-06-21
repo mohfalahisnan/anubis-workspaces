@@ -1,3 +1,8 @@
+> **Superseded (2026-06-22):** the external `anubis-engine` binary was replaced by
+> the in-process `@anubis/knowledge-lite` engine. See
+> `docs/superpowers/specs/2026-06-22-knowledge-lite-ts-engine-design.md`. The
+> sections below are retained for historical context.
+
 # Knowledge Base engine state lives under Anubis dataDir
 
 When the desktop app spawns the `anubis-engine` binary, it sets `ANUBIS_DB_PATH=<dataDir>/engine/anubis.db` so the engine's sqlite + FTS + vector state is written under `<dataDir>/engine/workdirs/<sha256(workspacePath)[..16]>/` — co-located with `config.json` and the rest of Anubis-owned state — rather than the engine's own default `%APPDATA%\com.anubis-os.app\workdirs\…`.

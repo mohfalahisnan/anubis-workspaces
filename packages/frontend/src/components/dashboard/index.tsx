@@ -33,7 +33,6 @@ import { WorkflowDemoPage } from '@/components/workflow'
 import { WorkflowsPage } from '@/pages/workflows'
 import { WorkflowEditorPage } from '@/pages/workflow-editor'
 import { KnowledgeBasePage } from '@/pages/knowledge-base'
-import { KnowledgeGraphPage } from '@/pages/knowledge-graph'
 import { ExtractorPage } from '@/pages/extractor'
 import { FlowPage } from '@/pages/flow'
 import { JobCompletionAlerts } from '@/components/jobs/top-nav-progress'
@@ -63,7 +62,6 @@ const BREADCRUMBS: Record<PageKey, string> = {
   workflows: 'Workflows',
   'workflow-editor': 'Workflows · Editor',
   'knowledge-base': 'Knowledge Base',
-  'knowledge-graph': 'Knowledge Graph',
   extractor: 'Extractor',
   flow: 'Flow Images',
 }
@@ -254,8 +252,6 @@ function CurrentPage() {
       return <WorkflowEditorPage workflowId={route.workflowId} />
     case 'knowledge-base':
       return <KnowledgeBasePage />
-    case 'knowledge-graph':
-      return <KnowledgeGraphPage />
     case 'extractor':
       return <ExtractorPage />
     case 'flow':

@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DatabaseIcon,
   FileTextIcon,
-  FolderInputIcon,
   RefreshCwIcon,
   SearchIcon,
-  ShieldIcon,
 } from 'lucide-react'
 import type {
   KnowledgeBaseDocument,
@@ -13,7 +11,7 @@ import type {
   KnowledgeBaseStats,
 } from '@anubis/shared'
 import {
-  indexKnowledgeBase,
+  ingestKnowledgeBase,
   searchKnowledgeBase,
 } from '@/api'
 import { useProject } from '@/lib/use-project'
@@ -21,8 +19,6 @@ import { cn } from '@/lib/utils'
 import { useKbLoader } from '@/lib/use-kb-loader'
 
 type Banner = { kind: 'success' | 'error'; message: string }
-
-type IndexMode = 'all' | 'file' | 'folder'
 
 export function KnowledgeBasePage() {
   const { activeProject } = useProject()
@@ -33,16 +29,16 @@ export function KnowledgeBasePage() {
   const backgroundLoading = useKbLoader((s) => s.loading)
   const stats = useKbLoader((s) => projectId ? s.kbStats[projectId] : null) || null
   const docs = useKbLoader((s) => projectId ? s.kbDocs[projectId] : null) || null
-  const ignoreFile = useKbLoader((s) => projectId ? s.kbIgnoreFiles[projectId] : null) || null
   const loadProjectData = useKbLoader((s) => s.loadProjectData)
 
   const [busy, setBusy] = useState(false)
-  const [indexing, setIndexing] = useState<IndexMode | null>(null)
+  const [ingesting, setIngesting] = useState(false)
   const [banner, setBanner] = useState<Banner | null>(null)
 
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [hits, setHits] = useState<KnowledgeBaseSearchHit[] | null>(null)
+  const [results, setResults] = useState<KnowledgeBaseSearchHit[] | null>(null)
+  const [lowConfidence, setLowConfidence] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!projectId || !projectWorkdir) return
@@ -59,31 +55,17 @@ export function KnowledgeBasePage() {
   const loaded = stats !== null
   const hasIndex = (stats?.documentCount ?? 0) > 0
 
-  async function handleIndex(mode: IndexMode) {
+  async function handleIngest(full = true) {
     if (!projectId) return
-    setIndexing(mode); setBanner(null)
+    setIngesting(true); setBanner(null)
     try {
-      let paths: string[] | undefined
-      if (mode === 'file' || mode === 'folder') {
-        const picked = window.prompt(
-          mode === 'file'
-            ? 'Absolute path of file to index:'
-            : 'Absolute path of folder to index:',
-          projectWorkdir ?? '',
-        )
-        if (!picked) { setIndexing(null); return }
-        paths = [picked]
-      }
-      const result = await indexKnowledgeBase({ projectId, paths })
-      const msg = result.createdIgnoreFile
-        ? `Indexed ${result.indexed.length} target(s). Created .anubisignore at workspace root.`
-        : `Indexed ${result.indexed.length} target(s).`
-      setBanner({ kind: 'success', message: msg })
+      const result = await ingestKnowledgeBase({ projectId, full })
+      setBanner({ kind: 'success', message: `Ingested ${result.documents} document(s), ${result.chunks} chunk(s).` })
       await refresh()
     } catch (e) {
-      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Indexing failed.' })
+      setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Ingestion failed.' })
     } finally {
-      setIndexing(null)
+      setIngesting(false)
     }
   }
 
@@ -93,7 +75,8 @@ export function KnowledgeBasePage() {
     setSearching(true); setBanner(null)
     try {
       const r = await searchKnowledgeBase({ projectId, query: query.trim(), limit: 20 })
-      setHits(r.hits)
+      setResults(r.results)
+      setLowConfidence(r.lowConfidence)
     } catch (e) {
       setBanner({ kind: 'error', message: e instanceof Error ? e.message : 'Search failed.' })
     } finally {
@@ -129,7 +112,7 @@ export function KnowledgeBasePage() {
             <div>
               <h1 className='text-[28px] font-semibold leading-[1.1] tracking-[-0.025em]'>Knowledge Base</h1>
               <p className='mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-muted-foreground'>
-                Per-project searchable corpus. Indexes <code className='font-mono text-foreground/80'>{projectWorkdir}</code> filtered by <code className='font-mono text-foreground/80'>.anubisignore</code>.
+                Per-project searchable corpus. Indexes <code className='font-mono text-foreground/80'>{projectWorkdir}/knowledge/</code>.
               </p>
             </div>
             <button
@@ -175,8 +158,8 @@ export function KnowledgeBasePage() {
               </h2>
               <p className='max-w-md text-[13px] text-muted-foreground'>
                 {backgroundLoading
-                  ? 'Anubis is loading the project index statistics and ignore rules in the background. Please wait.'
-                  : 'Opening this page is free — Anubis does not auto-query the engine. Click Refresh to load index stats and documents, or jump straight to indexing below.'}
+                  ? 'Anubis is loading the project index statistics in the background. Please wait.'
+                  : 'Click Refresh to load index stats, or ingest your knowledge directory below.'}
               </p>
               <div className='mt-2 flex flex-wrap items-center justify-center gap-2'>
                 <button
@@ -190,11 +173,11 @@ export function KnowledgeBasePage() {
                 </button>
                 <button
                   type='button'
-                  onClick={() => void handleIndex('all')}
-                  disabled={indexing !== null}
+                  onClick={() => void handleIngest(true)}
+                  disabled={ingesting}
                   className='inline-flex h-10 items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-5 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:opacity-50'
                 >
-                  {indexing === 'all' ? 'Indexing…' : 'Index this project now'}
+                  {ingesting ? 'Ingesting…' : 'Ingest knowledge now'}
                 </button>
               </div>
             </div>
@@ -207,15 +190,15 @@ export function KnowledgeBasePage() {
               <DatabaseIcon className='size-8 text-muted-foreground' strokeWidth={1.5} />
               <h2 className='text-[16px] font-semibold'>No documents indexed yet</h2>
               <p className='max-w-md text-[13px] text-muted-foreground'>
-                Indexing the workspace will respect <code className='font-mono'>.anubisignore</code>. On first index, Anubis creates a default ignore file at the workspace root if none exists.
+                Place Markdown files under <code className='font-mono'>{projectWorkdir}/knowledge/</code> then ingest to make them searchable.
               </p>
               <button
                 type='button'
-                onClick={() => void handleIndex('all')}
-                disabled={indexing !== null}
+                onClick={() => void handleIngest(true)}
+                disabled={ingesting}
                 className='mt-2 inline-flex h-10 items-center gap-2 rounded-md bg-[var(--anubis-gold)] px-5 text-[13.5px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:opacity-50'
               >
-                {indexing === 'all' ? 'Indexing…' : 'Index this project now'}
+                {ingesting ? 'Ingesting…' : 'Ingest knowledge now'}
               </button>
             </div>
           </section>
@@ -226,30 +209,21 @@ export function KnowledgeBasePage() {
             <div className='flex flex-wrap items-center gap-2'>
               <button
                 type='button'
-                onClick={() => void handleIndex('all')}
-                disabled={indexing !== null}
+                onClick={() => void handleIngest(true)}
+                disabled={ingesting}
                 className='inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--anubis-gold)] px-3.5 text-[13px] font-semibold text-[#0B0C0F] transition-colors hover:bg-[var(--anubis-gold-deep)] disabled:opacity-50'
               >
                 <RefreshCwIcon className='size-[14px]' strokeWidth={1.8} />
-                {indexing === 'all' ? 'Re-indexing…' : 'Re-index project'}
+                {ingesting ? 'Ingesting…' : 'Re-ingest'}
               </button>
               <button
                 type='button'
-                onClick={() => void handleIndex('folder')}
-                disabled={indexing !== null}
-                className='inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[13px] text-foreground transition-colors hover:bg-card/70 disabled:opacity-50'
-              >
-                <FolderInputIcon className='size-[14px]' strokeWidth={1.8} />
-                Index a folder…
-              </button>
-              <button
-                type='button'
-                onClick={() => void handleIndex('file')}
-                disabled={indexing !== null}
+                onClick={() => void handleIngest(false)}
+                disabled={ingesting}
                 className='inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-[13px] text-foreground transition-colors hover:bg-card/70 disabled:opacity-50'
               >
                 <FileTextIcon className='size-[14px]' strokeWidth={1.8} />
-                Index a file…
+                Incremental ingest
               </button>
             </div>
           </section>
@@ -281,22 +255,39 @@ export function KnowledgeBasePage() {
             </button>
           </form>
 
-          {hits && (
-            <ul className='mt-4 flex flex-col gap-2'>
-              {hits.length === 0
-                ? <li className='text-[12.5px] text-muted-foreground'>No hits.</li>
-                : hits.map((h, i) => (
-                  <li key={`${h.chunkId}-${i}`} className='rounded-md border border-border bg-card px-3.5 py-2.5'>
-                    <div className='flex items-baseline justify-between gap-3'>
-                      <span className='truncate font-mono text-[12px] text-muted-foreground'>{h.path || '(no path)'}</span>
-                      {h.score !== undefined && (
-                        <span className='font-mono text-[11px] text-muted-foreground'>{h.score.toFixed(3)}</span>
-                      )}
-                    </div>
-                    <p className='mt-1 line-clamp-3 text-[13px] text-foreground/90'>{h.snippet || '(no snippet)'}</p>
-                  </li>
-                ))}
-            </ul>
+          {results !== null && (
+            <div className='mt-4'>
+              {lowConfidence && (
+                <div className='mb-3 rounded-md border border-[color-mix(in_oklab,var(--destructive)_30%,var(--border))] bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] px-3.5 py-2.5 text-[12.5px] text-muted-foreground'>
+                  Low confidence — results may not be relevant to the query.
+                </div>
+              )}
+              {results.length === 0
+                ? <p className='text-[12.5px] text-muted-foreground'>No results.</p>
+                : (
+                  <ul className='flex flex-col gap-2'>
+                    {results.map((h, i) => (
+                      <li key={`${h.source}-${h.startLine}-${i}`} className='rounded-md border border-border bg-card px-3.5 py-3'>
+                        <div className='flex items-baseline justify-between gap-3'>
+                          <span className='truncate font-mono text-[12px] text-muted-foreground'>
+                            {h.source}
+                            <span className='ml-1.5 text-muted-foreground/60'>
+                              :{h.excerptStartLine}–{h.excerptEndLine}
+                            </span>
+                          </span>
+                          <span className='shrink-0 font-mono text-[11px] text-muted-foreground'>{h.score.toFixed(3)}</span>
+                        </div>
+                        {h.heading && (
+                          <p className='mt-1 text-[12px] font-medium text-foreground/70'>{h.heading}</p>
+                        )}
+                        <pre className='mt-2 max-h-[160px] overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-2 font-mono text-[11.5px] leading-relaxed text-foreground/85'>
+                          {h.excerpt}
+                        </pre>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+            </div>
           )}
         </section>
 
@@ -305,40 +296,14 @@ export function KnowledgeBasePage() {
             <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>Indexed documents ({docs.length})</h2>
             <ul className='mt-3 flex max-h-[420px] flex-col gap-1 overflow-y-auto rounded-md border border-border bg-card p-2'>
               {docs.map((d) => (
-                <li key={d.id} className='flex items-baseline justify-between gap-3 rounded px-2 py-1.5 font-mono text-[12px] hover:bg-background'>
-                  <span className='truncate text-foreground/90'>{d.path || d.id}</span>
-                  {d.chunkCount !== undefined && (
-                    <span className='shrink-0 text-muted-foreground'>{d.chunkCount} chunks</span>
-                  )}
+                <li key={d.path} className='flex items-baseline justify-between gap-3 rounded px-2 py-1.5 font-mono text-[12px] hover:bg-background'>
+                  <span className='truncate text-foreground/90'>{d.path}</span>
+                  <span className='shrink-0 text-muted-foreground'>{d.chunkCount} chunks</span>
                 </li>
               ))}
             </ul>
           </section>
         )}
-
-        <section className='mt-8 border-t border-border pt-6'>
-          <h2 className='flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
-            <ShieldIcon className='size-[13px]' strokeWidth={1.8} />
-            .anubisignore
-          </h2>
-          <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
-            Gitignore-style patterns at the workspace root. The engine does <em>not</em> honour <code className='font-mono'>.gitignore</code>; only this file. Edit it directly in your editor — Anubis writes a default on first index but never touches it afterwards.
-          </p>
-          {ignoreFile && ignoreFile.exists ? (
-            <pre className='mt-3 max-h-[260px] overflow-auto rounded-md border border-border bg-card p-3 font-mono text-[11.5px] leading-relaxed text-muted-foreground'>
-              {ignoreFile.content}
-            </pre>
-          ) : (
-            <p className='mt-3 rounded-md border border-dashed border-border bg-card/60 px-3 py-2.5 text-[12px] text-muted-foreground'>
-              No <code className='font-mono'>.anubisignore</code> yet — one will be created at first index.
-            </p>
-          )}
-          {ignoreFile && (
-            <p className='mt-2 text-[11px] text-muted-foreground'>
-              Path: <span className='font-mono text-foreground/70'>{ignoreFile.path}</span>
-            </p>
-          )}
-        </section>
       </div>
     </div>
   )

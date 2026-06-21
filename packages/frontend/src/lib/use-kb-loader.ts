@@ -2,13 +2,10 @@ import { create } from 'zustand'
 import type {
   KnowledgeBaseDocument,
   KnowledgeBaseStats,
-  KnowledgeBaseGraph,
 } from '@anubis/shared'
 import {
   getKnowledgeBaseStats,
   listKnowledgeBaseDocuments,
-  getKnowledgeBaseIgnoreFile,
-  getKnowledgeBaseGraph,
 } from '@/api'
 
 interface KbLoaderState {
@@ -18,8 +15,6 @@ interface KbLoaderState {
 
   kbStats: Record<string, KnowledgeBaseStats | null>
   kbDocs: Record<string, KnowledgeBaseDocument[] | null>
-  kbIgnoreFiles: Record<string, { exists: boolean; path: string; content: string } | null>
-  graphs: Record<string, KnowledgeBaseGraph | null>
 
   loadProjectData: (projectId: string, force?: boolean) => Promise<void>
   clearProjectData: (projectId: string) => void
@@ -31,25 +26,16 @@ export const useKbLoader = create<KbLoaderState>((set, get) => ({
   error: null,
   kbStats: {},
   kbDocs: {},
-  kbIgnoreFiles: {},
-  graphs: {},
 
   loadProjectData: async (projectId: string, force = false) => {
     const state = get()
-    const isLoaded = state.kbStats[projectId] && state.graphs[projectId]
+    const isLoaded = state.kbStats[projectId] !== undefined
     if (isLoaded && !force) return
 
     set({ loading: true, error: null, progressText: 'Connecting to engine...' })
 
     try {
-      // 1. Fetch Ignore File (cheap, disk-only)
-      set({ progressText: 'Loading ignore rules...' })
-      const ignore = await getKnowledgeBaseIgnoreFile(projectId).catch(() => null)
-      set((s) => ({
-        kbIgnoreFiles: { ...s.kbIgnoreFiles, [projectId]: ignore },
-      }))
-
-      // 2. Fetch stats and document list in parallel
+      // Fetch stats and document list in parallel
       set({ progressText: 'Fetching index stats...' })
       const [statsRes, docsRes] = await Promise.allSettled([
         getKnowledgeBaseStats(projectId),
@@ -62,18 +48,11 @@ export const useKbLoader = create<KbLoaderState>((set, get) => ({
       set((s) => ({
         kbStats: { ...s.kbStats, [projectId]: stats },
         kbDocs: { ...s.kbDocs, [projectId]: docs },
-      }))
-
-      // 3. Fetch Graph Overview (limit: 250 by default)
-      set({ progressText: 'Mapping knowledge graph...' })
-      const graph = await getKnowledgeBaseGraph(projectId, 250).catch(() => null)
-      set((s) => ({
-        graphs: { ...s.graphs, [projectId]: graph },
         progressText: 'Done',
         loading: false,
       }))
     } catch (e) {
-      console.error('Failed to background load project KB/graph:', e)
+      console.error('Failed to background load project KB:', e)
       set({
         loading: false,
         error: e instanceof Error ? e.message : 'Failed to load database.',
@@ -86,15 +65,11 @@ export const useKbLoader = create<KbLoaderState>((set, get) => ({
     set((s) => {
       const kbStats = { ...s.kbStats }
       const kbDocs = { ...s.kbDocs }
-      const kbIgnoreFiles = { ...s.kbIgnoreFiles }
-      const graphs = { ...s.graphs }
 
       delete kbStats[projectId]
       delete kbDocs[projectId]
-      delete kbIgnoreFiles[projectId]
-      delete graphs[projectId]
 
-      return { kbStats, kbDocs, kbIgnoreFiles, graphs }
+      return { kbStats, kbDocs }
     })
   },
 }))

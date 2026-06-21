@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { randomBytes } from 'node:crypto'
 import Database from 'better-sqlite3'
 import type { EngineConfig } from './config.js'
 import { INDEX_VERSION, SCHEMA_SQL } from './config.js'
@@ -118,7 +119,8 @@ export function buildIndex(sourceRoot: string, dbPath: string, config: EngineCon
   }
 
   mkdirSync(dirname(dbPath), { recursive: true })
-  const tmpPath = join(dirname(dbPath), `${dbPath.split(/[\\/]/).pop()}.${process.pid}.tmp`)
+  const rand = randomBytes(4).toString('hex')
+  const tmpPath = join(dirname(dbPath), `${dbPath.split(/[\\/]/).pop()}.${process.pid}.${rand}.tmp`)
   try {
     if (existsSync(tmpPath)) rmSync(tmpPath, { force: true })
     const conn = new Database(tmpPath)
@@ -150,7 +152,27 @@ export function buildIndex(sourceRoot: string, dbPath: string, config: EngineCon
     } finally {
       conn.close()
     }
-    renameSync(tmpPath, dbPath)
+    // Fix 1: Windows-safe atomic rename — retry up to 3 times on EPERM/EBUSY
+    let lastRenameErr: unknown
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        renameSync(tmpPath, dbPath)
+        lastRenameErr = undefined
+        break
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code
+        if ((code === 'EPERM' || code === 'EBUSY') && attempt < 3) {
+          // Synchronous busy-wait backoff: 10ms * 2^attempt (10, 20, 40ms)
+          const waitMs = 10 * (1 << attempt)
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitMs)
+          lastRenameErr = e
+        } else {
+          lastRenameErr = e
+          break
+        }
+      }
+    }
+    if (lastRenameErr !== undefined) throw lastRenameErr
   } catch (err) {
     try { if (existsSync(tmpPath)) rmSync(tmpPath, { force: true }) } catch { /* ignore */ }
     throw new IndexStoreError(`could not rebuild sqlite index: ${String(err)}`)
@@ -178,6 +200,9 @@ export function indexIsFresh(sourceRoot: string, dbPath: string): boolean {
   let stored: Map<string, string>
   try {
     const conn = new Database(dbPath, { readonly: true })
+    // Fix 3: version mismatch forces a rebuild even when content hashes are unchanged
+    const version = conn.pragma('user_version', { simple: true }) as number
+    if (version !== INDEX_VERSION) { conn.close(); return false }
     const rows = conn.prepare('SELECT path, content_hash FROM documents').all() as Array<{ path: string; content_hash: string }>
     conn.close()
     stored = new Map(rows.map(r => [r.path, r.content_hash]))

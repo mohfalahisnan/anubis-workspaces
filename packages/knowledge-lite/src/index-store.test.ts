@@ -84,4 +84,15 @@ describe('buildIndex', () => {
     expect(documents).toHaveLength(1)
     expect(chunks[0].terms.get('alpha')).toBe(2)
   })
+
+  it('indexIsFresh returns false when user_version does not match INDEX_VERSION', () => {
+    write('a.md', '# A\n\nalpha content here\n')
+    buildIndex(src, db, DEFAULT_CONFIG)
+    expect(indexIsFresh(src, db)).toBe(true)
+    // Manually corrupt the user_version to simulate a version mismatch
+    const conn = new Database(db)
+    conn.pragma(`user_version = ${INDEX_VERSION + 1}`)
+    conn.close()
+    expect(indexIsFresh(src, db)).toBe(false)
+  })
 })

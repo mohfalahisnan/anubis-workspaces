@@ -93,6 +93,44 @@ describe('knowledge-base routes', () => {
     expect(body.results).toEqual([])
   })
 
+  it('tree lists markdown files on disk and read returns content', async () => {
+    const app = await loadApp()
+    const projectId = 'default'
+
+    await app.request('/knowledge-base/save', {
+      method: 'POST', headers: JSON_HEADERS,
+      body: JSON.stringify({ projectId, path: 'guides/setup.md', content: '# Setup\n\nstep one\n' }),
+    })
+
+    const treeRes = await app.request(`/knowledge-base/tree?projectId=${projectId}`)
+    expect(treeRes.status).toBe(200)
+    const treeBody = await treeRes.json() as {
+      ok: boolean; items: Array<{ path: string; size: number; updatedAt: string }>
+    }
+    expect(treeBody.ok).toBe(true)
+    expect(treeBody.items.some((i) => i.path === 'guides/setup.md')).toBe(true)
+
+    const readRes = await app.request(
+      `/knowledge-base/read?projectId=${projectId}&path=${encodeURIComponent('guides/setup.md')}`,
+    )
+    expect(readRes.status).toBe(200)
+    const readBody = await readRes.json() as { ok: boolean; path: string; content: string }
+    expect(readBody.ok).toBe(true)
+    expect(readBody.path).toBe('guides/setup.md')
+    expect(readBody.content).toContain('step one')
+  })
+
+  it('read rejects path traversal with 400', async () => {
+    const app = await loadApp()
+    const projectId = 'default'
+    const res = await app.request(
+      `/knowledge-base/read?projectId=${projectId}&path=${encodeURIComponent('../escape.md')}`,
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json() as { ok: boolean }
+    expect(body.ok).toBe(false)
+  })
+
   it('save without force on an existing path returns 400', async () => {
     const app = await loadApp()
     const projectId = 'default'

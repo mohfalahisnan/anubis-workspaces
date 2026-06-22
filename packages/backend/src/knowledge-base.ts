@@ -82,6 +82,7 @@ const DeleteBody = z.object({
 }).strict()
 
 const ProjectQuery = z.object({ projectId: z.string().min(1) })
+const ReadQuery = z.object({ projectId: z.string().min(1), path: z.string().min(1) })
 
 export const knowledgeBaseRoutes = new Hono()
 
@@ -125,4 +126,16 @@ knowledgeBaseRoutes.get('/documents', async (c) => {
   const { projectId } = ProjectQuery.parse(Object.fromEntries(new URL(c.req.url).searchParams))
   const out = await withEngineLock(() => engineFor(projectId).listDocuments())
   return c.json({ ok: true, items: out.items })
+})
+
+knowledgeBaseRoutes.get('/tree', async (c) => {
+  const { projectId } = ProjectQuery.parse(Object.fromEntries(new URL(c.req.url).searchParams))
+  const out = await withEngineLock(() => engineFor(projectId).listFiles())
+  return c.json({ ok: true, items: out.items })
+})
+
+knowledgeBaseRoutes.get('/read', async (c) => {
+  const { projectId, path } = ReadQuery.parse(Object.fromEntries(new URL(c.req.url).searchParams))
+  const out = await withEngineLock(() => engineFor(projectId).readFile({ path }))
+  return c.json({ ok: true, path: out.path, content: out.content })
 })

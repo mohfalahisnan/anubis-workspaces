@@ -1,3 +1,8 @@
+> **Superseded (2026-06-22):** the external `anubis-engine` binary was replaced by
+> the in-process `@anubis/knowledge-lite` engine. See
+> `docs/superpowers/specs/2026-06-22-knowledge-lite-ts-engine-design.md`. The
+> sections below are retained for historical context.
+
 # Knowledge Base Workdir is the Project workspacePath itself
 
 A Project's Knowledge Base is built by invoking the engine with `-w <Project.workspacePath>` directly — no `.anubis/` subdirectory, no separate corpus root. The whole workspace folder is the corpus; what to exclude lives in a `.anubisignore` file at the workspace root (gitignore-style syntax, auto-created with sensible defaults on first index because the engine does not honour `.gitignore`).

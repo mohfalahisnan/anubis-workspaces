@@ -29,7 +29,6 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
         create: vi.fn((l: Record<string, unknown>) => { const x = { id: 'L', createdAt: 1, ...l }; lessons.push(x); return x }),
         listForInjection: vi.fn(() => []),
       },
-      contextPack: vi.fn(async () => ''),
       runAgent: vi.fn(),
       extract: vi.fn(async () => ({ caption: 'cap', assetRefs: [] })),
       appConfig: { get: vi.fn(() => ({})) },

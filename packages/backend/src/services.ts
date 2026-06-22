@@ -32,11 +32,6 @@ export function getStack(): ConversationStack {
     },
     backendUrl: () => process.env.ANUBIS_BACKEND_URL,
     cronActionRunner: (job, services) => runCronActionJob(job, services, dataDir),
-    contextPacker: async (projectId, query, budget) => {
-      const { contextPack } = await import('./knowledge-base.js')
-      const res = await contextPack({ projectId, query, budget })
-      return res.text
-    },
   })
   return stack
 }

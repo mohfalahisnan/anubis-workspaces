@@ -97,7 +97,6 @@ describe('AppConfigService — competitorLevels', () => {
     expect(cfg.competitorLevels).toBeUndefined()
   })
 })
-
 describe('AppConfigService — levelMultipliers', () => {
   let dir: string
 
@@ -169,25 +168,5 @@ describe('AppConfigService — levelMultipliers', () => {
     const next = svc.update({ levelMultipliers: valid })
     expect(next.competitorLevels?.greenMax).toBe(10_000)
     expect(next.levelMultipliers).toEqual(valid)
-  })
-})
-
-describe('AppConfigService — showPromptInjectionCard', () => {
-  let dir: string
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'anubis-cfg-card-')) })
-  afterEach(() => { rmSync(dir, { recursive: true, force: true }) })
-
-  it('defaults to true when unset', () => {
-    expect(new AppConfigService(dir).get().showPromptInjectionCard).toBe(true)
-  })
-
-  it('round-trips false and reloads it', () => {
-    new AppConfigService(dir).update({ showPromptInjectionCard: false })
-    expect(new AppConfigService(dir).get().showPromptInjectionCard).toBe(false)
-  })
-
-  it('round-trips true', () => {
-    const next = new AppConfigService(dir).update({ showPromptInjectionCard: true })
-    expect(next.showPromptInjectionCard).toBe(true)
   })
 })

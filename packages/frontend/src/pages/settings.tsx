@@ -50,8 +50,6 @@ export function SettingsPage() {
     form.levelMultipliers ?? config?.levelMultipliers ?? DEFAULT_LEVEL_MULTIPLIERS
 
   const chromePathDirty = config !== null && (form.chromePath ?? '') !== (config.chromePath ?? '')
-  const engineBinaryPathDirty =
-    config !== null && (form.engineBinaryPath ?? '') !== (config.engineBinaryPath ?? '')
   const extractorBinaryPathDirty =
     config !== null && (form.extractorBinaryPath ?? '') !== (config.extractorBinaryPath ?? '')
   const levelsDirty =
@@ -70,15 +68,11 @@ export function SettingsPage() {
     config !== null &&
     (form.enableNotifications ?? true) !== (config.enableNotifications ?? true)
 
-  const promptCardDirty =
-    config !== null &&
-    (form.showPromptInjectionCard ?? true) !== (config.showPromptInjectionCard ?? true)
-
   const qoderApiKeyDirty =
     config !== null &&
     (form.qoderApiKey ?? '') !== (config.qoderApiKey ?? '')
 
-  const dirty = chromePathDirty || engineBinaryPathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty || promptCardDirty || qoderApiKeyDirty
+  const dirty = chromePathDirty || extractorBinaryPathDirty || levelsDirty || multipliersDirty || notificationsDirty || qoderApiKeyDirty
   const canSave = dirty && levelsValid && multipliersValid
 
   async function handleSave() {
@@ -86,24 +80,20 @@ export function SettingsPage() {
     try {
       const next = await updateAppConfig({
         chromePath: form.chromePath ?? '',
-        engineBinaryPath: form.engineBinaryPath ?? '',
         extractorBinaryPath: form.extractorBinaryPath ?? '',
         competitorLevels: form.competitorLevels ?? config?.competitorLevels,
         levelMultipliers: form.levelMultipliers ?? config?.levelMultipliers,
         enableNotifications: form.enableNotifications ?? true,
-        showPromptInjectionCard: form.showPromptInjectionCard ?? true,
         qoderApiKey: form.qoderApiKey ?? '',
       })
       setConfig(next)
       setForm((f) => ({
         ...f,
         chromePath: next.chromePath ?? '',
-        engineBinaryPath: next.engineBinaryPath ?? '',
         extractorBinaryPath: next.extractorBinaryPath ?? '',
         competitorLevels: next.competitorLevels,
         levelMultipliers: next.levelMultipliers,
         enableNotifications: next.enableNotifications ?? true,
-        showPromptInjectionCard: next.showPromptInjectionCard ?? true,
         qoderApiKey: next.qoderApiKey ?? '',
       }))
       setCompetitorLevels(next.competitorLevels ?? DEFAULT_COMPETITOR_LEVELS)
@@ -203,19 +193,6 @@ export function SettingsPage() {
           </p>
 
           <div className='mt-4 flex flex-col gap-1.5'>
-            <label className='text-[12.5px] font-medium text-foreground'>Anubis Engine (Knowledge Base)</label>
-            <BinaryPathField
-              value={form.engineBinaryPath ?? ''}
-              onChange={(v) => setForm((f) => ({ ...f, engineBinaryPath: v }))}
-              placeholder='C:\Path\To\anubis-engine.exe'
-              pickerTitle='Select anubis-engine binary'
-            />
-            <p className='text-[12px] text-muted-foreground'>
-              Required for indexing and searching each Project's Knowledge Base.
-            </p>
-          </div>
-
-          <div className='mt-4 flex flex-col gap-1.5'>
             <label className='text-[12.5px] font-medium text-foreground'>Anubis Extractor (OCR &amp; Transcribe)</label>
             <BinaryPathField
               value={form.extractorBinaryPath ?? ''}
@@ -271,25 +248,6 @@ export function SettingsPage() {
             />
             <label htmlFor='enable-notifications' className='text-[13px] font-medium text-foreground cursor-pointer select-none'>
               Enable local notifications
-            </label>
-          </div>
-        </section>
-
-        <section className='mt-8 border-t border-border pt-6'>
-          <h2 className='font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>Conversation display</h2>
-          <p className='mt-1 text-[12.5px] leading-relaxed text-muted-foreground'>
-            Show the collapsible prompt-injection card under user messages, revealing the retrieved context pack and the improved prompt sent to the agent.
-          </p>
-          <div className='mt-4 flex items-center gap-3'>
-            <input
-              type='checkbox'
-              id='show-prompt-injection-card'
-              checked={form.showPromptInjectionCard ?? true}
-              onChange={(e) => setForm((f) => ({ ...f, showPromptInjectionCard: e.target.checked }))}
-              className='size-4 rounded border-border text-[var(--anubis-gold)] bg-card outline-none focus:ring-0 focus:ring-offset-0 accent-[var(--anubis-gold)] cursor-pointer'
-            />
-            <label htmlFor='show-prompt-injection-card' className='text-[13px] font-medium text-foreground cursor-pointer select-none'>
-              Show prompt-injection card in conversations
             </label>
           </div>
         </section>

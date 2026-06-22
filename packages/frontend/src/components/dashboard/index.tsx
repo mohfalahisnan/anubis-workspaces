@@ -10,6 +10,7 @@ import {
 } from '@/api'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { useNavigation, type PageKey } from '@/lib/navigation'
 import { useKbLoader } from '@/lib/use-kb-loader'
 import { useJobs } from '@/lib/use-jobs'
@@ -33,7 +34,6 @@ import { WorkflowDemoPage } from '@/components/workflow'
 import { WorkflowsPage } from '@/pages/workflows'
 import { WorkflowEditorPage } from '@/pages/workflow-editor'
 import { KnowledgeBasePage } from '@/pages/knowledge-base'
-import { KnowledgeGraphPage } from '@/pages/knowledge-graph'
 import { ExtractorPage } from '@/pages/extractor'
 import { FlowPage } from '@/pages/flow'
 import { JobCompletionAlerts } from '@/components/jobs/top-nav-progress'
@@ -63,7 +63,6 @@ const BREADCRUMBS: Record<PageKey, string> = {
   workflows: 'Workflows',
   'workflow-editor': 'Workflows · Editor',
   'knowledge-base': 'Knowledge Base',
-  'knowledge-graph': 'Knowledge Graph',
   extractor: 'Extractor',
   flow: 'Flow Images',
 }
@@ -254,8 +253,6 @@ function CurrentPage() {
       return <WorkflowEditorPage workflowId={route.workflowId} />
     case 'knowledge-base':
       return <KnowledgeBasePage />
-    case 'knowledge-graph':
-      return <KnowledgeGraphPage />
     case 'extractor':
       return <ExtractorPage />
     case 'flow':
@@ -289,7 +286,9 @@ export function Dashboard() {
       <Sidebar />
       <div className='flex min-w-0 flex-1 flex-col'>
         <TopBar breadcrumb={BREADCRUMBS[route.page]} />
-        <CurrentPage />
+        <ErrorBoundary label='page' resetKey={route.page}>
+          <CurrentPage />
+        </ErrorBoundary>
       </div>
       <JobCompletionAlerts />
     </div>

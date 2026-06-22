@@ -67,7 +67,6 @@ import {
   type UpdateProjectInput,
   type ProjectListResponse,
   type KnowledgeBaseDocument,
-  type KnowledgeBaseGraph,
   type KnowledgeBaseSearchHit,
   type KnowledgeBaseStats,
   type OcrResult,
@@ -1388,36 +1387,27 @@ export async function deleteProject(id: string): Promise<void> {
 
 /* ---------- Knowledge Base ---------- */
 
-export interface IndexKnowledgeBaseInput {
-  projectId: string
-  paths?: string[]
-}
-
-export interface IndexKnowledgeBaseResult {
-  workdirId: string
-  createdIgnoreFile: boolean
-  indexed: string[]
-}
-
-export async function indexKnowledgeBase(input: IndexKnowledgeBaseInput): Promise<IndexKnowledgeBaseResult> {
-  const r = await api<{ ok: true } & IndexKnowledgeBaseResult>('/knowledge-base/index', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
-  return { workdirId: r.workdirId, createdIgnoreFile: r.createdIgnoreFile, indexed: r.indexed }
-}
-
 export async function searchKnowledgeBase(input: {
   projectId: string
   query: string
   limit?: number
-  depth?: number
-}): Promise<{ query: string; hits: KnowledgeBaseSearchHit[] }> {
-  const r = await api<{ ok: true; query: string; hits: KnowledgeBaseSearchHit[] }>(
+}): Promise<{ query: string; results: KnowledgeBaseSearchHit[]; lowConfidence: boolean }> {
+  const r = await api<{ ok: true; query: string; results: KnowledgeBaseSearchHit[]; lowConfidence: boolean }>(
     '/knowledge-base/search',
     { method: 'POST', body: JSON.stringify(input) },
   )
-  return { query: r.query, hits: r.hits }
+  return { query: r.query, results: r.results, lowConfidence: r.lowConfidence }
+}
+
+export async function ingestKnowledgeBase(input: {
+  projectId: string
+  full?: boolean
+}): Promise<{ documents: number; chunks: number }> {
+  const r = await api<{ ok: true; documents: number; chunks: number }>('/knowledge-base/ingest', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return { documents: r.documents, chunks: r.chunks }
 }
 
 export async function getKnowledgeBaseStats(projectId: string): Promise<KnowledgeBaseStats> {
@@ -1426,9 +1416,7 @@ export async function getKnowledgeBaseStats(projectId: string): Promise<Knowledg
   return {
     documentCount: r.documentCount,
     chunkCount: r.chunkCount,
-    entityCount: r.entityCount,
-    edgeCount: r.edgeCount,
-    lastIndexedAt: r.lastIndexedAt,
+    lastIndexedAt: r.lastIndexedAt ?? null,
   }
 }
 
@@ -1436,38 +1424,6 @@ export async function listKnowledgeBaseDocuments(projectId: string): Promise<Kno
   const params = new URLSearchParams({ projectId })
   const r = await api<{ ok: true; items: KnowledgeBaseDocument[] }>(`/knowledge-base/documents?${params}`)
   return r.items
-}
-
-export async function getKnowledgeBaseGraph(projectId: string, limit?: number): Promise<KnowledgeBaseGraph> {
-  const params = new URLSearchParams({ projectId })
-  if (limit !== undefined) params.set('limit', String(limit))
-  const r = await api<{ ok: true } & KnowledgeBaseGraph>(`/knowledge-base/graph?${params}`)
-  return { nodes: r.nodes, edges: r.edges }
-}
-
-export async function getKnowledgeBaseNeighborhood(input: {
-  projectId: string
-  chunkId: string
-  depth?: number
-  limit?: number
-}): Promise<KnowledgeBaseGraph> {
-  const params = new URLSearchParams({ projectId: input.projectId, chunkId: input.chunkId })
-  if (input.depth !== undefined) params.set('depth', String(input.depth))
-  if (input.limit !== undefined) params.set('limit', String(input.limit))
-  const r = await api<{ ok: true } & KnowledgeBaseGraph>(`/knowledge-base/graph/neighborhood?${params}`)
-  return { nodes: r.nodes, edges: r.edges }
-}
-
-export async function getKnowledgeBaseIgnoreFile(projectId: string): Promise<{
-  exists: boolean
-  path: string
-  content: string
-}> {
-  const params = new URLSearchParams({ projectId })
-  const r = await api<{ ok: true; exists: boolean; path: string; content: string }>(
-    `/knowledge-base/ignore-file?${params}`,
-  )
-  return { exists: r.exists, path: r.path, content: r.content }
 }
 
 /* ---------- Extractor ---------- */

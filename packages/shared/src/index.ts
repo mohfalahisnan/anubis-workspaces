@@ -412,18 +412,10 @@ export interface AppConfig {
   competitorLevels?: CompetitorLevelsConfig
   /** Viral-multiplier thresholds (post likes ÷ avgLikes) per competitor level. */
   levelMultipliers?: LevelMultipliersConfig
-  /** Path to the `anubis-engine` binary that backs Knowledge Base. */
-  engineBinaryPath?: string
   /** Path to the `anubis-extractor` binary used for OCR and audio/video transcription. */
   extractorBinaryPath?: string
   /** Whether local notifications are enabled. */
   enableNotifications?: boolean
-  /** Whether the prompt improvement and context injection middleware hook is enabled. */
-  enableContextInjection?: boolean
-  /** The agent profile ID to use for context building and prompt improvement. */
-  contextInjectionProfileId?: string
-  /** Whether the prompt-injection details card is shown in conversations. Defaults to true. */
-  showPromptInjectionCard?: boolean
   /** Qoder personal access token stored in settings (preferred over QODER_PERSONAL_ACCESS_TOKEN env var). */
   qoderApiKey?: string
   /** Project-level AI profile assignments for Content Studio pipeline steps. */
@@ -439,69 +431,32 @@ export interface AppConfig {
 export interface KnowledgeBaseStats {
   documentCount: number
   chunkCount: number
-  entityCount: number
-  edgeCount: number
-  lastIndexedAt?: number
+  lastIndexedAt?: string | null
 }
 
 export interface KnowledgeBaseDocument {
-  id: string
   path: string
-  chunkCount?: number
-  indexedAt?: number
+  title: string
+  chunkCount: number
+  updatedAt: string
 }
 
 export interface KnowledgeBaseSearchHit {
-  chunkId: string
-  docId: string
-  path: string
-  score?: number
-  snippet: string
+  source: string
+  startLine: number
+  endLine: number
+  excerptStartLine: number
+  excerptEndLine: number
+  heading: string | null
+  score: number
+  excerpt: string
 }
 
 export interface KnowledgeBaseSearchResponse {
   ok: true
   query: string
-  hits: KnowledgeBaseSearchHit[]
-  raw?: unknown
-}
-
-export interface KnowledgeBaseIndexResult {
-  ok: true
-  indexed: string[]
-  workdirId: string
-  createdIgnoreFile: boolean
-}
-
-export interface KnowledgeBaseContextPackResponse {
-  ok: true
-  query: string
-  text: string
-  raw?: unknown
-}
-
-export interface KnowledgeBaseGraphNode {
-  id: string
-  docId: string
-  filename: string
-  content: string
-  page?: number
-  degree: number
-  docClass?: string
-  chunkSignal?: string
-}
-
-export interface KnowledgeBaseGraphEdge {
-  src: string
-  dst: string
-  weight: number
-  edgeType: string
-  reason?: string
-}
-
-export interface KnowledgeBaseGraph {
-  nodes: KnowledgeBaseGraphNode[]
-  edges: KnowledgeBaseGraphEdge[]
+  results: KnowledgeBaseSearchHit[]
+  lowConfidence: boolean
 }
 
 /* ============================================================

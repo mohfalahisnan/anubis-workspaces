@@ -38,6 +38,7 @@ function buildProjectBlock(project: ProjectContext): string {
   ]
   if (project.backendUrl) {
     lines.push(`Anubis backend API base URL: \`${project.backendUrl}\` (local HTTP API; e.g. \`GET ${project.backendUrl}/health\`).`)
+    lines.push('Knowledge base: before answering from project knowledge, POST `/knowledge-base/search` and cite `source:line`. Capture new knowledge via `/knowledge-base/save`.')
   }
   if (project.workspacePath) {
     lines.push(`Workspace path: \`${project.workspacePath}\``)

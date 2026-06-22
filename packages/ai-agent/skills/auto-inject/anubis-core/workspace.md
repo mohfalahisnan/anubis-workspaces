@@ -69,67 +69,30 @@ Removes from picker history. Does not touch filesystem.
 
 ## 3. Routes — Knowledge Base
 
-Search corpus backed by `anubis-engine`. Respects `.anubisignore` at the workspace root.
+Local markdown knowledge base for the active project. Source of truth is the
+project's `knowledge/` folder; the index is rebuilt automatically when files change.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/knowledge-base/index` | Index workspace/files |
-| POST | `/knowledge-base/search` | Search indexed documents |
-| POST | `/knowledge-base/context-pack` | Assemble context window |
-| GET | `/knowledge-base/stats` | Get document/edge stats |
+| POST | `/knowledge-base/search` | Search the knowledge base (cited excerpts) |
+| POST | `/knowledge-base/ingest` | Rebuild the index from `knowledge/` |
+| POST | `/knowledge-base/save` | Add a markdown doc under `knowledge/` |
+| POST | `/knowledge-base/update` | Replace an existing markdown doc |
+| POST | `/knowledge-base/delete` | Delete a markdown doc |
+| GET | `/knowledge-base/stats` | Document/chunk counts |
 | GET | `/knowledge-base/documents` | List indexed documents |
-| GET | `/knowledge-base/graph` | Get global knowledge graph |
-| GET | `/knowledge-base/graph/neighborhood` | Get local graph neighborhood |
-| GET | `/knowledge-base/ignore-file` | Read `.anubisignore` |
 
-### POST /knowledge-base/index
-```ts
-{
-  projectId: string                    // required
-  paths?: string[]                     // optional paths to index (default: entire workdir)
-}
-```
+### Workflow — recall before answering
 
-### POST /knowledge-base/search
-```ts
-{
-  projectId: string                    // required
-  query: string                        // required
-  limit?: number                       // default 20, max 50
-  depth?: number                       // search graph depth
-}
-```
-
-### POST /knowledge-base/context-pack
-```ts
-{
-  projectId: string                    // required
-  query: string                        // required
-  budget?: number                      // max token budget, default 10000
-  includeGraph?: boolean               // default true
-}
-```
-
-### GET /knowledge-base/graph
-```query
-GET /knowledge-base/graph?projectId=default&limit=100
-```
-
-### GET /knowledge-base/graph/neighborhood
-```query
-GET /knowledge-base/graph/neighborhood?projectId=default&chunkId=abc&depth=2&limit=50
-```
-
----
-
-## 4. Examples
+Before answering from project knowledge, search and cite the source path + line range:
 
 ```bash
-# Index a project's workspace
-curl -s -X POST "$BASE/knowledge-base/index" -H 'Content-Type: application/json' \
-  -d '{"projectId":"'$PID'"}'
-
-# Search for brand context
 curl -s -X POST "$BASE/knowledge-base/search" -H 'Content-Type: application/json' \
   -d '{"projectId":"'$PID'","query":"brand voice guidelines"}'
 ```
+
+Each result has `source`, `excerptStartLine`-`excerptEndLine`, `score`, and `excerpt`.
+Cite `source:excerptStartLine`. If the response has `lowConfidence: true`, the answer
+may not be in the knowledge base — do not invent it. Use a double-quoted span inside
+the query for an exact phrase, e.g. `"price objection"`. To capture new knowledge,
+POST `/knowledge-base/save` with a `path` under `knowledge/` and markdown `content`.

@@ -11,8 +11,6 @@ import { pipelineItemAssetsDir, type PostMedia } from './assets.js'
 const agentService = createAiAgentService()
 
 const MAX_AUTO_ITERATIONS = 3
-/** Token budget for the per-step knowledge-base context pack. */
-const CONTEXT_PACK_BUDGET = 2000
 /** Opus for the review step (reasoning-heavy); other steps use the agent default. */
 const REVIEW_MODEL = 'claude-opus-4-7'
 /**
@@ -68,18 +66,6 @@ export function getPipelineService(): ContentPipelineService {
     lessons: stack.contentLessons,
     appConfig: { get: () => stack.appConfig.get() },
     settings: { get: (projectId) => stack.contentPipelineSettings.get(projectId) },
-    // Pull brand guideline / niche / similar winning content from the project's
-    // knowledge-base index. Best-effort: returns '' when the engine binary isn't
-    // configured or the project isn't indexed, so the pipeline still runs.
-    contextPack: async (projectId, query) => {
-      try {
-        const { contextPack } = await import('../knowledge-base.js')
-        const res = await contextPack({ projectId, query, budget: CONTEXT_PACK_BUDGET })
-        return res.text ?? ''
-      } catch {
-        return ''
-      }
-    },
     runAgent: async ({ prompt, cwd, projectId, step, profileId, model: stepModel, reasoningEffort: stepEffort, temperature, files, onProgress }) => {
       const workDir = join(dataDir, 'content-pipeline', cwd.split('/').pop() ?? 'scratch')
       // Resolve the profile (default chain) + its agent, then the step model:

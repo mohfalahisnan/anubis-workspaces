@@ -28,7 +28,6 @@ export type Route =
   | { page: 'workflows' }
   | { page: 'workflow-editor'; workflowId: string }
   | { page: 'knowledge-base' }
-  | { page: 'knowledge-graph' }
   | { page: 'extractor' }
   | { page: 'flow' }
 

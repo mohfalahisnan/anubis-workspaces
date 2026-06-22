@@ -47,6 +47,14 @@ export function toErrorResponse(error: unknown): {
     return { status: error.status, body: error.body }
   }
 
+  // @anubis/knowledge-lite ValidationError: bad path or query input → 400
+  if (error instanceof Error && error.name === 'ValidationError') {
+    return {
+      status: 400,
+      body: { ok: false, error: { code: 'VALIDATION_ERROR', message: error.message } },
+    }
+  }
+
   if (error instanceof DocumentStoreError) {
     return {
       status: error.code.startsWith('DUPLICATE_') ? 409 : 400,

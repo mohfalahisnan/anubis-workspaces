@@ -20,20 +20,18 @@ describe('pipeline schemas', () => {
 })
 
 describe('prompt builders', () => {
-  it('brief prompt embeds raw idea, KB context, and lessons', () => {
+  it('brief prompt embeds raw idea and lessons', () => {
     const p = buildBriefPrompt({
       rawIdea: { caption: 'CAP', assetRefs: [] },
-      context: 'Brand guideline: BG\nNiche: NP',
       lessons: [{ type: 'tone_of_voice', howToImprove: 'be punchier' }],
     })
     expect(p).toContain('CAP')
-    expect(p).toContain('BG')
     expect(p).toContain('be punchier')
     expect(p.toLowerCase()).toContain('json')
     expect(p).toContain('IMPROVED BRIEF')
   })
   it('review prompt asks for approved/rejected', () => {
-    const p = buildReviewPrompt({ refined: { caption: 'x' } as never, context: '' })
+    const p = buildReviewPrompt({ refined: { caption: 'x' } as never })
     expect(p).toContain('approved')
     expect(p).toContain('rejected')
   })

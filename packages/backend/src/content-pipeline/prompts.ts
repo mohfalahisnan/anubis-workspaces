@@ -9,19 +9,15 @@ import type { ContentLesson, ImprovedBrief, PipelinePromptDefaults, RawIdea, Ref
    ContentPipelineSettingsRepo); overrides are rendered with the
    exact same variables, so a custom template can reference any of
    the documented placeholders below.
-
-   `{{context}}` is the project knowledge-base context pack — brand
-   guideline, niche positioning, similar winning content, etc. —
-   retrieved per item from the anubis-engine index.
    ============================================================ */
 
 const JSON_ONLY = 'Reply with ONLY a single JSON object matching the schema. No prose, no markdown fence.'
 
 /**
  * Default templates. Placeholders:
- *  - brief:     {{source}} {{context}} {{lessons}}
- *  - refine:    {{brief}} {{context}}
- *  - ai_review: {{content}} {{context}}
+ *  - brief:     {{source}} {{media}} {{lessons}}
+ *  - refine:    {{brief}}
+ *  - ai_review: {{content}}
  */
 export const DEFAULT_PROMPT_TEMPLATES: PipelinePromptDefaults = {
   brief: [
@@ -35,9 +31,6 @@ export const DEFAULT_PROMPT_TEMPLATES: PipelinePromptDefaults = {
     '=== REFERENCE MEDIA ===',
     '{{media}}',
     '',
-    '=== BRAND & KNOWLEDGE CONTEXT ===',
-    '{{context}}',
-    '',
     '=== LESSONS FROM PAST MISTAKES (apply these) ===',
     '{{lessons}}',
     '',
@@ -49,9 +42,6 @@ export const DEFAULT_PROMPT_TEMPLATES: PipelinePromptDefaults = {
     '',
     '=== BRIEF ===',
     '{{brief}}',
-    '',
-    '=== BRAND & KNOWLEDGE CONTEXT ===',
-    '{{context}}',
     '',
     'Produce JSON with keys:',
     'caption (string),',
@@ -68,9 +58,6 @@ export const DEFAULT_PROMPT_TEMPLATES: PipelinePromptDefaults = {
     '=== CONTENT ===',
     '{{content}}',
     '',
-    '=== BRAND & KNOWLEDGE CONTEXT ===',
-    '{{context}}',
-    '',
     'Decision MUST be exactly "approved" or "rejected".',
     'Produce JSON: { decision: "approved"|"rejected", score (0-100 number, optional), checklist: [{ criterion, pass (boolean), note? }], rejectionReason? (required if rejected), improvementInstruction? (required if rejected) }.',
     JSON_ONLY,
@@ -80,11 +67,6 @@ export const DEFAULT_PROMPT_TEMPLATES: PipelinePromptDefaults = {
 /** Replace `{{key}}` tokens with the provided values (missing keys → empty string). */
 export function renderPrompt(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => vars[key] ?? '')
-}
-
-/** The knowledge-base context pack, or a clear placeholder when nothing is indexed. */
-function contextBlock(context: string | undefined): string {
-  return context && context.trim() ? context.trim() : '(no project knowledge indexed for this item)'
 }
 
 function lessonsBlock(lessons: Array<Pick<ContentLesson, 'type' | 'howToImprove'>>): string {
@@ -120,27 +102,23 @@ function mediaBlock(rawIdea: RawIdea): string {
 
 export function buildBriefVars(input: {
   rawIdea: RawIdea
-  context: string
   lessons: Array<Pick<ContentLesson, 'type' | 'howToImprove'>>
 }): Record<string, string> {
   return {
     source: sourceBlock(input.rawIdea),
     media: mediaBlock(input.rawIdea),
-    context: contextBlock(input.context),
     lessons: lessonsBlock(input.lessons),
   }
 }
 
-export function buildRefineVars(input: { brief: ImprovedBrief; context: string }): Record<string, string> {
+export function buildRefineVars(input: { brief: ImprovedBrief }): Record<string, string> {
   return {
     brief: JSON.stringify(input.brief, null, 2),
-    context: contextBlock(input.context),
   }
 }
 
-export function buildReviewVars(input: { refined: RefinedContent; context: string }): Record<string, string> {
+export function buildReviewVars(input: { refined: RefinedContent }): Record<string, string> {
   return {
     content: JSON.stringify(input.refined, null, 2),
-    context: contextBlock(input.context),
   }
 }

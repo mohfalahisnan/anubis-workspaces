@@ -94,8 +94,6 @@ export function itemRoute(item: NavItem): Route {
       return { page: 'workflows' }
     case 'knowledge-base':
       return { page: 'knowledge-base' }
-    case 'knowledge-graph':
-      return { page: 'knowledge-graph' }
     case 'extractor':
       return { page: 'extractor' }
     case 'flow':

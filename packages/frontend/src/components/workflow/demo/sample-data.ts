@@ -12,7 +12,6 @@ import {
 import type { InstagramPostNodeData } from '../nodes/instagram-post-node'
 import type { TransformerNodeData }   from '../nodes/transformer-node'
 import type { TextNodeData }          from '../nodes/text-node'
-import type { TableNodeData }         from '../nodes/table-node'
 import type { SearchNodeData }        from '../nodes/search-node'
 import type { ContextBuilderNodeData } from '../nodes/context-builder-node'
 import type { AIAgentNodeData }       from '../nodes/ai-agent-node'
@@ -78,15 +77,6 @@ export const sampleNodeData = {
     body: 'Defines tone, banned claims, visual style, positioning, vocabulary, compliance constraints, and CTA boundaries.',
   } satisfies TextNodeData,
 
-  knowledgeBase: {
-    rows: [
-      { source: 'Brand Voice',    type: 'Guideline', score: '94%' },
-      { source: 'Offer Doc',      type: 'KB',        score: '91%' },
-      { source: 'Past Campaign',  type: 'Post',      score: '88%' },
-      { source: 'FAQ / Claims',   type: 'KB',        score: '83%' },
-    ],
-  } satisfies TableNodeData,
-
   similarityContext: {
     latency: '482ms',
     context: [
@@ -138,7 +128,7 @@ export const sampleNodeData = {
   } satisfies FinalContentNodeData,
 } as const
 
-/** 12 nodes positioned to match the reference layout. */
+/** 11 nodes positioned to match the reference layout. */
 export const sampleFlowNodes: Node[] = [
   { id: 'competitor-post',           type: 'instagramPost',   position: { x: 0,    y:  160 }, data: { ...sampleNodeData.instagramPost } },
   { id: 'post-crawler',              type: 'textBlock',       position: { x: 440,  y:  160 }, data: { ...sampleNodeData.postCrawler } },
@@ -146,7 +136,6 @@ export const sampleFlowNodes: Node[] = [
   { id: 'ocr-transcript-extractor',  type: 'textBlock',       position: { x: 1320, y:  160 }, data: { ...sampleNodeData.ocrTranscriptExtractor } },
   { id: 'brief-output-transformer',  type: 'transformer',     position: { x: 1760, y:  160 }, data: { ...sampleNodeData.briefOutputTransformer } },
   { id: 'brand-guideline',           type: 'textBlock',       position: { x: 1760, y: -250 }, data: { ...sampleNodeData.brandGuideline } },
-  { id: 'knowledge-base',            type: 'referenceTable',  position: { x: 1760, y:  520 }, data: { ...sampleNodeData.knowledgeBase } },
   { id: 'similarity-context',        type: 'contextSearch',   position: { x: 1760, y:  890 }, data: { ...sampleNodeData.similarityContext } },
   { id: 'ai-context-builder',        type: 'contextBuilder',  position: { x: 2200, y:  160 }, data: { ...sampleNodeData.aiContextBuilder } },
   { id: 'agent-executor',            type: 'aiAgent',         position: { x: 2640, y:  160 }, data: { ...sampleNodeData.agentExecutor } },
@@ -168,7 +157,6 @@ const EDGE_SPECS: EdgeSpec[] = [
   { id: 'e4',  source: 'ocr-transcript-extractor', target: 'brief-output-transformer', label: 'extracted text' },
   { id: 'e5',  source: 'brief-output-transformer', target: 'ai-context-builder',       label: 'content atoms' },
   { id: 'e6',  source: 'brand-guideline',          target: 'ai-context-builder',       label: 'brand rules' },
-  { id: 'e7',  source: 'knowledge-base',           target: 'ai-context-builder',       label: 'KB context' },
   { id: 'e8',  source: 'similarity-context',       target: 'ai-context-builder',       label: 'similarity' },
   { id: 'e9',  source: 'ai-context-builder',       target: 'agent-executor',           label: 'brief' },
   { id: 'e10', source: 'agent-executor',           target: 'agent-review',             label: 'draft' },

@@ -14,7 +14,6 @@ const ITEMS: GalleryItem[] = [
   { label: 'TransformerNode (media)', node: { id: 'g-tm',  type: 'transformer',    position: { x: 0, y: 0 }, data: { ...sampleNodeData.mediaOutputTransformer } } },
   { label: 'TransformerNode (brief)', node: { id: 'g-tb',  type: 'transformer',    position: { x: 0, y: 0 }, data: { ...sampleNodeData.briefOutputTransformer } } },
   { label: 'TextNode',                node: { id: 'g-tx',  type: 'textBlock',      position: { x: 0, y: 0 }, data: { ...sampleNodeData.postCrawler } } },
-  { label: 'TableNode',               node: { id: 'g-tb2', type: 'referenceTable', position: { x: 0, y: 0 }, data: { ...sampleNodeData.knowledgeBase } } },
   { label: 'SearchNode',              node: { id: 'g-sr',  type: 'contextSearch',  position: { x: 0, y: 0 }, data: { ...sampleNodeData.similarityContext } } },
   { label: 'ContextBuilderNode',      node: { id: 'g-cb',  type: 'contextBuilder', position: { x: 0, y: 0 }, data: { ...sampleNodeData.aiContextBuilder } } },
   { label: 'AIAgentNode',             node: { id: 'g-ag',  type: 'aiAgent',        position: { x: 0, y: 0 }, data: { ...sampleNodeData.agentExecutor } } },

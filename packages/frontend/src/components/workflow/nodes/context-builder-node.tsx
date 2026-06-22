@@ -24,7 +24,7 @@ export const ContextBuilderNode = memo(function ContextBuilderNode({
     <NodeShell
       icon={Brain}
       title='AI Context Builder'
-      subtitle='Builds the execution brief from crawler output, transformed data, brand rules, knowledge base, and similarity context.'
+      subtitle='Builds the execution brief from crawler output, transformed data, brand rules, and similarity context.'
       accent={ACCENT_GRADIENTS.data}
       footer={
         <div className='flex flex-wrap gap-2'>

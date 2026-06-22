@@ -459,6 +459,17 @@ export interface KnowledgeBaseSearchResponse {
   lowConfidence: boolean
 }
 
+export interface KnowledgeBaseFileEntry {
+  path: string
+  size: number
+  updatedAt: string
+}
+
+export interface KnowledgeBaseFileContent {
+  path: string
+  content: string
+}
+
 /* ============================================================
    Extractor
    ============================================================ */

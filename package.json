@@ -26,7 +26,6 @@
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "dependencies": {
-    "@anubis/knowledge-lite": "workspace:*",
     "@hono/node-server": "^1.19.6",
     "@hono/node-ws": "^1.3.1",
     "@qoder-ai/qoder-agent-sdk": "^1.0.0",

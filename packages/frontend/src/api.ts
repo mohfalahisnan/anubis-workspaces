@@ -684,14 +684,28 @@ export async function captureCompetitorPreview(
   }
 }
 
+/**
+ * Max posts sent per `/posts/import` request. The backend caps the route at 500
+ * items, and a single large body (each post carries a heavy `raw` blob) is slow
+ * and failure-prone — so big saves are split into sequential batches and the
+ * counts summed (e.g. 1000 selected posts → 4 requests).
+ */
+const IMPORT_BATCH_SIZE = 300
+
 export async function importCapturedPosts(
   input: ImportCapturedPostsInput,
 ): Promise<{ importedCount: number }> {
-  const r = await api<{ ok: true; importedCount: number }>('/posts/import', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
-  return { importedCount: r.importedCount }
+  const { posts } = input
+  let importedCount = 0
+  for (let i = 0; i < posts.length; i += IMPORT_BATCH_SIZE) {
+    const batch = posts.slice(i, i + IMPORT_BATCH_SIZE)
+    const r = await api<{ ok: true; importedCount: number }>('/posts/import', {
+      method: 'POST',
+      body: JSON.stringify({ posts: batch }),
+    })
+    importedCount += r.importedCount
+  }
+  return { importedCount }
 }
 
 export interface ListPostsOpts {

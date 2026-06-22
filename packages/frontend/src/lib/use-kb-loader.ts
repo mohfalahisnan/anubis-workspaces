@@ -1,12 +1,6 @@
 import { create } from 'zustand'
-import type {
-  KnowledgeBaseDocument,
-  KnowledgeBaseStats,
-} from '@anubis/shared'
-import {
-  getKnowledgeBaseStats,
-  listKnowledgeBaseDocuments,
-} from '@/api'
+import type { KnowledgeBaseStats } from '@anubis/shared'
+import { getKnowledgeBaseStats } from '@/api'
 
 interface KbLoaderState {
   loading: boolean
@@ -14,7 +8,6 @@ interface KbLoaderState {
   error: string | null
 
   kbStats: Record<string, KnowledgeBaseStats | null>
-  kbDocs: Record<string, KnowledgeBaseDocument[] | null>
 
   loadProjectData: (projectId: string, force?: boolean) => Promise<void>
   clearProjectData: (projectId: string) => void
@@ -25,29 +18,18 @@ export const useKbLoader = create<KbLoaderState>((set, get) => ({
   progressText: '',
   error: null,
   kbStats: {},
-  kbDocs: {},
 
   loadProjectData: async (projectId: string, force = false) => {
     const state = get()
     const isLoaded = state.kbStats[projectId] !== undefined
     if (isLoaded && !force) return
 
-    set({ loading: true, error: null, progressText: 'Connecting to engine...' })
+    set({ loading: true, error: null, progressText: 'Fetching index stats...' })
 
     try {
-      // Fetch stats and document list in parallel
-      set({ progressText: 'Fetching index stats...' })
-      const [statsRes, docsRes] = await Promise.allSettled([
-        getKnowledgeBaseStats(projectId),
-        listKnowledgeBaseDocuments(projectId),
-      ])
-
-      const stats = statsRes.status === 'fulfilled' ? statsRes.value : null
-      const docs = docsRes.status === 'fulfilled' ? docsRes.value : null
-
+      const stats = await getKnowledgeBaseStats(projectId)
       set((s) => ({
         kbStats: { ...s.kbStats, [projectId]: stats },
-        kbDocs: { ...s.kbDocs, [projectId]: docs },
         progressText: 'Done',
         loading: false,
       }))
@@ -64,12 +46,8 @@ export const useKbLoader = create<KbLoaderState>((set, get) => ({
   clearProjectData: (projectId: string) => {
     set((s) => {
       const kbStats = { ...s.kbStats }
-      const kbDocs = { ...s.kbDocs }
-
       delete kbStats[projectId]
-      delete kbDocs[projectId]
-
-      return { kbStats, kbDocs }
+      return { kbStats }
     })
   },
 }))

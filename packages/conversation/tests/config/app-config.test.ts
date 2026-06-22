@@ -97,7 +97,6 @@ describe('AppConfigService — competitorLevels', () => {
     expect(cfg.competitorLevels).toBeUndefined()
   })
 })
-
 describe('AppConfigService — levelMultipliers', () => {
   let dir: string
 
@@ -171,4 +170,3 @@ describe('AppConfigService — levelMultipliers', () => {
     expect(next.levelMultipliers).toEqual(valid)
   })
 })
-

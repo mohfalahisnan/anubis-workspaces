@@ -69,6 +69,8 @@ import {
   type KnowledgeBaseDocument,
   type KnowledgeBaseSearchHit,
   type KnowledgeBaseStats,
+  type KnowledgeBaseFileEntry,
+  type KnowledgeBaseFileContent,
   type OcrResult,
   type TranscribeResult,
   type WhisperModel,
@@ -1424,6 +1426,45 @@ export async function listKnowledgeBaseDocuments(projectId: string): Promise<Kno
   const params = new URLSearchParams({ projectId })
   const r = await api<{ ok: true; items: KnowledgeBaseDocument[] }>(`/knowledge-base/documents?${params}`)
   return r.items
+}
+
+export async function getKnowledgeBaseTree(projectId: string): Promise<KnowledgeBaseFileEntry[]> {
+  const params = new URLSearchParams({ projectId })
+  const r = await api<{ ok: true; items: KnowledgeBaseFileEntry[] }>(`/knowledge-base/tree?${params}`)
+  return r.items
+}
+
+export async function readKnowledgeBaseFile(projectId: string, path: string): Promise<KnowledgeBaseFileContent> {
+  const params = new URLSearchParams({ projectId, path })
+  const r = await api<{ ok: true; path: string; content: string }>(`/knowledge-base/read?${params}`)
+  return { path: r.path, content: r.content }
+}
+
+export async function saveKnowledgeBaseFile(input: {
+  projectId: string; path: string; content: string; force?: boolean
+}): Promise<{ path: string }> {
+  const r = await api<{ ok: true; path: string }>('/knowledge-base/save', {
+    method: 'POST', body: JSON.stringify(input),
+  })
+  return { path: r.path }
+}
+
+export async function updateKnowledgeBaseFile(input: {
+  projectId: string; path: string; content: string
+}): Promise<{ path: string }> {
+  const r = await api<{ ok: true; path: string }>('/knowledge-base/update', {
+    method: 'POST', body: JSON.stringify(input),
+  })
+  return { path: r.path }
+}
+
+export async function deleteKnowledgeBaseFile(input: {
+  projectId: string; path: string
+}): Promise<{ path: string }> {
+  const r = await api<{ ok: true; path: string }>('/knowledge-base/delete', {
+    method: 'POST', body: JSON.stringify(input),
+  })
+  return { path: r.path }
 }
 
 /* ---------- Extractor ---------- */

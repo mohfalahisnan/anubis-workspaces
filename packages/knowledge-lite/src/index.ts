@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
 import type { EngineConfig } from './config.js'
@@ -8,6 +8,7 @@ import { ValidationError, FileSystemError } from './types.js'
 import { buildIndex, indexIsFresh } from './index-store.js'
 import { searchIndex, renderSearchResult } from './search.js'
 import { resolveTargetPath } from './paths.js'
+import { scanMarkdownFiles, toSourcePath } from './fs.js'
 
 export type { EngineConfig } from './config.js'
 export type { SearchResult, DocumentRow, Chunk } from './types.js'
@@ -29,6 +30,8 @@ export interface KnowledgeEngine {
   delete(opts: { path: string }): { path: string }
   stats(): { documentCount: number; chunkCount: number; lastIndexedAt: string | null }
   listDocuments(): { items: Array<{ path: string; title: string; chunkCount: number; updatedAt: string }> }
+  listFiles(): { items: Array<{ path: string; size: number; updatedAt: string }> }
+  readFile(opts: { path: string }): { path: string; content: string }
 }
 
 export function createEngine(options: EngineOptions): KnowledgeEngine {
@@ -117,6 +120,21 @@ export function createEngine(options: EngineOptions): KnowledgeEngine {
       } finally {
         conn.close()
       }
+    },
+
+    listFiles() {
+      mkdirSync(sourceRoot, { recursive: true })
+      const items = scanMarkdownFiles(sourceRoot).map((abs) => {
+        const st = statSync(abs)
+        return { path: toSourcePath(sourceRoot, abs), size: st.size, updatedAt: st.mtime.toISOString() }
+      })
+      return { items }
+    },
+
+    readFile(opts) {
+      const target = resolveTargetPath(sourceRoot, opts.path)
+      if (!existsSync(target)) throw new ValidationError('target does not exist')
+      return { path: toSourcePath(sourceRoot, target), content: readFileSync(target, 'utf8') }
     },
   }
 }

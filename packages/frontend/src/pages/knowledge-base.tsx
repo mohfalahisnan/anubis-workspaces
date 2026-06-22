@@ -55,6 +55,13 @@ export function KnowledgeBasePage() {
 
   useEffect(() => {
     if (!projectId) return
+    setSelectedPath(null)
+    setContent('')
+    setMode('view')
+    setIsNewFile(false)
+    setNewPathInput('')
+    setResults(null)
+    setBanner(null)
     void refreshTree()
     void loadProjectData(projectId, true)
   }, [projectId, refreshTree, loadProjectData])

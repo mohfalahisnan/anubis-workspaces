@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { extractImageReferencesFromUnknown } from '@anubis/shared'
 import {
-  GlobeIcon, PaperclipIcon, SendIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
+  GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
   FolderIcon, FolderOpenIcon, CopyIcon, CheckIcon,
 } from 'lucide-react'
 

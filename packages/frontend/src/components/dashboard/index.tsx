@@ -10,6 +10,7 @@ import {
 } from '@/api'
 import { useProject } from '@/lib/use-project'
 import { cn } from '@/lib/utils'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { useNavigation, type PageKey } from '@/lib/navigation'
 import { useKbLoader } from '@/lib/use-kb-loader'
 import { useJobs } from '@/lib/use-jobs'
@@ -285,7 +286,9 @@ export function Dashboard() {
       <Sidebar />
       <div className='flex min-w-0 flex-1 flex-col'>
         <TopBar breadcrumb={BREADCRUMBS[route.page]} />
-        <CurrentPage />
+        <ErrorBoundary label='page' resetKey={route.page}>
+          <CurrentPage />
+        </ErrorBoundary>
       </div>
       <JobCompletionAlerts />
     </div>

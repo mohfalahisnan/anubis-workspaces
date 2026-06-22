@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { useNavigation } from '@/lib/navigation'
 import { CaptureSelectionDialog, type CaptureRunOptions } from './competitor-dialogs'
 import { ViewToggle } from '@/components/view-toggle'
+import { SnapshotIoButtons } from '@/components/snapshot-io-buttons'
 import {
   PaginationBar,
   SearchBox,
@@ -465,6 +466,13 @@ export function ContentPage() {
               <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
               Refresh
             </button>
+            <SnapshotIoButtons
+              projectId={activeProject?.id || undefined}
+              projectName={activeProject?.name}
+              onImported={refresh}
+              onResult={setBanner}
+              disabled={busy || !!capturing || selectMode}
+            />
             {selectMode ? (
               <button
                 type='button'

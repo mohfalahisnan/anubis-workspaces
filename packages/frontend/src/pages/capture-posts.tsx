@@ -15,6 +15,7 @@ import { useProject } from '@/lib/use-project'
 import { useJobs } from '@/lib/use-jobs'
 import { useCompetitorLevels } from '@/hooks/use-competitor-levels'
 import { LEVEL_COLOR, resolveLevel } from '@/lib/competitor-level'
+import { SnapshotIoButtons, type SnapshotIoResult } from '@/components/snapshot-io-buttons'
 import {
   SearchBox,
   SortControl,
@@ -117,6 +118,7 @@ export function CapturePostsPage({
   const [headless, setHeadless] = useState(true)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [snapshotResult, setSnapshotResult] = useState<SnapshotIoResult | null>(null)
 
   // The job this page follows: the one named in the route, or the most recent
   // capture job for the active project, so returning re-attaches to a live run.
@@ -239,13 +241,35 @@ export function CapturePostsPage({
             <ArrowLeftIcon className='size-3.5' strokeWidth={2} />
             Back to competitors
           </button>
-          <div>
-            <h1 className='text-[30px] font-semibold leading-[1.1] tracking-[-0.025em]'>Capture posts</h1>
-            <p className='mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground'>
-              Crawl posts from your tracked competitors. The run is chunked (max {CAPTURE_CHUNK_SIZE}{' '}
-              profiles per chunk, with short cooldowns) and persists to the content library as it goes —
-              you can leave this page and come back without losing progress.
-            </p>
+          <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
+            <div>
+              <h1 className='text-[30px] font-semibold leading-[1.1] tracking-[-0.025em]'>Capture posts</h1>
+              <p className='mt-2 max-w-2xl text-[14px] leading-relaxed text-muted-foreground'>
+                Crawl posts from your tracked competitors. The run is chunked (max {CAPTURE_CHUNK_SIZE}{' '}
+                profiles per chunk, with short cooldowns) and persists to the content library as it goes —
+                you can leave this page and come back without losing progress.
+              </p>
+            </div>
+            <div className='flex shrink-0 flex-col items-end gap-2'>
+              <div className='flex items-center gap-2.5'>
+                <SnapshotIoButtons
+                  projectId={activeProject?.id || undefined}
+                  projectName={activeProject?.name}
+                  onResult={setSnapshotResult}
+                />
+              </div>
+              {snapshotResult && (
+                <p
+                  className={
+                    snapshotResult.kind === 'error'
+                      ? 'max-w-xs text-right text-[12.5px] text-destructive'
+                      : 'max-w-xs text-right text-[12.5px] text-muted-foreground'
+                  }
+                >
+                  {snapshotResult.message}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

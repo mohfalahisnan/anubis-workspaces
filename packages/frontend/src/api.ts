@@ -1416,9 +1416,7 @@ export async function getKnowledgeBaseStats(projectId: string): Promise<Knowledg
   return {
     documentCount: r.documentCount,
     chunkCount: r.chunkCount,
-    entityCount: r.entityCount,
-    edgeCount: r.edgeCount,
-    lastIndexedAt: r.lastIndexedAt ?? undefined,
+    lastIndexedAt: r.lastIndexedAt ?? null,
   }
 }
 

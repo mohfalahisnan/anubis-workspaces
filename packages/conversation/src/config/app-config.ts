@@ -48,10 +48,6 @@ export interface AppConfig {
   levelMultipliers?: LevelMultipliersConfig
   extractorBinaryPath?: string
   enableNotifications?: boolean
-  enableContextInjection?: boolean
-  contextInjectionProfileId?: string
-  /** Whether the prompt-injection details card is shown in conversations. Defaults to true. */
-  showPromptInjectionCard?: boolean
   /** Qoder personal access token stored in settings. */
   qoderApiKey?: string
   /** Project-level AI profile assignments for Content Studio pipeline steps. */
@@ -73,7 +69,7 @@ export class AppConfigService {
   get(): AppConfig {
     if (this.cache) return this.cache
     if (!existsSync(this.path)) {
-      // Apply sanitize so boolean defaults (e.g. showPromptInjectionCard) hold
+      // Apply sanitize so boolean defaults (e.g. enableNotifications) hold
       // on a fresh install where no config.json exists yet.
       this.cache = sanitize({})
       return this.cache
@@ -112,23 +108,6 @@ function sanitize(obj: Record<string, unknown>): AppConfig {
     out.enableNotifications = obj.enableNotifications
   } else if (obj.enableNotifications === undefined) {
     out.enableNotifications = true
-  }
-
-  if (typeof obj.enableContextInjection === 'boolean') {
-    out.enableContextInjection = obj.enableContextInjection
-  } else if (obj.enableContextInjection === undefined) {
-    out.enableContextInjection = false
-  }
-
-  const contextInjectionProfileId = typeof obj.contextInjectionProfileId === 'string' ? obj.contextInjectionProfileId.trim() : ''
-  if (contextInjectionProfileId) {
-    out.contextInjectionProfileId = contextInjectionProfileId
-  }
-
-  if (typeof obj.showPromptInjectionCard === 'boolean') {
-    out.showPromptInjectionCard = obj.showPromptInjectionCard
-  } else if (obj.showPromptInjectionCard === undefined) {
-    out.showPromptInjectionCard = true
   }
 
   const qoderApiKey = typeof obj.qoderApiKey === 'string' ? obj.qoderApiKey.trim() : ''

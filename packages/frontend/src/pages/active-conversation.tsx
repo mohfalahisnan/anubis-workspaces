@@ -1,11 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { extractImageReferencesFromUnknown } from '@anubis/shared'
 import {
-  GlobeIcon, PaperclipIcon, SendIcon, BrainIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
+  GlobeIcon, PaperclipIcon, SendIcon, SquareIcon, Loader2Icon, ChevronDownIcon, QuoteIcon, XIcon,
   FolderIcon, FolderOpenIcon, CopyIcon, CheckIcon,
 } from 'lucide-react'
 
-import type { AgentAvailability, AgentKind, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary, AppConfig } from '@anubis/shared'
+import type { AgentAvailability, AgentKind, ConversationSummary, MessageSummary, ProfileSummary, WorkspaceSummary } from '@anubis/shared'
 
 import {
   NoCredentialsError,
@@ -14,7 +14,6 @@ import {
   listProfiles,
   sendMessage as apiSendMessage,
   updateConversation,
-  getAppConfig,
   type ReasoningEffort,
 } from '@/api'
 import { LoginModal } from '@/components/login-modal'
@@ -35,7 +34,6 @@ import { useDefaultProfile } from '@/lib/use-default-profile'
 import { useEnsureConversation } from '@/lib/use-ensure-conversation'
 import { useWorkspaces } from '@/lib/use-workspaces'
 import { useProject } from '@/lib/use-project'
-import { usePromptCardExpanded } from '@/lib/use-prompt-card-expanded'
 import { ProfilePicker } from '@/components/composer/profile-picker'
 import { ReasoningPicker } from '@/components/composer/reasoning-picker'
 import { WorkdirPicker } from '@/components/composer/workdir-picker'
@@ -227,53 +225,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   const effectiveEffort: ReasoningEffort =
     pickedEffort ?? convOverrideEffort ?? profileDefaultEffort
   const effortIsOverride = effectiveEffort !== profileDefaultEffort
-
-  const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
-  useEffect(() => {
-    getAppConfig().then(setAppConfig).catch(() => {})
-  }, [])
-
-  const [promptCardExpanded, setPromptCardExpanded] = usePromptCardExpanded()
-  const showPromptInjectionCard = appConfig?.showPromptInjectionCard ?? true
-  const togglePromptCard = useCallback(
-    () => setPromptCardExpanded(!promptCardExpanded),
-    [promptCardExpanded, setPromptCardExpanded],
-  )
-
-  // --- Prompt-optimizer local state (mirrors the pickedEffort pattern) ---
-  const [pickedEnableContext, setPickedEnableContext] = useState<boolean | null>(null)
-
-  const overrides = conv?.extra?.overrides || {}
-  const convOverrideEnableContext =
-    overrides.enableContextInjection !== undefined
-      ? (overrides.enableContextInjection as boolean)
-      : undefined
-  const profileDefaultEnableContext =
-    selectedProfile?.config.enableContextInjection !== undefined
-      ? (selectedProfile.config.enableContextInjection as boolean)
-      : (appConfig?.enableContextInjection ?? false)
-
-  const effectiveEnableContext: boolean =
-    pickedEnableContext ?? convOverrideEnableContext ?? profileDefaultEnableContext
-
-  const onEnableContextChange = useCallback(async (next: boolean) => {
-    setPickedEnableContext(next)
-    setSendError(null)
-    if (!conversationId) return
-    const currentOverrides = conv?.extra?.overrides || {}
-    try {
-      const updated = await updateConversation(conversationId, {
-        override: {
-          ...currentOverrides,
-          enableContextInjection: next
-        }
-      })
-      setConv(updated)
-    } catch (e) {
-      setPickedEnableContext(null)
-      setSendError(e instanceof Error ? e.message : String(e))
-    }
-  }, [conversationId, conv])
 
   // Reset forceStopped whenever the SSE flag flips back to false on its own.
   useEffect(() => {
@@ -479,9 +430,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
               key={m.id}
               message={m}
               conversationId={conversationId ?? ''}
-              showCard={showPromptInjectionCard}
-              cardExpanded={promptCardExpanded}
-              onToggleCard={togglePromptCard}
             />
           ))}
           {optimistic.map((m) => (
@@ -529,8 +477,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
         pendingQuote={pendingQuote}
         onConsumeQuote={() => setPendingQuote(null)}
         conversationId={conversationId ?? ''}
-        enableContextInjection={effectiveEnableContext}
-        onEnableContextInjectionChange={onEnableContextChange}
       />
 
       {selectionPopup && (
@@ -591,50 +537,6 @@ export function ActiveConversationPage({ conversationId }: { conversationId?: st
   )
 }
 
-function CollapsibleHookCard({
-  improvedPrompt,
-  expanded,
-  onToggle,
-}: {
-  improvedPrompt: string
-  expanded: boolean
-  onToggle: () => void
-}) {
-  return (
-    <div className='flex flex-col items-end w-full max-w-[75%]'>
-      <button
-        type='button'
-        onClick={onToggle}
-        className='flex items-center gap-1.5 rounded-full border border-[color-mix(in_oklab,var(--anubis-gold)_40%,var(--border))] bg-[color-mix(in_oklab,var(--anubis-gold)_8%,transparent)] px-3 py-1 text-[11.5px] font-medium text-foreground hover:bg-[color-mix(in_oklab,var(--anubis-gold)_18%,transparent)] transition-all cursor-pointer'
-      >
-        <span className='size-[5px] rounded-full bg-[var(--anubis-gold-hi)]' />
-        ✨ Prompt Optimized
-        <ChevronDownIcon
-          className={cn(
-            'size-3 text-muted-foreground transition-transform duration-200',
-            expanded && 'rotate-180',
-          )}
-        />
-      </button>
-
-      {expanded && (
-        <div className='mt-2 w-full rounded-lg border border-border bg-card p-3 shadow-md text-left flex flex-col gap-3 animate-in fade-in duration-200'>
-          {improvedPrompt && (
-            <div>
-              <div className='mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground'>
-                Improved Prompt Sent to Agent
-              </div>
-              <div className='max-h-40 overflow-y-auto rounded border border-border bg-muted/30 p-2 font-mono text-[11.5px] text-foreground whitespace-pre-wrap scrollbar-thin'>
-                {improvedPrompt}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /**
  * One persisted transcript entry. Memoized so the historical transcript does
  * not re-render on every streamed chunk: `message` identity is stable between
@@ -644,36 +546,18 @@ function CollapsibleHookCard({
 const RenderedMessage = memo(function RenderedMessage({
   message,
   conversationId,
-  showCard,
-  cardExpanded,
-  onToggleCard,
 }: {
   message: MessageSummary
   conversationId: string
-  showCard: boolean
-  cardExpanded: boolean
-  onToggleCard: () => void
 }) {
   if (message.role === 'user') {
     const files = message.metadata?.fileReferences as string[] | undefined
-    const originalPrompt = message.metadata?.originalPrompt as string | undefined
-    const improvedPrompt = message.metadata?.improvedPrompt as string | undefined
-
-    const showHookInfo = !!(originalPrompt || improvedPrompt)
 
     return (
       <div className='flex flex-col items-end gap-1.5 w-full'>
         <div className='max-w-[75%] rounded-[13px] rounded-br-[4px] border border-border bg-card px-[15px] py-3 text-[15px] leading-[1.5] tracking-[-0.005em] text-foreground'>
-          {originalPrompt ?? message.content}
+          {message.content}
         </div>
-
-        {showCard && showHookInfo && (
-          <CollapsibleHookCard
-            improvedPrompt={improvedPrompt ?? ''}
-            expanded={cardExpanded}
-            onToggle={onToggleCard}
-          />
-        )}
 
         {files && files.length > 0 && (
           <div className='flex flex-col items-end gap-1 max-w-[75%]'>
@@ -1050,8 +934,6 @@ function Composer({
   pendingQuote,
   onConsumeQuote,
   conversationId,
-  enableContextInjection,
-  onEnableContextInjectionChange,
 }: {
   onSend: (content: string, files?: string[]) => void
   onStop: () => void
@@ -1073,8 +955,6 @@ function Composer({
   pendingQuote?: string | null
   onConsumeQuote?: () => void
   conversationId: string
-  enableContextInjection: boolean
-  onEnableContextInjectionChange: (next: boolean) => void
 }) {
   const [value, setValue] = useState('')
   const [quotes, setQuotes] = useState<string[]>([])
@@ -1263,22 +1143,6 @@ function Composer({
         </div>
 
         <div className='absolute bottom-2 right-2 flex items-center gap-2'>
-          <button
-            type='button'
-            disabled={streaming}
-            onClick={() => onEnableContextInjectionChange(!enableContextInjection)}
-            title={enableContextInjection ? 'Prompt Optimizer: Enabled' : 'Prompt Optimizer: Disabled'}
-            className={cn(
-              'inline-flex size-[34px] items-center justify-center rounded-md border transition-all',
-              streaming && 'cursor-not-allowed opacity-50',
-              enableContextInjection
-                ? 'border-[var(--anubis-gold)] bg-[color-mix(in_oklab,var(--anubis-gold)_15%,transparent)] text-[var(--anubis-gold)]'
-                : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-          >
-            <BrainIcon className='size-[16px]' strokeWidth={2} />
-          </button>
-
           {streaming ? (
             <button
               type='submit'

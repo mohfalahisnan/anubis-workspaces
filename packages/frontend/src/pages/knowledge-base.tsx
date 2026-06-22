@@ -138,11 +138,9 @@ export function KnowledgeBasePage() {
           </div>
         )}
 
-        <section className='mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4'>
+        <section className='mt-8 grid grid-cols-2 gap-3'>
           <StatCard label='Documents' value={stats?.documentCount ?? '—'} />
           <StatCard label='Chunks' value={stats?.chunkCount ?? '—'} />
-          <StatCard label='Entities' value={stats?.entityCount ?? '—'} />
-          <StatCard label='Edges' value={stats?.edgeCount ?? '—'} />
         </section>
 
         <p className='mt-3 text-[12px] text-muted-foreground'>
@@ -330,7 +328,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
   )
 }
 
-function formatTime(ts?: number): string {
+function formatTime(ts?: string | null): string {
   if (!ts) return 'never'
   return new Date(ts).toLocaleString()
 }

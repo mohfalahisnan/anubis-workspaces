@@ -83,4 +83,38 @@ describe('<ResearchPage>', () => {
     expect(await screen.findByText('20.0×')).toBeInTheDocument()
     expect(mocks.createResearchSession).toHaveBeenCalledTimes(1)
   })
+
+  it('renders an Export JSON action', async () => {
+    render(<ResearchPage />)
+    await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: /export json/i })).toBeInTheDocument()
+  })
+
+  it('narrows visible candidates with the date preset filter', async () => {
+    const DAY = 86_400_000
+    mocks.listCompetitors.mockResolvedValue([
+      competitor({ id: 'c1', handle: '@recent' }),
+      competitor({ id: 'c2', handle: '@old' }),
+    ])
+    mocks.createResearchSession.mockResolvedValue({
+      session,
+      candidates: [
+        candidate({ id: 'r1', competitorId: 'c1', score: 20, postedAt: new Date(Date.now() - 1 * DAY).toISOString() }),
+        candidate({ id: 'r2', competitorId: 'c2', score: 15, postedAt: new Date(Date.now() - 100 * DAY).toISOString() }),
+      ],
+    })
+
+    render(<ResearchPage />)
+    await waitFor(() => expect(mocks.listCompetitors).toHaveBeenCalled())
+    await userEvent.click(screen.getByRole('button', { name: /run research/i }))
+
+    // Both candidates visible under the default "All" window.
+    expect(await screen.findByText('@recent')).toBeInTheDocument()
+    expect(screen.getByText('@old')).toBeInTheDocument()
+
+    // Restricting to the last 7 days drops the 100-day-old post.
+    await userEvent.click(screen.getByRole('button', { name: '7d' }))
+    expect(screen.getByText('@recent')).toBeInTheDocument()
+    expect(screen.queryByText('@old')).not.toBeInTheDocument()
+  })
 })

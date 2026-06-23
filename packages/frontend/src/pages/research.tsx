@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  CalendarIcon,
+  DownloadCloudIcon,
   ExternalLinkIcon,
   PlayIcon,
   RefreshCwIcon,
@@ -23,10 +25,15 @@ import {
 import { CandidateLevelBadge } from '@/components/research/candidate-level-badge'
 import {
   CANDIDATE_LEVEL_LABEL,
+  DEFAULT_DATE_FILTER,
   VALIDATION_LABEL,
   candidateValidationReason,
+  filterCandidatesByDate,
   formatScore,
+  type DateFilterState,
+  type DatePreset,
 } from '@/lib/research'
+import { buildResearchExport } from '@/lib/research-export'
 import { cn } from '@/lib/utils'
 import {
   Sheet,
@@ -42,6 +49,9 @@ type LevelFilter = 'all' | CandidateLevel
 
 const textInput =
   'h-10 w-full rounded-md border border-border bg-background px-3 text-[13.5px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))] focus:ring-1 focus:ring-[var(--anubis-gold-hi)]'
+
+const dateInput =
+  'h-8 rounded-md border border-border bg-background px-2 text-[12px] text-foreground outline-none transition-colors focus:border-[color-mix(in_oklab,var(--anubis-gold)_50%,var(--border))]'
 
 /** localStorage key for the per-project research session + scored candidates so
  *  they survive navigating away and back. */
@@ -94,6 +104,7 @@ export function ResearchPage() {
   const [detail, setDetail] = useState<ResearchCandidateSummary | null>(null)
   const [validationFilter, setValidationFilter] = useState<ValidationFilter>('all')
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all')
+  const [dateFilter, setDateFilter] = useState<DateFilterState>(DEFAULT_DATE_FILTER)
 
   // Research controls
   const [favoriteOnly, setFavoriteOnly] = useState(false)
@@ -184,17 +195,45 @@ export function ResearchPage() {
 
   const visibleCandidates = useMemo(
     () =>
-      candidates
+      filterCandidatesByDate(candidates, dateFilter, Date.now())
         .filter((c) => validationFilter === 'all' || c.validationStatus === validationFilter)
         .filter((c) => levelFilter === 'all' || c.candidateLevel === levelFilter)
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
-    [candidates, validationFilter, levelFilter],
+    [candidates, dateFilter, validationFilter, levelFilter],
   )
 
   const competitorById = useMemo(
     () => new Map((competitors ?? []).map((c) => [c.id, c] as const)),
     [competitors],
   )
+
+  function handleExportJson() {
+    const file = buildResearchExport({
+      candidates: visibleCandidates,
+      competitorById,
+      project: activeProject ? { id: activeProject.id, name: activeProject.name } : undefined,
+      filters: { date: dateFilter, validation: validationFilter, level: levelFilter },
+      exportedAt: Date.now(),
+    })
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const slug = (activeProject?.name || 'project')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `anubis-research-${slug || 'project'}-${date}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    setBanner({
+      kind: 'success',
+      message: `Exported ${file.count} candidate post${file.count === 1 ? '' : 's'} as JSON.`,
+    })
+  }
 
   return (
     <div className='flex flex-1 flex-col overflow-y-auto bg-background'>
@@ -258,34 +297,47 @@ export function ResearchPage() {
               <RefreshCwIcon className='size-[15px]' strokeWidth={2} />
               Refresh
             </button>
+            <button
+              type='button'
+              onClick={handleExportJson}
+              disabled={visibleCandidates.length === 0}
+              title='Download the filtered candidates as detailed-post JSON'
+              className='inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3.5 text-[13px] font-medium text-foreground transition-colors hover:border-[color-mix(in_oklab,var(--anubis-gold)_45%,var(--border))] hover:bg-muted disabled:opacity-50'
+            >
+              <DownloadCloudIcon className='size-[15px]' strokeWidth={2} />
+              Export JSON
+            </button>
           </div>
 
-          <div className='mt-5 mb-3 flex flex-wrap items-center gap-2'>
-            <span className='text-[12.5px] text-muted-foreground'>
-              {session ? `${visibleCandidates.length} shown of ${candidates.length}` : 'Run research to populate'}
-            </span>
-            <div className='ml-auto flex flex-wrap gap-2'>
-              <SegmentedFilter
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'valid', label: 'Valid' },
-                  { value: 'pending', label: 'Pending' },
-                  { value: 'invalid', label: 'Invalid' },
-                ]}
-                value={validationFilter}
-                onChange={(v) => setValidationFilter(v as ValidationFilter)}
-              />
-              <SegmentedFilter
-                options={[
-                  { value: 'all', label: 'Any level' },
-                  { value: 'green', label: 'High' },
-                  { value: 'yellow', label: 'Good' },
-                  { value: 'neutral', label: 'Weak' },
-                ]}
-                value={levelFilter}
-                onChange={(v) => setLevelFilter(v as LevelFilter)}
-              />
+          <div className='mt-5 mb-3 flex flex-col gap-2.5'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <span className='text-[12.5px] text-muted-foreground'>
+                {session ? `${visibleCandidates.length} shown of ${candidates.length}` : 'Run research to populate'}
+              </span>
+              <div className='ml-auto flex flex-wrap gap-2'>
+                <SegmentedFilter
+                  options={[
+                    { value: 'all', label: 'All' },
+                    { value: 'valid', label: 'Valid' },
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'invalid', label: 'Invalid' },
+                  ]}
+                  value={validationFilter}
+                  onChange={(v) => setValidationFilter(v as ValidationFilter)}
+                />
+                <SegmentedFilter
+                  options={[
+                    { value: 'all', label: 'Any level' },
+                    { value: 'green', label: 'High' },
+                    { value: 'yellow', label: 'Good' },
+                    { value: 'neutral', label: 'Weak' },
+                  ]}
+                  value={levelFilter}
+                  onChange={(v) => setLevelFilter(v as LevelFilter)}
+                />
+              </div>
             </div>
+            <DateFilterControl value={dateFilter} onChange={setDateFilter} />
           </div>
           <CandidateTable
             candidates={visibleCandidates}
@@ -353,6 +405,66 @@ function SegmentedFilter({
           {opt.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+const DATE_PRESETS: { preset: DatePreset; label: string }[] = [
+  { preset: 'all', label: 'All' },
+  { preset: '7d', label: '7d' },
+  { preset: '30d', label: '30d' },
+  { preset: '90d', label: '90d' },
+]
+
+function DateFilterControl({
+  value,
+  onChange,
+}: {
+  value: DateFilterState
+  onChange: (next: DateFilterState) => void
+}) {
+  return (
+    <div className='flex flex-wrap items-center gap-2'>
+      <span className='inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground'>
+        <CalendarIcon className='size-3.5' strokeWidth={2} />
+        Date
+      </span>
+      <div className='inline-flex rounded-md border border-border bg-card p-0.5'>
+        {DATE_PRESETS.map((p) => (
+          <button
+            key={p.preset}
+            type='button'
+            onClick={() => onChange({ preset: p.preset })}
+            className={cn(
+              'rounded px-2.5 py-1 text-[12px] font-medium transition-colors',
+              value.preset === p.preset
+                ? 'bg-[var(--anubis-gold)] text-[#0B0C0F]'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className='flex items-center gap-1.5'>
+        <input
+          type='date'
+          aria-label='From date'
+          value={value.from ?? ''}
+          max={value.to || undefined}
+          onChange={(e) => onChange({ preset: 'custom', from: e.target.value || undefined, to: value.to })}
+          className={dateInput}
+        />
+        <span className='text-[12px] text-muted-foreground'>–</span>
+        <input
+          type='date'
+          aria-label='To date'
+          value={value.to ?? ''}
+          min={value.from || undefined}
+          onChange={(e) => onChange({ preset: 'custom', from: value.from, to: e.target.value || undefined })}
+          className={dateInput}
+        />
+      </div>
     </div>
   )
 }

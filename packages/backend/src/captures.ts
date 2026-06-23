@@ -460,21 +460,24 @@ const UpdatePostBody = z.object({
   carouselCount: z.number().int().nonnegative().optional(),
 }).strict()
 
+const nullableOpt = <T extends z.ZodTypeAny>(schema: T) =>
+  schema.nullable().optional().transform(v => v ?? undefined)
+
 const ImportPostsBody = z.object({
   posts: z.array(z.object({
-    id: z.string().min(1).optional(),
+    id: nullableOpt(z.string().min(1)),
     competitorId: z.string().min(1),
-    projectId: z.string().min(1).optional(),
+    projectId: nullableOpt(z.string().min(1)),
     username: z.string().min(1),
     postUrl: z.string().min(1),
-    caption: z.string().optional(),
-    likes: z.number().int().nonnegative().optional(),
-    comments: z.number().int().nonnegative().optional(),
-    postedAt: z.string().optional(),
+    caption: nullableOpt(z.string()),
+    likes: nullableOpt(z.number().int().nonnegative()),
+    comments: nullableOpt(z.number().int().nonnegative()),
+    postedAt: nullableOpt(z.string()),
     mediaKind: z.enum(['image', 'video', 'carousel']).optional(),
-    mediaUrl: z.string().optional(),
-    carouselCount: z.number().int().nonnegative().optional(),
-    capturedAt: z.number().int().positive().optional(),
+    mediaUrl: nullableOpt(z.string()),
+    carouselCount: nullableOpt(z.number().int().nonnegative()),
+    capturedAt: nullableOpt(z.number().int().positive()),
     raw: z.record(z.string(), z.unknown()).optional(),
   })).max(500),
 }).strict()

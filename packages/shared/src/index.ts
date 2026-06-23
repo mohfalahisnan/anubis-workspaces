@@ -1503,6 +1503,9 @@ export interface SnapshotCompetitor {
   tint?: string
   followers?: number
   avgLikes?: number
+  baselineLikes?: number
+  baselineSampleSize?: number
+  baselineUpdatedAt?: number
   postCount?: number
   lastRefreshedAt?: number
   notes?: string

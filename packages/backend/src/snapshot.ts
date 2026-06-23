@@ -47,6 +47,9 @@ export function buildSnapshot(projectId: string): ProjectSnapshot {
     tint: c.tint,
     followers: c.followers,
     avgLikes: c.avgLikes,
+    baselineLikes: c.baselineLikes,
+    baselineSampleSize: c.baselineSampleSize,
+    baselineUpdatedAt: c.baselineUpdatedAt,
     postCount: c.postCount,
     lastRefreshedAt: c.lastRefreshedAt,
     notes: c.notes,
@@ -104,6 +107,9 @@ const SnapshotCompetitorSchema = z.object({
   tint: z.string().optional(),
   followers: z.number().int().nonnegative().optional(),
   avgLikes: z.number().int().nonnegative().optional(),
+  baselineLikes: z.number().int().nonnegative().optional(),
+  baselineSampleSize: z.number().int().nonnegative().optional(),
+  baselineUpdatedAt: z.number().int().nonnegative().optional(),
   postCount: z.number().int().nonnegative().optional(),
   lastRefreshedAt: z.number().int().nonnegative().optional(),
   notes: z.string().optional(),
@@ -152,6 +158,16 @@ function normHandle(handle: string): string {
   return handle.trim().toLowerCase()
 }
 
+function hasSnapshotBaseline(
+  sc: Pick<SnapshotCompetitor, 'baselineLikes' | 'baselineSampleSize' | 'baselineUpdatedAt'>,
+): boolean {
+  return (
+    sc.baselineLikes !== undefined ||
+    sc.baselineSampleSize !== undefined ||
+    sc.baselineUpdatedAt !== undefined
+  )
+}
+
 export function importSnapshot(
   targetProjectId: string,
   snapshot: ValidatedSnapshot,
@@ -162,93 +178,106 @@ export function importSnapshot(
   const createdCompetitorIds: string[] = []
   try {
     return stack.transaction((): ImportSnapshotResult => {
-    const warnings: string[] = []
-    let created = 0
-    let matched = 0
+      const warnings: string[] = []
+      let created = 0
+      let matched = 0
+      const importedAt = Date.now()
 
-    // Handles are globally unique → resolve against ALL competitors.
-    const byHandle = new Map<string, { id: string; projectId: string }>()
-    for (const c of stack.competitors.list()) {
-      byHandle.set(normHandle(c.handle), { id: c.id, projectId: c.projectId ?? 'default' })
-    }
-
-    // 1. Resolve or create competitors.
-    for (const sc of snapshot.competitors) {
-      const key = normHandle(sc.handle)
-      if (byHandle.has(key)) {
-        matched++
-        continue
+      const applyBaseline = (id: string, sc: ValidatedSnapshot['competitors'][number]) => {
+        if (!hasSnapshotBaseline(sc)) return
+        const current = stack.competitors.get(id)
+        stack.competitors.setBaseline(id, {
+          baselineLikes: sc.baselineLikes ?? current?.baselineLikes ?? null,
+          baselineSampleSize: sc.baselineSampleSize ?? current?.baselineSampleSize ?? 0,
+          baselineUpdatedAt: sc.baselineUpdatedAt ?? current?.baselineUpdatedAt ?? importedAt,
+        })
       }
-      const c = stack.competitors.create({
-        handle: sc.handle,
+
+      // Handles are globally unique → resolve against ALL competitors.
+      const byHandle = new Map<string, { id: string; projectId: string }>()
+      for (const c of stack.competitors.list()) {
+        byHandle.set(normHandle(c.handle), { id: c.id, projectId: c.projectId ?? 'default' })
+      }
+
+      // 1. Resolve or create competitors.
+      for (const sc of snapshot.competitors) {
+        const key = normHandle(sc.handle)
+        const existing = byHandle.get(key)
+        if (existing) {
+          applyBaseline(existing.id, sc)
+          matched++
+          continue
+        }
+        const c = stack.competitors.create({
+          handle: sc.handle,
+          projectId: targetProjectId,
+          displayName: sc.displayName,
+          niche: sc.niche,
+          tint: sc.tint,
+          followers: sc.followers,
+          avgLikes: sc.avgLikes,
+          notes: sc.notes,
+          bio: sc.bio,
+          level: sc.level,
+        })
+        applyBaseline(c.id, sc)
+        createdCompetitorIds.push(c.id)
+        byHandle.set(key, { id: c.id, projectId: c.projectId ?? targetProjectId })
+        created++
+      }
+
+      // 2. Build post rows; collect orphans (handle not in file or DB).
+      const rows: CapturedPost[] = []
+      let orphans = 0
+      for (const sp of snapshot.capturedPosts) {
+        const owner = byHandle.get(normHandle(sp.competitorHandle))
+        if (!owner) {
+          orphans++
+          continue
+        }
+        rows.push({
+          id: randomUUID(),
+          competitorId: owner.id,
+          projectId: owner.projectId,
+          username: sp.username,
+          postUrl: sp.postUrl,
+          caption: sp.caption,
+          likes: sp.likes,
+          comments: sp.comments,
+          postedAt: sp.postedAt,
+          mediaKind: sp.mediaKind,
+          mediaUrl: sp.mediaUrl,
+          carouselCount: sp.carouselCount,
+          capturedAt: sp.capturedAt ?? importedAt,
+          raw: sp.raw,
+        })
+      }
+      if (orphans > 0) {
+        warnings.push(`${orphans} post(s) skipped: competitor handle not found in snapshot or database.`)
+      }
+
+      // 3. Net-new = sum of per-competitor counts after minus before.
+      const affected = [...new Set(rows.map((r) => r.competitorId))]
+      const countAll = () =>
+        affected.reduce((n, id) => n + stack.capturedPosts.countForCompetitor(id), 0)
+      const before = countAll()
+      const { inserted: uniqueCandidates } = stack.capturedPosts.upsertMany(rows)
+      const after = countAll()
+      const imported = after - before
+      const skipped = uniqueCandidates - imported
+
+      // 4. Refresh competitor post counts.
+      for (const id of affected) {
+        stack.competitors.update(id, { postCount: stack.capturedPosts.countForCompetitor(id) })
+      }
+
+      return {
+        ok: true,
         projectId: targetProjectId,
-        displayName: sc.displayName,
-        niche: sc.niche,
-        tint: sc.tint,
-        followers: sc.followers,
-        avgLikes: sc.avgLikes,
-        notes: sc.notes,
-        bio: sc.bio,
-        level: sc.level,
-      })
-      createdCompetitorIds.push(c.id)
-      byHandle.set(key, { id: c.id, projectId: c.projectId ?? targetProjectId })
-      created++
-    }
-
-    // 2. Build post rows; collect orphans (handle not in file or DB).
-    const now = Date.now()
-    const rows: CapturedPost[] = []
-    let orphans = 0
-    for (const sp of snapshot.capturedPosts) {
-      const owner = byHandle.get(normHandle(sp.competitorHandle))
-      if (!owner) {
-        orphans++
-        continue
+        competitors: { created, matched },
+        posts: { imported, skipped },
+        warnings,
       }
-      rows.push({
-        id: randomUUID(),
-        competitorId: owner.id,
-        projectId: owner.projectId,
-        username: sp.username,
-        postUrl: sp.postUrl,
-        caption: sp.caption,
-        likes: sp.likes,
-        comments: sp.comments,
-        postedAt: sp.postedAt,
-        mediaKind: sp.mediaKind,
-        mediaUrl: sp.mediaUrl,
-        carouselCount: sp.carouselCount,
-        capturedAt: sp.capturedAt ?? now,
-        raw: sp.raw,
-      })
-    }
-    if (orphans > 0) {
-      warnings.push(`${orphans} post(s) skipped: competitor handle not found in snapshot or database.`)
-    }
-
-    // 3. Net-new = sum of per-competitor counts after minus before.
-    const affected = [...new Set(rows.map((r) => r.competitorId))]
-    const countAll = () =>
-      affected.reduce((n, id) => n + stack.capturedPosts.countForCompetitor(id), 0)
-    const before = countAll()
-    const { inserted: uniqueCandidates } = stack.capturedPosts.upsertMany(rows)
-    const after = countAll()
-    const imported = after - before
-    const skipped = uniqueCandidates - imported
-
-    // 4. Refresh competitor post counts.
-    for (const id of affected) {
-      stack.competitors.update(id, { postCount: stack.capturedPosts.countForCompetitor(id) })
-    }
-
-    return {
-      ok: true,
-      projectId: targetProjectId,
-      competitors: { created, matched },
-      posts: { imported, skipped },
-      warnings,
-    }
     })
   } catch (error) {
     // SQLite rolls back automatically; compensate for canonical files written

@@ -24,6 +24,11 @@ describe('snapshot export', () => {
     const stack = getStack()
 
     const comp = stack.competitors.create({ handle: '@alpha', displayName: 'Alpha' })
+    stack.competitors.setBaseline(comp.id, {
+      baselineLikes: 15,
+      baselineSampleSize: 2,
+      baselineUpdatedAt: 1_700_000_000_000,
+    })
     stack.capturedPosts.upsertMany([
       {
         id: 'p1', competitorId: comp.id, username: 'alpha',
@@ -39,6 +44,11 @@ describe('snapshot export', () => {
     expect(snap.kind).toBe('anubis-project-snapshot')
     expect(snap.schemaVersion).toBe(1)
     expect(snap.competitors.map((c) => c.handle)).toContain('@alpha')
+    expect(snap.competitors.find((c) => c.handle === '@alpha')).toMatchObject({
+      baselineLikes: 15,
+      baselineSampleSize: 2,
+      baselineUpdatedAt: 1_700_000_000_000,
+    })
     expect(snap.capturedPosts).toHaveLength(2)
     expect(snap.capturedPosts.every((p) => p.competitorHandle === '@alpha')).toBe(true)
     // The repo normalises post URLs on upsert (trailing slash stripped), so the
@@ -63,7 +73,14 @@ function sampleSnapshot(): ProjectSnapshot {
     app: { name: 'anubis', version: 'test' },
     project: { id: 'default', name: 'Default Project' },
     competitors: [
-      { handle: '@roundtrip', displayName: 'RT', followers: 100 },
+      {
+        handle: '@roundtrip',
+        displayName: 'RT',
+        followers: 100,
+        baselineLikes: 50,
+        baselineSampleSize: 2,
+        baselineUpdatedAt: 1_700_000_000_001,
+      },
     ],
     capturedPosts: [
       { competitorHandle: '@roundtrip', username: 'rt', postUrl: 'https://instagram.com/p/RT1/', likes: 5 },
@@ -88,6 +105,9 @@ describe('snapshot import', () => {
     expect(comp).toBeTruthy()
     expect(stack.capturedPosts.countForCompetitor(comp!.id)).toBe(2)
     expect(comp!.postCount).toBe(2)
+    expect(comp!.baselineLikes).toBe(50)
+    expect(comp!.baselineSampleSize).toBe(2)
+    expect(comp!.baselineUpdatedAt).toBe(1_700_000_000_001)
   })
 
   it('is idempotent: re-importing the same file adds nothing new', async () => {

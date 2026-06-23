@@ -53,7 +53,7 @@ import {
    -----------------------------------------------------------
    The list of Instagram profiles the user wants to keep tabs
    on. Add → enter handle → row appears in the grid with empty
-   stats. Stats (followers, avgLikes, postCount) will fill in
+   stats. Stats (followers, avgLikes, baselineLikes, postCount) will fill in
    automatically once the research-crawler capture pipeline is
    wired; for now they're editable manually via the future
    editor.
@@ -61,11 +61,12 @@ import {
 
 type Banner = { kind: 'error' | 'success'; message: string }
 
-type CompetitorSortKey = 'handle' | 'followers' | 'avgLikes' | 'postCount' | 'lastRefreshedAt'
+type CompetitorSortKey = 'handle' | 'followers' | 'avgLikes' | 'baselineLikes' | 'postCount' | 'lastRefreshedAt'
 
 const COMPETITOR_SORT_OPTIONS: readonly SortOption<CompetitorSortKey>[] = [
   { value: 'followers', label: 'Followers' },
   { value: 'avgLikes', label: 'Avg likes' },
+  { value: 'baselineLikes', label: 'Baseline likes' },
   { value: 'postCount', label: 'Posts' },
   { value: 'handle', label: 'Handle' },
   { value: 'lastRefreshedAt', label: 'Last refresh' },
@@ -75,6 +76,7 @@ const COMPETITOR_SORT_ACCESSORS: Record<CompetitorSortKey, (c: CompetitorSummary
   handle: (c) => c.handle.replace(/^@/, '').toLowerCase(),
   followers: (c) => c.followers,
   avgLikes: (c) => c.avgLikes,
+  baselineLikes: (c) => c.baselineLikes,
   postCount: (c) => c.postCount,
   lastRefreshedAt: (c) => c.lastRefreshedAt,
 }
@@ -652,6 +654,7 @@ function CompetitorCard({
   const tint = competitor.tint ?? '#565B63'
   const followersLabel = formatBigNumber(competitor.followers)
   const avgLikesLabel = formatBigNumber(competitor.avgLikes)
+  const baselineLikesLabel = formatBigNumber(competitor.baselineLikes)
   const level = resolveLevel(competitor.followers, competitor.level, levelsCfg)
   const levelTooltip = levelTip(competitor.followers, competitor.level, levelsCfg)
 
@@ -722,9 +725,10 @@ function CompetitorCard({
       </div>
 
       <div className='border-t border-border px-4 py-3'>
-        <div className='grid grid-cols-3 gap-2 text-center'>
+        <div className='grid grid-cols-4 gap-2 text-center'>
           <Stat label='Followers' value={followersLabel} />
           <Stat label='Avg likes' value={avgLikesLabel} />
+          <Stat label='Baseline' value={baselineLikesLabel} />
           <Stat label='Posts' value={competitor.postCount.toLocaleString()} />
         </div>
       </div>
@@ -827,7 +831,7 @@ function CompetitorTable({
   return (
     <div className='mt-7 overflow-hidden rounded-md border border-border bg-card'>
       <div className='overflow-x-auto'>
-        <table className='w-full min-w-[820px] border-collapse text-left text-[13px]'>
+        <table className='w-full min-w-[920px] border-collapse text-left text-[13px]'>
           <thead className='border-b border-border bg-background/50 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground'>
             <tr>
               {selectMode && <th className='w-8 px-3 py-2.5 font-medium' />}
@@ -835,6 +839,7 @@ function CompetitorTable({
               <th className='px-3 py-2.5 font-medium'>Niche</th>
               <th className='px-3 py-2.5 text-right font-medium'>Followers</th>
               <th className='px-3 py-2.5 text-right font-medium'>Avg likes</th>
+              <th className='px-3 py-2.5 text-right font-medium'>Baseline likes</th>
               <th className='px-3 py-2.5 text-right font-medium'>Posts</th>
               <th className='px-3 py-2.5 font-medium'>Last refresh</th>
               <th className='px-3 py-2.5 text-right font-medium'>Actions</th>
@@ -895,6 +900,7 @@ function CompetitorTable({
                   <td className='px-3 py-3 text-muted-foreground'>{c.niche ?? '—'}</td>
                   <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{formatBigNumber(c.followers)}</td>
                   <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{formatBigNumber(c.avgLikes)}</td>
+                  <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{formatBigNumber(c.baselineLikes)}</td>
                   <td className='px-3 py-3 text-right font-mono text-[12px] tabular-nums'>{c.postCount.toLocaleString()}</td>
                   <td className='px-3 py-3 font-mono text-[11.5px] text-muted-foreground'>
                     {isCapturing ? 'Capturing…' : c.lastRefreshedAt ? relativeTime(c.lastRefreshedAt) : 'Never'}

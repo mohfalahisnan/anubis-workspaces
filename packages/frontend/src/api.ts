@@ -120,7 +120,7 @@ export async function getApiBaseUrl(): Promise<string> {
     return window.anubis.backend.getBaseUrl()
   }
 
-  return import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:4317'
+  return import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:666'
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {

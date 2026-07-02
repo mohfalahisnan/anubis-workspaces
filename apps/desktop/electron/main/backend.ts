@@ -15,7 +15,7 @@ interface BackendRuntime {
 }
 
 let backendRuntime: Promise<BackendRuntime> | undefined
-const DEFAULT_BACKEND_PORT = '4317'
+const DEFAULT_BACKEND_PORT = '666'
 
 export function startBackend(appRoot: string, isDev: boolean, dataDir?: string, modelsDir?: string) {
   backendRuntime ??= new Promise<BackendRuntime>((resolve, reject) => {

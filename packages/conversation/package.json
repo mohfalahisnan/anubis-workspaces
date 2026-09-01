@@ -21,7 +21,7 @@
     "better-sqlite3": "^12.10.0",
     "fflate": "^0.8.2",
     "gray-matter": "^4.0.3",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^5.4.1",
     "node-cron": "^3.0.3",
     "uuid": "^11.0.3",
     "zod": "^4.4.3"
